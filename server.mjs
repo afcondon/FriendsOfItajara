@@ -134,5 +134,15 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, "127.0.0.1", () => {
-  console.log(`the Friend on http://localhost:${PORT}/  (takes in ${TAKES}, msm = ${MSM})`);
+  console.log(`the Friends on http://localhost:${PORT}/  (takes in ${TAKES}, msm = ${MSM})`);
 });
+
+// Drain on a signal: stop accepting, let a harvest in flight finish its
+// reply, then go. A supervisor that sends TERM and waits gets a clean exit
+// rather than a socket dropped mid-answer.
+for (const sig of ["SIGTERM", "SIGINT"]) {
+  process.on(sig, () => {
+    server.close(() => process.exit(0));
+    setTimeout(() => process.exit(0), 5000).unref();
+  });
+}
