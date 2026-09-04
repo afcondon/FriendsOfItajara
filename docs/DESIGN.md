@@ -20,13 +20,27 @@ on the stick, how the daemon should be started — are data, so they are
 `Friend.Face` and nothing else knows them.
 
 **And the face is not the skin.** A face is a configuration; how the page
-looks is a stylesheet. The two vary independently: the open-source build
-ships a plain skin (`friend.css`, light, sans-serif, a grid of cards), and
-a house-styled skin for a particular manufacturer — the Instruo one, to
-share with Jason Lim as a video — is a second stylesheet that lives *outside
-this repository*, replaces `friend.css`, and leaves the class names alone.
-The public app is deliberately nobody's house style, so that sharing a
-styled version with its maker is a gift rather than a copy.
+looks is a stylesheet. The two vary independently: `friend.css` is the plain
+skin (light, sans-serif, a grid of cards), and a skin is a second stylesheet
+in `static/skins/`, chosen by `?skin=<name>`, that replaces it and leaves the
+class names alone.
+
+The first skin is **`river`**, for the Arbhar face, and it is deliberately
+*not* a copy of Instruo's panel — no black, no gold, no attempt at their
+lettering, which would only ever be an imperfect clone. It takes one thing
+from the module, the thing at the heart of its design: the **Granular
+Stream**, the river of blue LEDs that runs across the face, drawn here as a
+blurred, speckled band of light behind the takes. Around it, the page is a
+*design notebook*: warm grid paper with a heavier rule every five cells,
+Swiss grotesk caps for structure, a hand-lettered face for everything a
+person writes or reads as annotation (state words, destinations, the log,
+the notes fields, which get ruled lines rather than boxes), cards and
+buttons as hand-drawn boxes each a little off true, and the layers lettered
+α–ζ because that is what they become. This page exists to write things down
+about takes for later performance, so it looks like the place you would.
+The river is one SVG, base64 in the stylesheet; the root element is left
+unpainted on purpose so the body's paper propagates to the canvas and the
+river's negative z-index sits between paper and page.
 
 ---
 

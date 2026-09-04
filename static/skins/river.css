@@ -1,0 +1,170 @@
+/* river.css — the Arbhar skin for the Friends. ?skin=river
+   Not a panel clone: a design notebook. Warm grid paper, Swiss grotesk caps
+   for structure, a hand-lettered face for everything a person writes or reads
+   as annotation, and the Granular Stream — the river of blue LEDs that runs
+   across the arbhar's face — as a band of light behind the takes.
+   Same class names as friend.css: this file only changes how they look. */
+
+@import url('https://fonts.googleapis.com/css2?family=Caveat:wght@400;600;700&family=Inter:wght@400;500;600;700&display=swap');
+
+:root {
+  --paper: #f7f4ec;
+  --grid: rgba(60, 100, 150, 0.13);
+  --grid-major: rgba(60, 100, 150, 0.24);
+  --ink: #1e1c1a;
+  --pencil: #6f6a62;
+  --river: #2f8ff0;
+  --river-deep: #1f63c9;
+  --river-pale: #cfe6fb;
+  --violet: #8a7cf0;
+  --record: #d4462e;
+  --armed: #e0a53a;
+  --hand: 'Caveat', 'Bradley Hand', 'Comic Sans MS', cursive;
+  --grot: 'Inter', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  /* The hand-drawn box: one radius for every corner, never quite the same. */
+  --sketch: 255px 12px 225px 12px / 12px 225px 12px 255px;
+}
+
+* { box-sizing: border-box; }
+/* No background on html, on purpose: with the root unpainted the body's paper
+   and grid propagate to the canvas, which is what lets the river's negative
+   z-index sit between the paper and the page. Paint the root and the body
+   covers the river. */
+body {
+  margin: 0; color: var(--ink);
+  font: 14px/1.45 var(--grot);
+  background-color: var(--paper);
+  background-image:
+    linear-gradient(var(--grid-major) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-major) 1px, transparent 1px),
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 120px 120px, 120px 120px, 24px 24px, 24px 24px;
+  background-position: -1px -1px;
+}
+
+/* The river: a fixed layer behind everything, crossing the sheet the way the
+   LEDs cross the panel. Drawn once, in SVG, and blurred and speckled there. */
+.friend::before {
+  content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNDAwIDkwMCIgcHJlc2VydmVBc3BlY3RSYXRpbz0ieE1pZFlNaWQgc2xpY2UiPgo8ZGVmcz4KPGZpbHRlciBpZD0iZyIgeD0iLTIwJSIgeT0iLTUwJSIgd2lkdGg9IjE0MCUiIGhlaWdodD0iMjAwJSI+PGZlR2F1c3NpYW5CbHVyIHN0ZERldmlhdGlvbj0iMjIiLz48L2ZpbHRlcj4KPGZpbHRlciBpZD0icyIgeD0iLTIwJSIgeT0iLTUwJSIgd2lkdGg9IjE0MCUiIGhlaWdodD0iMjAwJSI+CjxmZVR1cmJ1bGVuY2UgdHlwZT0iZnJhY3RhbE5vaXNlIiBiYXNlRnJlcXVlbmN5PSIwLjciIG51bU9jdGF2ZXM9IjIiIHNlZWQ9IjExIiByZXN1bHQ9Im4iLz4KPGZlQ29sb3JNYXRyaXggaW49Im4iIHR5cGU9Im1hdHJpeCIgdmFsdWVzPSIwIDAgMCAwIDAuMTYgIDAgMCAwIDAgMC41MiAgMCAwIDAgMCAwLjkzICAwIDAgMCAxMiAtNi42IiByZXN1bHQ9ImRvdHMiLz4KPGZlQ29tcG9zaXRlIGluPSJkb3RzIiBpbjI9IlNvdXJjZUdyYXBoaWMiIG9wZXJhdG9yPSJpbiIvPgo8L2ZpbHRlcj4KPGxpbmVhckdyYWRpZW50IGlkPSJsZyIgeDE9IjAiIHkxPSIwIiB4Mj0iMSIgeTI9IjAiPgo8c3RvcCBvZmZzZXQ9IjAiIHN0b3AtY29sb3I9IiM5Y2NkZmIiIHN0b3Atb3BhY2l0eT0iMCIvPgo8c3RvcCBvZmZzZXQ9IjAuMiIgc3RvcC1jb2xvcj0iIzJmOGZmMCIvPgo8c3RvcCBvZmZzZXQ9IjAuNTUiIHN0b3AtY29sb3I9IiMxZjYzYzkiLz4KPHN0b3Agb2Zmc2V0PSIwLjgiIHN0b3AtY29sb3I9IiM3ZjZmZjAiLz4KPHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjYzlkN2ZmIiBzdG9wLW9wYWNpdHk9IjAiLz4KPC9saW5lYXJHcmFkaWVudD4KPC9kZWZzPgo8cGF0aCBkPSJNLTYwLDYwMCBDMjQwLDUyMCAzMDAsNzYwIDU0MCw2OTAgQzc2MCw2MjAgODAwLDQwMCAxMDUwLDQ1MCBDMTI0MCw0OTAgMTMyMCw2MTAgMTQ3MCw1NjAiIGZpbGw9Im5vbmUiIHN0cm9rZT0idXJsKCNsZykiIHN0cm9rZS13aWR0aD0iNjQiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgZmlsdGVyPSJ1cmwoI2cpIiBvcGFjaXR5PSIwLjYiLz4KPHBhdGggZD0iTS02MCw2MDAgQzI0MCw1MjAgMzAwLDc2MCA1NDAsNjkwIEM3NjAsNjIwIDgwMCw0MDAgMTA1MCw0NTAgQzEyNDAsNDkwIDEzMjAsNjEwIDE0NzAsNTYwIiBmaWxsPSJub25lIiBzdHJva2U9InVybCgjbGcpIiBzdHJva2Utd2lkdGg9IjExMCIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBmaWx0ZXI9InVybCgjcykiIG9wYWNpdHk9IjEiLz4KPHBhdGggZD0iTS02MCw2MDAgQzI0MCw1MjAgMzAwLDc2MCA1NDAsNjkwIEM3NjAsNjIwIDgwMCw0MDAgMTA1MCw0NTAgQzEyNDAsNDkwIDEzMjAsNjEwIDE0NzAsNTYwIiBmaWxsPSJub25lIiBzdHJva2U9IiNkZmYwZmYiIHN0cm9rZS13aWR0aD0iNiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBmaWx0ZXI9InVybCgjZykiIG9wYWNpdHk9IjAuNyIvPgo8L3N2Zz4=") no-repeat center / cover;
+}
+
+.friend { position: relative; max-width: 1180px; margin: 0 auto; padding: 36px 28px 56px; display: flex; flex-direction: column; gap: 22px; }
+
+/* Header: the title block of a poster rough. */
+.friend-head h1 { margin: 0; font: 700 30px/1 var(--grot); letter-spacing: 0.14em; text-transform: uppercase; }
+.friend-head h1::after { content: "  ·  a design notebook for takes"; font: 400 22px var(--hand); letter-spacing: 0; text-transform: none; color: var(--pencil); }
+.friend-sub { margin: 6px 0 0; font: 400 21px/1.2 var(--hand); color: var(--pencil); }
+.friend-conn { margin: 12px 0 0; font: 500 11px var(--grot); letter-spacing: 0.1em; text-transform: uppercase; color: var(--pencil); }
+.friend-conn::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 10px; vertical-align: -1px; background: #b9b3a8; }
+.friend-conn.is-on::before { background: var(--river); box-shadow: 0 0 10px 3px rgba(47, 143, 240, 0.55); }
+.friend-conn.is-off::before { background: var(--record); }
+
+.friend-start pre { background: rgba(255,255,255,0.8); border: 1.5px solid var(--ink); border-radius: var(--sketch); padding: 14px 18px; margin: 0 0 10px; overflow-x: auto; font-size: 13px; }
+.friend-start p, .friend-start li { font: 400 19px/1.3 var(--hand); color: var(--pencil); }
+.friend-start ul { margin: 6px 0 0; padding-left: 20px; }
+
+.friend-shape { display: flex; flex-wrap: wrap; gap: 4px 28px; font: 500 11px/1.6 var(--grot); letter-spacing: 0.08em; text-transform: uppercase; color: var(--pencil); }
+.friend-warn { color: var(--record); flex-basis: 100%; font: 600 18px var(--hand); letter-spacing: 0; text-transform: none; }
+
+/* Loop cards: swatches pasted on the sheet, each a little off true. */
+.friend-loops { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 22px 18px; padding-top: 6px; }
+.friend-loop {
+  background: rgba(255,255,255,0.88); border: 1.5px solid var(--ink); border-radius: var(--sketch);
+  padding: 14px 16px 14px; display: flex; flex-direction: column; gap: 10px; cursor: default;
+  box-shadow: 2px 3px 0 rgba(30,28,26,0.08);
+}
+.friend-loop:nth-child(odd) { transform: rotate(-0.35deg); }
+.friend-loop:nth-child(even) { transform: rotate(0.3deg); }
+.friend-loop:nth-child(3n) { transform: rotate(-0.15deg); }
+.friend-loop.is-focus { box-shadow: 0 0 0 3px var(--paper), 0 0 0 4.5px var(--ink), 2px 3px 0 rgba(30,28,26,0.08); }
+.friend-loop-head { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.friend-loop-name { font: 700 12px var(--grot); letter-spacing: 0.16em; text-transform: uppercase; }
+.friend-loop-state { font: 600 19px/1 var(--hand); color: var(--river-deep); }
+.is-recording .friend-loop-state { color: var(--record); }
+.is-armed .friend-loop-state { color: var(--armed); }
+.is-empty .friend-loop-state, .is-stopped .friend-loop-state { color: var(--pencil); }
+.friend-loop-len { font: 500 11px var(--grot); letter-spacing: 0.06em; color: var(--pencil); font-variant-numeric: tabular-nums; }
+.friend-loop-dest { margin-left: auto; font: 400 18px/1 var(--hand); color: var(--pencil); }
+
+/* Layers: the six the module has, by the panel's own letters. */
+.friend-layers { display: flex; flex-direction: column; gap: 4px; min-height: 26px; }
+.friend-layer { display: flex; align-items: center; gap: 10px; height: 24px; }
+.friend-layer.is-empty { font: 400 18px var(--hand); color: var(--pencil); height: auto; }
+.friend-layer.is-off .friend-layer-wave { opacity: 0.22; }
+.friend-layer-n { width: 14px; text-align: center; font: 500 13px var(--grot); color: var(--pencil); }
+.friend-layer-n { font-size: 0; }
+.friend-layer-n::after { font-size: 14px; }
+.friend-layer:nth-of-type(1) .friend-layer-n::after { content: "α"; }
+.friend-layer:nth-of-type(2) .friend-layer-n::after { content: "β"; }
+.friend-layer:nth-of-type(3) .friend-layer-n::after { content: "γ"; }
+.friend-layer:nth-of-type(4) .friend-layer-n::after { content: "δ"; }
+.friend-layer:nth-of-type(5) .friend-layer-n::after { content: "ε"; }
+.friend-layer:nth-of-type(6) .friend-layer-n::after { content: "ζ"; }
+.friend-layer:nth-of-type(n+7) .friend-layer-n { font-size: 12px; }
+.friend-layer-wave { position: relative; flex: 1 1 auto; height: 100%; background: #fff; border-bottom: 1px solid rgba(60,100,150,0.25); }
+.loop-wave path { fill: var(--river); }
+.is-recording .friend-layer-wave .loop-wave path { fill: var(--record); }
+.is-stopped .friend-layer-wave .loop-wave path { fill: #a29c92; }
+.loop-layer-on { accent-color: var(--river-deep); }
+
+/* Buttons: small caps in a hand-drawn box. */
+.friend-btn, .looper-help-btn {
+  font: 600 10.5px var(--grot); letter-spacing: 0.12em; text-transform: uppercase;
+  padding: 6px 11px; color: var(--ink); background: rgba(255,255,255,0.9);
+  border: 1.5px solid var(--ink); border-radius: var(--sketch); cursor: pointer;
+}
+.friend-btn:hover, .looper-help-btn:hover { background: var(--river-pale); }
+.friend-btn.on, .looper-help-btn.on { background: var(--ink); color: var(--paper); }
+.is-recording .friend-btn:first-child { border-color: var(--record); color: var(--record); }
+.friend-loop-buttons { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.friend-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding-top: 14px; border-top: 1.5px solid var(--ink); }
+.friend-gap { flex: 1 1 auto; }
+.friend-controls label { font: 400 19px var(--hand); color: var(--pencil); }
+.friend-take { font: 600 19px var(--hand); color: var(--ink); padding: 2px 8px; width: 170px; background: transparent; border: 0; border-bottom: 1.5px solid var(--ink); }
+.friend-saved { font: 600 18px var(--hand); color: var(--river-deep); min-width: 60px; }
+.friend-note { flex-basis: 100%; font: 400 17px/1.3 var(--hand); color: var(--pencil); }
+
+/* The log: notes in the margin. */
+.friend-log { font: 400 17px/1.35 var(--hand); color: var(--pencil); border-top: 1px solid rgba(60,100,150,0.3); padding-top: 10px; display: flex; flex-direction: column; gap: 1px; }
+.friend-log div:first-child { color: var(--ink); font-weight: 600; }
+
+/* Panels: a sheet laid on the sheet. */
+.looper-modal-overlay { position: fixed; inset: 0; z-index: 10; display: flex; align-items: center; justify-content: center; }
+.looper-modal-backdrop { position: absolute; inset: 0; background: rgba(247,244,236,0.55); }
+.looper-modal { position: relative; background: #fff; border: 1.5px solid var(--ink); border-radius: var(--sketch); box-shadow: 4px 6px 0 rgba(30,28,26,0.1); max-width: 920px; width: calc(100% - 40px); max-height: calc(100% - 40px); overflow: hidden; }
+.looper-modal-body { padding: 22px 26px 20px; overflow-y: auto; max-height: calc(100vh - 60px); }
+.looper-modal h2 { margin: 0 0 14px; font: 700 12px var(--grot); letter-spacing: 0.16em; text-transform: uppercase; }
+.looper-modal-close { position: absolute; top: 8px; right: 12px; border: 0; background: none; font: 400 26px var(--hand); color: var(--pencil); cursor: pointer; }
+
+/* The Edit panel's waveform, in the river's colours. */
+.looper-wave { background: #fff; border: 1px solid rgba(60,100,150,0.3); }
+.looper-wave-loop { fill: #fff; }
+.looper-wave-body { fill: var(--river); }
+.looper-wave-outside { fill: var(--paper); opacity: 0.85; }
+.looper-wave-edge { stroke: var(--ink); }
+.looper-wave-start { stroke: var(--record); }
+.looper-wave-head { stroke: var(--violet); opacity: 0.9; }
+.looper-edit-label { font: 700 11px var(--grot); letter-spacing: 0.12em; text-transform: uppercase; }
+.looper-edit-word { font: 400 17px var(--hand); color: var(--pencil); }
+.looper-edit-slider { accent-color: var(--river-deep); }
+.looper-edit-note { font: 400 17px var(--hand); color: var(--pencil); }
+
+/* Notes: written on ruled lines, by hand. */
+.friend-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px 22px; margin-bottom: 14px; }
+.friend-field { display: flex; flex-direction: column; gap: 2px; font: 600 10px var(--grot); letter-spacing: 0.12em; text-transform: uppercase; color: var(--pencil); }
+.friend-field.is-check { flex-direction: row; align-items: center; gap: 8px; align-self: end; text-transform: none; letter-spacing: 0; font: 400 17px var(--hand); }
+.friend-field input[type=text], .friend-field textarea, .friend-field select, .friend-loop-notes input {
+  font: 500 19px/1.25 var(--hand); color: var(--ink); padding: 3px 4px;
+  background: transparent; border: 0; border-bottom: 1px solid rgba(60,100,150,0.45); border-radius: 0;
+}
+.friend-field textarea { background-image: repeating-linear-gradient(transparent 0 25px, rgba(60,100,150,0.35) 25px 26px); line-height: 26px; border-bottom: 0; resize: vertical; }
+.friend-field input:focus, .friend-field textarea:focus, .friend-loop-notes input:focus { outline: none; border-bottom-color: var(--river-deep); }
+.friend-field select { font: 500 14px var(--grot); }
+.friend-loop-notes { width: 100%; border-collapse: collapse; margin-bottom: 14px; }
+.friend-loop-notes th { text-align: left; font: 600 10px var(--grot); letter-spacing: 0.12em; text-transform: uppercase; color: var(--pencil); padding: 0 8px 4px 0; }
+.friend-loop-notes td { padding: 2px 8px 2px 0; font: 400 17px var(--hand); color: var(--pencil); }
+.friend-loop-notes input { width: 100%; }
+.friend-harvest-out { margin: 14px 0 0; padding: 12px 14px; background: var(--paper); border: 1px solid rgba(60,100,150,0.3); font: 12px/1.45 ui-monospace, Menlo, monospace; white-space: pre-wrap; max-height: 320px; overflow: auto; }

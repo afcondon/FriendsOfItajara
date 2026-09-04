@@ -40,8 +40,12 @@ PureScript's `spago` for the page.
 - `server.mjs` — the seam: the page cannot write a file or run a process,
   the daemon must not, so this one zero-dependency file does both.
 
-The face is not the skin: how the page *looks* is `static/friend.css`, and a
-house-styled skin is a second stylesheet that replaces it and leaves the
-class names alone.
+The face is not the skin: how the page *looks* is `static/friend.css`, the
+plain one, and a skin is a second stylesheet in `static/skins/` that replaces
+it and leaves the class names alone — `?skin=river` is the Arbhar one: warm
+grid paper, Swiss caps for structure, hand lettering for everything a person
+writes, the module's α–ζ on the layers, and the Granular Stream — the river of
+blue LEDs across the arbhar's face — as a band of light behind the takes. A
+design notebook for takes, not a copy of anyone's panel.
 
 MIT.

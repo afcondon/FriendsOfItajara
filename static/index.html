@@ -5,7 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Arbhar's Friend</title>
   <link rel="stylesheet" href="looper.css?v=1">
-  <link rel="stylesheet" href="friend.css?v=1">
+  <link id="skin" rel="stylesheet" href="friend.css?v=1">
+  <!-- The face is ?face=; the skin is ?skin=. A skin is a stylesheet in
+       skins/ that replaces friend.css and leaves the class names alone. -->
+  <script>
+    (function () {
+      var skin = new URLSearchParams(location.search).get("skin");
+      if (skin && /^[a-z0-9-]+$/.test(skin)) {
+        document.getElementById("skin").href = "skins/" + skin + ".css?v=1";
+      }
+    })();
+  </script>
 </head>
 <body>
   <div id="app"></div>
