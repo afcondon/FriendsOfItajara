@@ -1,6 +1,7 @@
-# The Friend — one looper, a face per module
+# Friends of Itajara — one looper, a face per module
 
-**Status:** built to first light 2026-09-04, from a conversation. Picks up
+**Status:** built to first light 2026-09-04, harvesting the same night, and
+in its own repository from then. Picks up
 `producing-with-your-feet/docs/DESIGN-HARVEST.md` §6 (three strata) and §7
 step 10, which is where the idea came from; this is the design of the app
 itself.
@@ -32,7 +33,7 @@ styled version with its maker is a gift rather than a copy.
 ## 2. Where the pieces live
 
 ```
-itajara/
+itajara/                 (github.com/afcondon/itajara)
   daemon/    the engine (Rust)
   client/    A + B: socket, snapshot, verbs, recipes,
              Data.Looper.Duty (the vocabulary), Data.Looper.Machine (meaning)
@@ -40,12 +41,20 @@ itajara/
              Itajara.Surface.Wave (a layer's envelope as the loop plays it)
              Itajara.Surface.Edit (the Edit panel), and looper.css —
              one rendering of the class names they draw with
-  friend/    the app: Friend.Face (the table), Friend.App (the page), Main
   tools/     check-verbs, check-snapshot
+friends-of-itajara/      (github.com/afcondon/FriendsOfItajara — this repo)
+  src/       Friend.Face (the table), Friend.App (the page), Friend.Http, Main
+  server.mjs the seam: notes and the harvest
+  static/    the page and the plain skin
 ```
 
-`producing-with-your-feet` consumes `client` and `surface` by path and is
-the first consumer of both — its Looper page's Edit panel *is*
+Two repositories, checked out side by side: the Friends reach `client` and
+`surface` by path (`../itajara/…`). The daemon and its client are the thing
+every surface needs; the Friends are one surface, and a separate repo keeps
+that so — a pedalboard app is another, and neither owns the other.
+
+`producing-with-your-feet` also consumes `client` and `surface` by path and
+was the first consumer of both — its Looper page's Edit panel *is*
 `Itajara.Surface.Edit` and its slots draw with `Itajara.Surface.Wave`.
 That is what makes the seam real rather than claimed: one source, two apps,
 the same picture. What the pedalboard keeps is everything with feet on it —
@@ -145,7 +154,7 @@ would read: one record per harvest, with enough in it to find "the D minor
 bowed thing in bank 3" without listening.
 
 **The seam.** The browser cannot spawn a process and the daemon must not, so
-`friend/server.mjs` — Node, zero dependencies, one file — serves the page
+`server.mjs` — Node, zero dependencies, one file — serves the page
 and holds the two things the page cannot do: write `notes.json`, and run
 `msm harvest` (`MSM=` overrides the binary; `cargo install --path
 SamplesProject/msm` puts it on the path). Served statically instead, the
@@ -168,9 +177,11 @@ Not built, in the order they are likely wanted:
 ## 5. Running it
 
 ```
-cd daemon && cargo build --release
+git clone https://github.com/afcondon/itajara
+git clone https://github.com/afcondon/FriendsOfItajara friends-of-itajara
+cd itajara/daemon && cargo build --release
 ./target/release/itajara loop --device <device> --layers 6 --yes
-cd ../friend && make serve        # bundles, copies looper.css, node server.mjs on :3029
+cd ../../friends-of-itajara && make serve   # bundles, copies looper.css, node server.mjs on :3029
 open http://localhost:3029/?face=arbhar
 ```
 

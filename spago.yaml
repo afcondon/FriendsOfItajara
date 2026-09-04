@@ -1,5 +1,5 @@
 package:
-  name: itajara-friend
+  name: friends-of-itajara
   description: A looper for people with a sample-playing module, a sound
     source and a Mac — the Itajara daemon with a page on it. One app, and a
     face per module (`?face=arbhar` first) that says what the module holds,
@@ -36,7 +36,9 @@ workspace:
   packageSet:
     registry: 77.13.1
   extraPackages:
+    # The daemon's client and surface packages, from the itajara repo
+    # checked out beside this one.
     itajara-client:
-      path: ../client
+      path: ../itajara/client
     itajara-surface:
-      path: ../surface
+      path: ../itajara/surface

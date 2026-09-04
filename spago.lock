@@ -1,7 +1,7 @@
 {
   "workspace": {
     "packages": {
-      "itajara-friend": {
+      "friends-of-itajara": {
         "path": "./",
         "core": {
           "dependencies": [
@@ -682,10 +682,10 @@
     },
     "extra_packages": {
       "itajara-client": {
-        "path": "../client"
+        "path": "../itajara/client"
       },
       "itajara-surface": {
-        "path": "../surface"
+        "path": "../itajara/surface"
       }
     }
   },
@@ -1185,7 +1185,7 @@
     },
     "itajara-client": {
       "type": "local",
-      "path": "../client",
+      "path": "../itajara/client",
       "dependencies": [
         "arrays",
         "control",
@@ -1200,7 +1200,7 @@
     },
     "itajara-surface": {
       "type": "local",
-      "path": "../surface",
+      "path": "../itajara/surface",
       "dependencies": [
         "arrays",
         "halogen",

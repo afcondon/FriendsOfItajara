@@ -4,7 +4,7 @@
 build:
 	spago build
 bundle: build
-	spago bundle -p itajara-friend
-	cp ../surface/looper.css static/looper.css
+	spago bundle -p friends-of-itajara
+	cp ../itajara/surface/looper.css static/looper.css
 serve: bundle
 	node server.mjs

@@ -1,0 +1,5 @@
+output/
+.spago/
+static/index.js
+static/looper.css
+node_modules/
