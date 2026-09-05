@@ -46,11 +46,12 @@ body {
   background: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNDAwIDUyMCIgcHJlc2VydmVBc3BlY3RSYXRpbz0ieE1pZFlNYXggc2xpY2UiPgo8ZGVmcz4KPGZpbHRlciBpZD0iZyIgZmlsdGVyVW5pdHM9InVzZXJTcGFjZU9uVXNlIiB4PSItMjAwIiB5PSItMjAwIiB3aWR0aD0iMTgwMCIgaGVpZ2h0PSIxMDAwIj48ZmVHYXVzc2lhbkJsdXIgc3RkRGV2aWF0aW9uPSIxMiIvPjwvZmlsdGVyPgo8ZmlsdGVyIGlkPSJ3IiBmaWx0ZXJVbml0cz0idXNlclNwYWNlT25Vc2UiIHg9Ii0yMDAiIHk9Ii0yMDAiIHdpZHRoPSIxODAwIiBoZWlnaHQ9IjEwMDAiPjxmZUdhdXNzaWFuQmx1ciBzdGREZXZpYXRpb249IjI2Ii8+PC9maWx0ZXI+CjxmaWx0ZXIgaWQ9InMiIGZpbHRlclVuaXRzPSJ1c2VyU3BhY2VPblVzZSIgeD0iLTIwMCIgeT0iLTIwMCIgd2lkdGg9IjE4MDAiIGhlaWdodD0iMTAwMCI+CjxmZVR1cmJ1bGVuY2UgdHlwZT0iZnJhY3RhbE5vaXNlIiBiYXNlRnJlcXVlbmN5PSIwLjkiIG51bU9jdGF2ZXM9IjIiIHNlZWQ9IjUiIHJlc3VsdD0ibiIvPgo8ZmVDb2xvck1hdHJpeCBpbj0ibiIgdHlwZT0ibWF0cml4IiB2YWx1ZXM9IjAgMCAwIDAgMC4yMiAgMCAwIDAgMCAwLjUyICAwIDAgMCAwIDAuODYgIDAgMCAwIDEyIC02LjkiIHJlc3VsdD0iZG90cyIvPgo8ZmVDb21wb3NpdGUgaW49ImRvdHMiIGluMj0iU291cmNlR3JhcGhpYyIgb3BlcmF0b3I9ImluIi8+CjwvZmlsdGVyPgo8ZmlsdGVyIGlkPSJzMiIgZmlsdGVyVW5pdHM9InVzZXJTcGFjZU9uVXNlIiB4PSItMjAwIiB5PSItMjAwIiB3aWR0aD0iMTgwMCIgaGVpZ2h0PSIxMDAwIj4KPGZlVHVyYnVsZW5jZSB0eXBlPSJmcmFjdGFsTm9pc2UiIGJhc2VGcmVxdWVuY3k9IjEuMyIgbnVtT2N0YXZlcz0iMiIgc2VlZD0iOSIgcmVzdWx0PSJuIi8+CjxmZUNvbG9yTWF0cml4IGluPSJuIiB0eXBlPSJtYXRyaXgiIHZhbHVlcz0iMCAwIDAgMCAwLjM1ICAwIDAgMCAwIDAuNjAgIDAgMCAwIDAgMC45MCAgMCAwIDAgMTAgLTYuMiIgcmVzdWx0PSJkb3RzIi8+CjxmZUNvbXBvc2l0ZSBpbj0iZG90cyIgaW4yPSJTb3VyY2VHcmFwaGljIiBvcGVyYXRvcj0iaW4iLz4KPC9maWx0ZXI+CjxsaW5lYXJHcmFkaWVudCBpZD0ibGciIHgxPSIwIiB5MT0iMCIgeDI9IjEiIHkyPSIwIj4KPHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjOGZiZGU4IiBzdG9wLW9wYWNpdHk9IjAiLz4KPHN0b3Agb2Zmc2V0PSIwLjI1IiBzdG9wLWNvbG9yPSIjNmFhOGU2Ii8+CjxzdG9wIG9mZnNldD0iMSIgc3RvcC1jb2xvcj0iIzNmODZkNiIvPgo8L2xpbmVhckdyYWRpZW50Pgo8bGluZWFyR3JhZGllbnQgaWQ9ImZnIiB4MT0iMCIgeTE9IjAiIHgyPSIwIiB5Mj0iMSI+CjxzdG9wIG9mZnNldD0iMCIgc3RvcC1jb2xvcj0iIzNmODZkNiIvPgo8c3RvcCBvZmZzZXQ9IjAuNyIgc3RvcC1jb2xvcj0iIzZmOGZlMCIvPgo8c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiNiOWM5ZWUiIHN0b3Atb3BhY2l0eT0iMC4xIi8+CjwvbGluZWFyR3JhZGllbnQ+CjwvZGVmcz4KPHBhdGggZD0iTS00MCwzMzAgQzIwMCwzMzggNDIwLDMxMiA2NDAsMzI2IEM3MDAsMzMwIDc0MCwzMzIgNzcyLDMzNiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJ1cmwoI2xnKSIgc3Ryb2tlLXdpZHRoPSI0MCIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBmaWx0ZXI9InVybCgjZykiIG9wYWNpdHk9IjAuNDUiLz4KPHBhdGggZD0iTS00MCwzMzAgQzIwMCwzMzggNDIwLDMxMiA2NDAsMzI2IEM3MDAsMzMwIDc0MCwzMzIgNzcyLDMzNiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJ1cmwoI2xnKSIgc3Ryb2tlLXdpZHRoPSI2NCIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBmaWx0ZXI9InVybCgjcykiIG9wYWNpdHk9IjAuOTUiLz4KPHBhdGggZD0iTS00MCwzMzAgQzIwMCwzMzggNDIwLDMxMiA2NDAsMzI2IEM3MDAsMzMwIDc0MCwzMzIgNzcyLDMzNiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjZWVmNmZmIiBzdHJva2Utd2lkdGg9IjMiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgZmlsdGVyPSJ1cmwoI2cpIiBvcGFjaXR5PSIwLjgiLz4KPHBhdGggZD0iTTc3NiwzNDAgQzc4NCwzODAgNzg2LDQzMCA3OTAsNDgwIEM3OTIsNTA1IDc5NCw1MjAgNzk2LDU0MCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJ1cmwoI2ZnKSIgc3Ryb2tlLXdpZHRoPSIxMjAiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgZmlsdGVyPSJ1cmwoI3cpIiBvcGFjaXR5PSIwLjMiLz4KPHBhdGggZD0iTTc3NiwzNDAgQzc4NCwzODAgNzg2LDQzMCA3OTAsNDgwIEM3OTIsNTA1IDc5NCw1MjAgNzk2LDU0MCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJ1cmwoI2ZnKSIgc3Ryb2tlLXdpZHRoPSI0NCIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBmaWx0ZXI9InVybCgjcykiIG9wYWNpdHk9IjAuOTUiLz4KPHBhdGggZD0iTTc3NiwzNDAgQzc3MCwzOTAgNzY4LDQ1MCA3NjIsNTIwIiBmaWxsPSJub25lIiBzdHJva2U9InVybCgjZmcpIiBzdHJva2Utd2lkdGg9IjMwIiBzdHJva2UtbGluZWNhcD0icm91bmQiIGZpbHRlcj0idXJsKCNzMikiIG9wYWNpdHk9IjAuOCIvPgo8cGF0aCBkPSJNNzc2LDM0MCBDNzg4LDM5MCA4MDAsNDUwIDgxMiw1MjAiIGZpbGw9Im5vbmUiIHN0cm9rZT0idXJsKCNmZykiIHN0cm9rZS13aWR0aD0iMzAiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgZmlsdGVyPSJ1cmwoI3MyKSIgb3BhY2l0eT0iMC44Ii8+CjxwYXRoIGQ9Ik03NzYsMzQwIEM3ODQsMzgwIDc4Niw0MzAgNzkwLDQ4MCBDNzkyLDUwNSA3OTQsNTIwIDc5Niw1NDAiIGZpbGw9Im5vbmUiIHN0cm9rZT0iI2VlZjZmZiIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIGZpbHRlcj0idXJsKCNnKSIgb3BhY2l0eT0iMC43Ii8+Cjwvc3ZnPg==") no-repeat center bottom / auto 100%;
 }
 
-.friend { position: relative; max-width: 1180px; margin: 0 auto; padding: 44px 32px 140px 76px; overflow: visible; display: flex; flex-direction: column; gap: 18px; min-height: 100vh; }
+.friend { position: relative; max-width: 1180px; margin: 0 auto; padding: 44px 32px 140px 32px; overflow: visible; display: flex; flex-direction: column; gap: 18px; min-height: 100vh; }
 
-/* The stone core: a hatched vertical at the left that every slab bears on. */
+/* The stone core: a hatched vertical a quarter of the way across, rising
+   behind every slab — the chimney mass the terraces cantilever from. */
 .friend::after {
-  content: ""; position: absolute; left: 32px; top: 40px; bottom: 120px; width: var(--core);
+  content: ""; position: absolute; left: 26%; top: 96px; bottom: 120px; width: var(--core); z-index: -1;
   border-left: 1.5px solid var(--ink); border-right: 1.5px solid var(--ink);
   background: repeating-linear-gradient(135deg, var(--hair) 0 1px, transparent 1px 6px);
   pointer-events: none;
@@ -84,25 +85,26 @@ body {
 .friend-shape::before { content: "ARBHAR'S FRIEND — TAKES"; display: block; padding: 6px 10px; font-size: 11px; letter-spacing: 0.2em; }
 .friend-warn { color: var(--record); text-transform: none; letter-spacing: 0; }
 
-/* Slabs: each loop a terrace bearing on the core, a different length each,
-   a heavy shadow line beneath. The stack is the elevation. */
+/* Slabs: each loop a terrace, its own start and its own length, every one
+   crossing the core, a heavy shadow line beneath. Staggered, so the stack
+   steps across the sheet the way the house does. */
 .friend-loops { display: flex; flex-direction: column; gap: 16px; counter-reset: slab; margin-top: 8px; }
 .friend-loop {
   counter-increment: slab;
   position: relative; display: flex; flex-direction: row; align-items: center; gap: 20px;
   background: rgba(255,255,255,0.92); border: 1px solid var(--ink); border-bottom-width: 3px;
-  padding: 12px 18px 12px 16px; margin-left: -1px; min-height: 76px; cursor: default;
+  padding: 12px 18px 12px 16px; min-height: 76px; cursor: default;
   box-shadow: 0 5px 0 -1px var(--paper), 0 6px 0 -1px var(--hair);
 }
-.friend-loop:nth-child(1) { width: 78%; }
-.friend-loop:nth-child(2) { width: 94%; }
-.friend-loop:nth-child(3) { width: 64%; }
-.friend-loop:nth-child(4) { width: 88%; }
-.friend-loop:nth-child(5) { width: 72%; }
-.friend-loop:nth-child(6) { width: 98%; }
-.friend-loop:nth-child(7) { width: 58%; }
-.friend-loop:nth-child(8) { width: 84%; }
-.friend-loop:nth-child(n+9) { width: 80%; }
+.friend-loop:nth-child(1) { margin-left: 0;   width: 72%; }
+.friend-loop:nth-child(2) { margin-left: 12%; width: 70%; }
+.friend-loop:nth-child(3) { margin-left: 4%;  width: 56%; }
+.friend-loop:nth-child(4) { margin-left: 18%; width: 76%; }
+.friend-loop:nth-child(5) { margin-left: 8%;  width: 64%; }
+.friend-loop:nth-child(6) { margin-left: 0;   width: 84%; }
+.friend-loop:nth-child(7) { margin-left: 22%; width: 60%; }
+.friend-loop:nth-child(8) { margin-left: 10%; width: 70%; }
+.friend-loop:nth-child(n+9) { margin-left: 6%; width: 72%; }
 .friend-loop.is-focus { box-shadow: inset 0 0 0 3px #fff, inset 0 0 0 4px var(--ink), 0 5px 0 -1px var(--paper), 0 6px 0 -1px var(--hair); }
 
 /* The head as a narrow column: the circled number, the state, the dimension. */
@@ -145,20 +147,23 @@ body {
 .is-stopped .friend-layer-wave .loop-wave path { fill: #a8a49c; }
 .loop-layer-on { accent-color: var(--ink); width: 10px; height: 10px; }
 
-/* Buttons: bare glyphs, the word on hover. */
+/* Buttons: bare glyphs, the word beneath on hover. The word's line is always
+   there, in transparent ink, so nothing moves when it appears; the button is
+   a fixed-width column and a long word simply overhangs it, centred. */
 .friend-btn {
-  font: 400 0px var(--hand); letter-spacing: 0.12em; text-transform: uppercase;
-  background: none; border: 0; border-bottom: 1px solid transparent; padding: 2px 4px; color: var(--ink); cursor: pointer;
-  display: inline-flex; align-items: center; gap: 6px; min-width: 26px; justify-content: center; line-height: 1;
+  font: 400 9px/1 var(--hand); letter-spacing: 0.1em; text-transform: uppercase; white-space: nowrap;
+  background: none; border: 0; padding: 2px 0 0; color: transparent; cursor: pointer;
+  display: inline-flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 5px;
+  width: 40px; height: 40px; line-height: 1; overflow: visible;
 }
-.friend-btn::before { font-size: 17px; font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif; line-height: 1; }
-.friend-btn:hover { font-size: 10px; border-bottom-color: var(--ink); }
+.friend-btn::before { font-size: 17px; font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif; line-height: 1; color: var(--ink); }
+.friend-btn:hover { color: var(--ink); }
 .friend-btn.on::before { color: var(--water); }
-.friend-loop-buttons { display: flex; gap: 10px; flex: 0 0 auto; }
+.friend-loop-buttons { display: flex; gap: 6px; flex: 0 0 auto; }
 .friend-loop-buttons .friend-btn:nth-child(1)::before { content: "●"; }
 .is-armed .friend-loop-buttons .friend-btn:nth-child(1)::before { content: "◌"; color: var(--armed); }
 .is-recording .friend-loop-buttons .friend-btn:nth-child(1)::before { content: "■"; color: var(--record); }
-.is-recording .friend-loop-buttons .friend-btn:nth-child(1) { color: var(--record); }
+.is-recording .friend-loop-buttons .friend-btn:nth-child(1):hover { color: var(--record); }
 .friend-loop-buttons .friend-btn:nth-child(2)::before { content: "◎"; }
 .friend-loop-buttons .friend-btn:nth-child(3)::before { content: "▶"; font-size: 14px; }
 .is-playing .friend-loop-buttons .friend-btn:nth-child(3)::before { content: "■"; }
@@ -167,7 +172,7 @@ body {
 .friend-loop-buttons .friend-btn:nth-child(6)::before { content: "⟷"; }
 
 /* The controls: a thin rule and a row of glyphs; the take's name on a line. */
-.friend-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; padding-top: 12px; border-top: 1px solid var(--ink); margin-top: 6px; }
+.friend-controls { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px; padding-top: 12px; border-top: 1px solid var(--ink); margin-top: 6px; }
 .friend-controls .friend-btn:nth-of-type(1)::before { content: "♩"; }
 .friend-controls .friend-btn:nth-of-type(2)::before { content: "■■"; font-size: 11px; letter-spacing: 1px; }
 .friend-controls .friend-btn:nth-of-type(3)::before { content: "✕✕"; font-size: 11px; letter-spacing: 1px; }
@@ -175,10 +180,10 @@ body {
 .friend-controls .friend-btn:nth-of-type(5)::before { content: "✎"; }
 .friend-controls .friend-btn:nth-of-type(6)::before { content: "⤴"; }
 .friend-gap { flex: 1 1 auto; }
-.friend-controls label { font: 400 11px var(--hand); letter-spacing: 0.14em; text-transform: uppercase; color: var(--pencil); }
-.friend-take { font: 400 15px var(--hand); color: var(--ink); padding: 2px 6px; width: 170px; background: transparent; border: 0; border-bottom: 1px solid var(--ink); }
+.friend-controls label { padding-top: 6px; font: 400 11px var(--hand); letter-spacing: 0.14em; text-transform: uppercase; color: var(--pencil); }
+.friend-take { margin-top: 2px; font: 400 15px var(--hand); color: var(--ink); padding: 2px 6px; width: 170px; background: transparent; border: 0; border-bottom: 1px solid var(--ink); }
 .friend-take:focus { outline: none; border-bottom-color: var(--water); }
-.friend-saved { font: 400 11px var(--hand); letter-spacing: 0.14em; text-transform: uppercase; color: var(--water); min-width: 58px; }
+.friend-saved { padding-top: 6px; font: 400 11px var(--hand); letter-spacing: 0.14em; text-transform: uppercase; color: var(--water); min-width: 58px; }
 .friend-note { display: none; }
 
 /* The log: the revisions strip, small, the newest line only in ink. */

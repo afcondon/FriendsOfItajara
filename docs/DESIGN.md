@@ -39,12 +39,15 @@ architectural drawing**: still hand-lettered, but with the precision and
 sparseness of pre-CAD drafting, and the boxes and the river reimagined as
 **a cousin of Fallingwater**. So the skin is now an elevation. Each loop is
 a *slab* — a wide, thin terrace with a heavy shadow line beneath it,
-cantilevered to a different length from a hatched stone core at the left,
-the eight stacked as the terraces are. The water runs along the foot of the
+with its own start and its own length, every one crossing a hatched stone
+core that rises a quarter of the way across the sheet — staggered, so the
+eight step across the page the way the house does rather than lining up on
+a margin. The water runs along the foot of the
 sheet as a shelf and spills over an edge into a widening fall. Loop numbers
 are the circled room numbers of a plan; lengths are dimension lines with
 ticks; the layers are the ribbon windows, lettered α–ζ because that is what
-they become; every button is a bare glyph whose word appears only on hover;
+they become; every button is a bare glyph whose word appears beneath it on hover, in a
+line that is always there in transparent ink so nothing shifts;
 and the daemon's shape, the face's capacity and any warning go into a
 **title block** bottom-right, where a drawing keeps its data. One drafting
 hand throughout (Architects Daughter), capitals for labels, and almost
