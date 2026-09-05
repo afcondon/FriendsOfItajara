@@ -26,7 +26,7 @@ import Data.Looper.Machine as Machine
 import Data.Looper.Verb as Verb
 import Data.Map (Map)
 import Data.Map as Map
-import Data.Maybe (Maybe(..), fromMaybe, maybe)
+import Data.Maybe (Maybe(..), fromMaybe, isJust, maybe)
 import Data.Number as Number
 import Data.String as String
 import Data.Tuple (Tuple(..))
@@ -50,8 +50,12 @@ import Halogen.Subscription as HS
 import Itajara.Surface.Edit as Edit
 import Itajara.Surface.Wave (viewOf, wave)
 import Web.Event.Event (preventDefault)
+import Web.DOM.Element as Element
+import Web.Event.Event (currentTarget)
 import Web.HTML.Event.DragEvent (DragEvent)
 import Web.HTML.Event.DragEvent as DragEvent
+import Web.UIEvent.MouseEvent (MouseEvent)
+import Web.UIEvent.MouseEvent as ME
 
 type State =
   { face :: Face
@@ -62,6 +66,9 @@ type State =
   , focus :: Int
   , peaks :: Maybe Peaks
   , peaksKey :: String
+  -- | A hand on the Edit picture: where it went down, the window's start
+  -- | then, and how many frames one pixel is.
+  , waveDrag :: Maybe { x0 :: Int, fpp :: Number, d :: Edit.Drag }
   -- | The slider a hand is on; see `Itajara.Surface.Edit.View`.
   , local :: Map String Int
   , panel :: Panel
@@ -136,6 +143,9 @@ data Action
   | Solo Int Int
   | NotesFor Int
   | StartDrag Int (Maybe Int)
+  | WaveDown Edit.Drag MouseEvent
+  | WaveMove MouseEvent
+  | WaveUp
   | DragOver Int DragEvent
   | DragLeave Int
   | DropOn Int DragEvent
@@ -146,7 +156,7 @@ component =
   H.mkComponent
     { initialState: \face ->
         { face, looper: Nothing, status: Nothing, age: 0.0, focus: 0, peaks: Nothing
-        , peaksKey: "", local: Map.empty, panel: NoPanel, ackSeq: 0, log: [], take: "take"
+        , peaksKey: "", waveDrag: Nothing, local: Map.empty, panel: NoPanel, ackSeq: 0, log: [], take: "take"
         , saved: [], notes: Http.emptyNotes, notesFor: "", notesStatus: ""
         , sticks: [], stick: "", bank: "1", scene: "1_1", overwrite: false, allLayers: false
         , harvestOut: "", harvestBusy: false, drag: Nothing, dropOn: Nothing }
@@ -225,6 +235,17 @@ handleAction = case _ of
 
   Do subject d -> do
     st <- H.get
+    -- **Silent while the next layer goes down**, on a face that solos. The
+    -- layers here are alternates for one scene, not parts of one piece, so
+    -- the one sounding is switched off before the take and the new one
+    -- solos itself when it lands (the poll does that). The pedalboard keeps
+    -- hearing the old layer, as a looper should; this is the face's choice.
+    when st.face.solo $ case subject, d of
+      OnLoop i, Duty.RecordFixed _ -> for_ (st.looper >>= \top -> Array.index top.loops i) \lp ->
+        when (lp.layers > 0 && not (Socket.isWriting lp) && not lp.armed) $
+          for_ (Array.mapWithIndex Tuple (Array.take lp.layers lp.shapes)) \(Tuple k sh) ->
+            when sh.on $ duty i (Duty.LayerOn (k + 1) false)
+      _, _ -> pure unit
     traverse_ runAction (Machine.perform (rigOf st) subject d)
   Focus i -> H.modify_ _ { focus = i }
   ToggleEdit i -> do
@@ -261,6 +282,35 @@ handleAction = case _ of
   -- pointer and let the default drop be prevented, which is what makes a
   -- browser allow one at all.
   StartDrag i k -> H.modify_ _ { drag = Just { loop: i, layer: k } }
+  -- **The window under the hand.** Frames per pixel from the picture's
+  -- width, read once on the way down; every move is then the distance
+  -- travelled in frames, snapped to the step and held to the bounds, sent
+  -- as the same window the slider sends.
+  WaveDown d ev -> do
+    liftEffect $ preventDefault (ME.toEvent ev)
+    width <- liftEffect $ case currentTarget (ME.toEvent ev) >>= Element.fromEventTarget of
+      Just el -> _.width <$> Element.getBoundingClientRect el
+      Nothing -> pure 0.0
+    when (width > 0.0) $
+      H.modify_ _ { waveDrag = Just { x0: ME.clientX ev, fpp: Int.toNumber d.span / width, d } }
+  WaveMove ev -> do
+    st <- H.get
+    for_ st.waveDrag \w -> do
+      let
+        dx = Int.toNumber (ME.clientX ev - w.x0) * w.fpp
+        steps = Int.round (dx / Int.toNumber (max 1 w.d.step))
+        s = clamp w.d.lo w.d.hi (w.d.win0 + steps * w.d.step)
+        n = st.face.windowSecs
+        sr = maybe 48000 _.sampleRate st.looper
+        o = s + Int.round (n * Int.toNumber sr)
+      when (Map.lookup "in" st.local /= Just s) $ case w.d.layer of
+        Just k -> handleAction (SetLayerWindow w.d.loop k s o)
+        Nothing -> handleAction (SetWindow w.d.loop s o)
+  WaveUp -> do
+    st <- H.get
+    when (isJust st.waveDrag) do
+      H.modify_ _ { waveDrag = Nothing }
+      handleAction (EditDone "in")
   DragOver i ev -> do
     st <- H.get
     when (canDrop st i) do
@@ -788,6 +838,7 @@ render st =
     , layerWindowTo: SetLayerWindow
     , clearLayerWindow: ClearLayerWindow
     , editDone: EditDone
+    , waveDrag: Just { down: WaveDown, move: WaveMove, up: WaveUp }
     }
 
 -- | The record button says what the next press does, because `r` is one

@@ -25,6 +25,7 @@ package:
     - strings
     - web-dom
     - web-html
+    - web-uievents
   build:
     strict: true
   bundle:

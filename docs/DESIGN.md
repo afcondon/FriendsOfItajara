@@ -204,7 +204,25 @@ Not a threaded tape (`blank13`): that carries a silent layer so it can
 play, which would make the take an overdub, and an overdub never closes
 itself — until this one. One consequence, left as it is: undo keeps the
 loop's length, so an open record after undoing a fixed take also closes at
-thirteen — the length on the slab says so. An
+thirteen — the length on the slab says so.
+
+**The window may hang off either end, and the hand drags it.** A bum note at
+the front of a thirteen-second layer is lost by sliding the window half a
+second in; the daemon fills the overhang with silence (the read is a range
+check, so the bound is only that the window overlaps the layer and fits the
+arena), and the harvest writes that silence too. The Edit picture spans a
+window's length either side of the layer so the overhang has room to be
+seen; the window follows a drag along the picture — frames per pixel read
+once from the picture's width on the way down, each move snapped to the
+step and held to the bounds, released on mouse-up or when the pointer
+leaves — and the slider beneath is the fine hand with the same range. No
+"unbounded" switch: the window is already that.
+
+**Silent while the next layer goes down.** On the Arbhar face the layers
+are alternates for one scene, so the one sounding is switched off before
+Add layer records and the new layer solos itself when it lands. The
+pedalboard keeps hearing the old layer, as a looper should; this is the
+face's choice, made in the page, not the daemon. An
 overdub goes into a windowed loop and lands where you heard it — the write
 head follows the play head through the window — so a loop can be windowed
 first and layered inside the window afterwards.

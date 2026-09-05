@@ -23,7 +23,8 @@
             "prelude",
             "strings",
             "web-dom",
-            "web-html"
+            "web-html",
+            "web-uievents"
           ]
         },
         "test": {
@@ -1210,7 +1211,8 @@
         "numbers",
         "ordered-collections",
         "prelude",
-        "strings"
+        "strings",
+        "web-uievents"
       ]
     },
     "js-date": {
