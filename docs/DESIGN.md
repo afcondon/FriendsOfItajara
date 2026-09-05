@@ -189,9 +189,11 @@ Nothing is cut, so a take can be re-windowed and re-harvested later.
 button (`Duty.RecordFixed 13.0`) is `fix13` then `r`. On an empty loop the
 daemon sizes it — a length and no layers, the state `len` already used for
 bars — and the first take closes itself through the closer it already has.
-On a loop with material `fix` arms **one pass**: the `r` waits for the
-loop's own zero, so every layer starts where the first did, and the overdub
-closes itself a loop length later; the seconds asked for are noted if they
+On a loop with material `fix` arms **one pass**: the `r` starts on the
+press, like any overdub, and closes itself a loop length later (a first cut
+waited for the loop's own zero so the layers would share a start; on a
+thirteen-second loop that was up to thirteen seconds of nothing after the
+press, and the layer spans the whole loop either way); the seconds asked for are noted if they
 differ and not obeyed, because layers of two lengths in one loop is a
 different instrument (Ableton-lite, as Andrew put it), and the daemon does
 not have it. An open take is `r` as ever, closed by the next press, and only
