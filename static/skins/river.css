@@ -240,3 +240,9 @@ body {
 .friend-loop-notes td { padding: 2px 8px 2px 0; font: 400 13px var(--hand); color: var(--pencil); }
 .friend-loop-notes input { width: 100%; }
 .friend-harvest-out { margin: 14px 0 0; padding: 12px 14px; background: var(--paper); border: 1px solid var(--hair); font: 12px/1.45 ui-monospace, Menlo, monospace; white-space: pre-wrap; max-height: 320px; overflow: auto; }
+
+/* Nothing on the sheet is text to select — a drag that misses its handle must
+   not paint the hover words, which are on the page in transparent ink. Only
+   the places you type stay selectable. */
+.friend-head, .friend-shape, .friend-loops, .friend-controls, .friend-log, .friend-loop, .friend-btn, .looper-edit-actions { user-select: none; -webkit-user-select: none; }
+input, textarea, .friend-harvest-out { user-select: text; -webkit-user-select: text; }

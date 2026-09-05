@@ -89,3 +89,9 @@ body { margin: 0; background: var(--ground); color: var(--ink);
 .friend-loop.can-drop { border-style: dashed; }
 .friend-loop.is-drop { border-style: solid; border-color: var(--accent); background: #eef5f2; }
 .friend-loop-notes tr.is-focus td { background: #eef5f2; }
+
+/* Nothing on the sheet is text to select — a drag that misses its handle must
+   not paint the hover words, which are on the page in transparent ink. Only
+   the places you type stay selectable. */
+.friend-head, .friend-shape, .friend-loops, .friend-controls, .friend-log, .friend-loop, .friend-btn, .looper-edit-actions { user-select: none; -webkit-user-select: none; }
+input, textarea, .friend-harvest-out { user-select: text; -webkit-user-select: text; }
