@@ -208,9 +208,15 @@ handleAction = case _ of
       -- a loop that has just gained a layer — a take closed, a duplicate, a
       -- drop — is asked to solo it, so what you just did is what you hear.
       -- Read from the two snapshots, never assumed; a lone layer is left.
+      --
+      -- And the other direction: undo the soloed layer and the ones left are
+      -- all off, so the loop plays silence with no sign of why. A loop that
+      -- has just lost a layer and has none sounding gets its newest turned on.
       when cur.face.solo $ for_ snap \s -> for_ cur.looper \old ->
-        for_ (Array.zip old.loops s.loops) \(Tuple o n) ->
+        for_ (Array.zip old.loops s.loops) \(Tuple o n) -> do
           when (n.layers > o.layers && n.layers > 1) $ duty n.index (Duty.SoloLayer n.layers)
+          when (n.layers < o.layers && n.layers > 0 && not (Array.any _.on (Array.take n.layers n.shapes))) $
+            duty n.index (Duty.SoloLayer n.layers)
       -- What the daemon had to say. By sequence, so two identical refusals
       -- in a row are two lines.
       for_ snap \s ->
