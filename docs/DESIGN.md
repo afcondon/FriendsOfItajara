@@ -181,9 +181,27 @@ overdub goes into a windowed loop and lands where you heard it — the write
 head follows the play head through the window — so a loop can be windowed
 first and layered inside the window afterwards.
 
-**A copy leaves the window behind.** Dropped layers arrive whole and the new
-loop plays whole; the source's window is a view of the source and stays
-there. That is a choice, not an accident — the copy exists so the new loop
+**One layer sounds at a time, and each layer has its own window.** The
+module plays one layer at a time — the Layer knob — so on this face the
+layers behave as a radio: clicking a letter or its envelope solos it, the
+rest are drawn parked, and a lone layer cannot be parked. (The summed loop,
+the omega, stays what the pedalboard hears; the daemon still sums, this
+face just leaves one on.) And the window belongs to the layer, not the
+loop: each layer carries its own in and out, plays that stretch coming
+round inside the loop's cycle, and the Edit panel edits the window of the
+layer in hand, in its colour. So a scene is built the way you would want
+to: record a long take once, drop its layer on its own slab to duplicate it
+(`dp<k>`, window and all), solo each copy in turn and slide its window —
+six different thirteen seconds of one performance, in one loop, harvested
+as one scene. The picture the panel draws is the arena as stored, so the
+window is drawn over the audio rather than baked into it; playback applies
+it, and so does the harvest, which prefers a layer's window to the loop's.
+Rample's voice-and-stack is the same shape exactly.
+
+**A copy leaves the loop's window behind, and brings the layers' own.** Dropped layers arrive whole and the new
+loop plays whole; the source *loop's* window is a view of the source and
+stays there, while a *layer's* own window is the slice the player chose of
+it and travels with the layer. That is a choice, not an accident — the copy exists so the new loop
 can be windowed to a *different* thirteen seconds — and it is the one Andrew
 said he had not thought about and might want the other way. If so it is one
 flag on the verb.

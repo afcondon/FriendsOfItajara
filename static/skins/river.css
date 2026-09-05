@@ -135,6 +135,15 @@ body {
 .friend-layer { display: flex; align-items: center; gap: 8px; height: 18px; }
 .friend-layer.is-empty { display: none; }
 .friend-layer.is-off .friend-layer-wave { opacity: 0.25; }
+.friend-layer.is-off .friend-layer-n::after { color: var(--pencil) !important; opacity: 0.5; }
+.friend-layer.is-solo .friend-layer-n, .friend-layer.is-solo .friend-layer-wave { cursor: pointer; }
+/* The Edit panel's waveform in the colour of the layer in hand. */
+.looper-modal.is-layer-1 .looper-wave-body { fill: var(--l1); }
+.looper-modal.is-layer-2 .looper-wave-body { fill: var(--l2); }
+.looper-modal.is-layer-3 .looper-wave-body { fill: var(--l3); }
+.looper-modal.is-layer-4 .looper-wave-body { fill: var(--l4); }
+.looper-modal.is-layer-5 .looper-wave-body { fill: var(--l5); }
+.looper-modal.is-layer-6 .looper-wave-body { fill: var(--l6); }
 .friend-layer-n { width: 12px; text-align: center; font-size: 0; color: var(--pencil); }
 .friend-layer-n::after { font: 400 12px var(--hand); }
 .friend-layer:nth-of-type(1) .friend-layer-n::after { content: "α"; }

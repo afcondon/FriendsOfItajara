@@ -95,3 +95,5 @@ body { margin: 0; background: var(--ground); color: var(--ink);
    the places you type stay selectable. */
 .friend-head, .friend-shape, .friend-loops, .friend-controls, .friend-log, .friend-loop, .friend-btn, .looper-edit-actions { user-select: none; -webkit-user-select: none; }
 input, textarea, .friend-harvest-out { user-select: text; -webkit-user-select: text; }
+.friend-layer.is-solo .friend-layer-n, .friend-layer.is-solo .friend-layer-wave { cursor: pointer; }
+.friend-layer.is-solo.is-off .friend-layer-n { opacity: 0.4; }

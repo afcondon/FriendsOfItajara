@@ -42,6 +42,10 @@ type Face =
   -- | along the loop — and what sounds is what the harvest writes. A loop
   -- | shorter than this plays whole and the harvest lets it come round.
   , windowSecs :: Number
+  -- | Whether one layer sounds at a time, the module's own way: the Layer
+  -- | knob. Clicking a layer solos it; a lone layer cannot be parked. Off,
+  -- | every layer sounds and a checkbox parks one — the pedalboard's way.
+  , solo :: Boolean
   -- | What a loop becomes on the stick, and what a layer becomes.
   , unit :: String
   , layerWord :: String
@@ -72,6 +76,7 @@ arbhar =
   -- 13, not 10: the module captures thirteen so that grains can be drawn
   -- evenly from any point of the ten. The window is what it captures.
   , windowSecs: 13.0
+  , solo: true
   , unit: "scene"
   , layerWord: "layer"
   , holds: "36 scenes of 6 layers, and 36 single-layer library slots, per stick"
@@ -96,6 +101,7 @@ morphagene =
   , layerSecs: 174.0
   , tailSecs: 0.0
   , windowSecs: 0.0
+  , solo: false
   , unit: "reel"
   , layerWord: "splice"
   , holds: "32 reels of up to 300 splices, 174 s per reel"
@@ -116,6 +122,7 @@ rample =
   , layerSecs: 60.0
   , tailSecs: 0.0
   , windowSecs: 0.0
+  , solo: false
   , unit: "voice"
   , layerWord: "sample"
   , holds: "kits A0 to Z99, four voices each, up to 12 samples per voice"
@@ -135,6 +142,7 @@ qd =
   , layerSecs: 4.0
   , tailSecs: 0.0
   , windowSecs: 0.0
+  , solo: false
   , unit: "sample set"
   , layerWord: "sample"
   , holds: "128 samples per voice, mono"

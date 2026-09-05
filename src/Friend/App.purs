@@ -130,6 +130,9 @@ data Action
   | SetAllLayers Boolean
   | RunHarvest Boolean
   | SetWindow Int Int Int
+  | SetLayerWindow Int Int Int Int
+  | ClearLayerWindow Int Int
+  | Solo Int Int
   | NotesFor Int
   | StartDrag Int (Maybe Int)
   | DragOver Int DragEvent
@@ -228,6 +231,13 @@ handleAction = case _ of
     H.modify_ \s -> s { local = Map.insert "in" i s.local }
     duty loop (Duty.WindowIn i)
     duty loop (Duty.WindowOut o)
+  SetLayerWindow loop k i o -> do
+    H.modify_ \s -> s { local = Map.insert "in" i s.local }
+    duty loop (Duty.LayerWindow k i o)
+  ClearLayerWindow loop k -> duty loop (Duty.ClearLayerWindow k)
+  Solo loop k -> do
+    H.modify_ _ { focus = loop, peaksKey = "" }
+    duty loop (Duty.SoloLayer k)
   NotesFor i -> do
     H.modify_ _ { focus = i }
     handleAction (OpenPanel NotesPanel)
@@ -248,6 +258,7 @@ handleAction = case _ of
     st <- H.get
     for_ st.drag \d ->
       duty i (case d.layer of
+        Just k | d.loop == i -> Duty.DupLayer k
         Just k -> Duty.CopyLayer d.loop k
         Nothing -> Duty.CopyLoop d.loop)
     H.modify_ _ { drag = Nothing, dropOn = Nothing }
@@ -356,11 +367,29 @@ safeName s =
     if cleaned == "" then "take" else cleaned
 
 -- | Whether a drop here would mean something: a drag in hand, from another
--- | loop, onto one that holds nothing. The same rule the machine applies.
+-- | loop onto one that holds nothing — or a layer onto its own loop, which
+-- | duplicates it, while there is room. The same rules the machine applies.
 canDrop :: State -> Int -> Boolean
 canDrop st i = case st.drag of
   Nothing -> false
-  Just d -> d.loop /= i && maybe false (\top -> maybe false (\lp -> lp.layers == 0) (Array.index top.loops i)) st.looper
+  Just d -> case st.looper of
+    Nothing -> false
+    Just top -> case Array.index top.loops i of
+      Nothing -> false
+      Just lp
+        | d.loop == i -> d.layer /= Nothing && lp.layers < top.maxLayers
+        | otherwise -> lp.layers == 0
+
+-- | The layer sounding alone, from one, when the face solos: the first one
+-- | the daemon reports on. The Edit panel edits its window.
+activeLayer :: State -> Int -> Maybe Int
+activeLayer st i
+  | not st.face.solo = Nothing
+  | otherwise = do
+      top <- st.looper
+      lp <- Array.index top.loops i
+      k <- Array.findIndex _.on lp.shapes
+      pure (k + 1)
 
 setNote :: NoteField -> String -> Notes -> Notes
 setNote f v n = case f of
@@ -494,22 +523,36 @@ render st =
   layerRow i lp k sh =
     -- A layer is a handle too: drag one onto an empty loop and it goes alone.
     HH.div
-      [ HP.class_ (HH.ClassName ("friend-layer" <> (if sh.on then "" else " is-off")))
+      [ HP.class_ (HH.ClassName ("friend-layer" <> (if sh.on then "" else " is-off") <> (if f.solo then " is-solo" else "")))
       , HP.draggable true
       , HP.title "drag onto an empty loop to copy this layer"
       , HE.onDragStart \_ -> StartDrag i (Just (k + 1))
       , HE.onDragEnd \_ -> EndDrag
       ]
-      [ HH.input
-          [ HP.type_ HP.InputCheckbox
-          , HP.class_ (HH.ClassName "loop-layer-on")
-          , HP.checked sh.on
-          , HP.title (f.layerWord <> " " <> show (k + 1) <> (if sh.on then ", in the mix" else ", out of the mix"))
-          , HE.onChecked (SetLayer i (k + 1))
-          ]
-      , HH.span [ HP.class_ (HH.ClassName "friend-layer-n") ] [ HH.text (show (k + 1)) ]
-      , HH.div [ HP.class_ (HH.ClassName "friend-layer-wave") ] (wave (viewOf lp sh))
-      ]
+      ( (if f.solo then []
+          else
+            [ HH.input
+                [ HP.type_ HP.InputCheckbox
+                , HP.class_ (HH.ClassName "loop-layer-on")
+                , HP.checked sh.on
+                , HP.title (f.layerWord <> " " <> show (k + 1) <> (if sh.on then ", in the mix" else ", out of the mix"))
+                , HE.onChecked (SetLayer i (k + 1))
+                ]
+            ])
+        -- On a face that solos, the letter and the envelope are the Layer
+        -- knob: a click makes this the one that sounds.
+        <> [ HH.span
+               ( [ HP.class_ (HH.ClassName "friend-layer-n") ]
+                   <> (if f.solo then [ HE.onClick \_ -> Solo i (k + 1), HP.title soloWord ] else []) )
+               [ HH.text (show (k + 1)) ]
+           , HH.div
+               ( [ HP.class_ (HH.ClassName "friend-layer-wave") ]
+                   <> (if f.solo then [ HE.onClick \_ -> Solo i (k + 1), HP.title soloWord ] else []) )
+               (wave (viewOf lp sh))
+           ]
+      )
+    where
+    soloWord = "hear " <> f.layerWord <> " " <> show (k + 1) <> " alone"
 
   btn label act on =
     HH.button
@@ -554,15 +597,16 @@ render st =
   editModal =
     HH.div [ HP.class_ (HH.ClassName "looper-modal-overlay") ]
       [ HH.div [ HP.class_ (HH.ClassName "looper-modal-backdrop"), HE.onClick \_ -> ToggleEdit st.focus ] []
-      , HH.div [ HP.class_ (HH.ClassName "looper-modal is-edit"), HP.attr (HH.AttrName "role") "dialog" ]
+      , HH.div [ HP.class_ (HH.ClassName ("looper-modal is-edit" <> maybe "" (\k -> " is-layer-" <> show k) (activeLayer st st.focus))), HP.attr (HH.AttrName "role") "dialog" ]
           [ HH.button [ HP.class_ (HH.ClassName "looper-modal-close"), HE.onClick \_ -> ToggleEdit st.focus ] [ HH.text "×" ]
           , HH.div [ HP.class_ (HH.ClassName "looper-modal-body") ]
-              [ HH.h2_ [ HH.text ("Edit — loop " <> show (st.focus + 1)) ]
+              [ HH.h2_ [ HH.text ("Edit — loop " <> show (st.focus + 1) <> maybe "" (\k -> ", " <> f.layerWord <> " " <> show k) (activeLayer st st.focus)) ]
               , Edit.editPanel editHandlers
                   { focus: st.focus, peaks: st.peaks, local: st.local
                   , fixedFrames: if f.windowSecs > 0.0
                       then map (\top -> Int.round (f.windowSecs * Int.toNumber top.sampleRate)) st.looper
                       else Nothing
+                  , layer: activeLayer st st.focus
                   }
                   st.looper
               ]
@@ -663,6 +707,8 @@ render st =
     , shiftStart: ShiftStart
     , askPeaks: AskPeaks
     , windowTo: SetWindow
+    , layerWindowTo: SetLayerWindow
+    , clearLayerWindow: ClearLayerWindow
     , editDone: EditDone
     }
 
