@@ -176,7 +176,17 @@ the window is what the harvest writes, so audition and export cannot
 disagree; rotation has no meaning here and is not offered. A loop shorter
 than the window plays whole and is not windowed: the harvest fills the
 module's length by letting it come round again, which is what a loop does.
-Nothing is cut, so a take can be re-windowed and re-harvested later.
+Nothing is cut, so a take can be re-windowed and re-harvested later. An
+overdub goes into a windowed loop and lands where you heard it — the write
+head follows the play head through the window — so a loop can be windowed
+first and layered inside the window afterwards.
+
+**A copy leaves the window behind.** Dropped layers arrive whole and the new
+loop plays whole; the source's window is a view of the source and stays
+there. That is a choice, not an accident — the copy exists so the new loop
+can be windowed to a *different* thirteen seconds — and it is the one Andrew
+said he had not thought about and might want the other way. If so it is one
+flag on the verb.
 
 **Drag and drop is a copy onto an empty loop.** A loop's circled number is
 the handle for the whole loop; a layer row is the handle for that layer.
