@@ -38,13 +38,14 @@ body {
   background-size: 24px 24px;
 }
 
-/* The site, at the foot of the elevation: contoured ground, every fourth
-   contour an index line, with the run following the valley — the house
-   stands over Bear Run, and the slabs stand over this. Generated to
-   river-site.svg beside this file; part of the sheet, not of the window, so
-   it scrolls with the drawing. */
+/* The site, under the lower two thirds of the sheet: contoured ground, every
+   fourth contour an index line, fading in from the top, with the run
+   following the valley beneath the last slabs — the house stands over Bear
+   Run, and the slabs stand over this. Generated to river-site.svg beside
+   this file; part of the sheet, not of the window, so it scrolls with the
+   drawing. */
 .friend::before {
-  content: ""; position: absolute; left: -100vw; right: -100vw; bottom: 0; height: 560px; z-index: -1; pointer-events: none;
+  content: ""; position: absolute; left: -100vw; right: -100vw; top: 34%; bottom: 0; z-index: -1; pointer-events: none;
   background: url("river-site.svg") no-repeat center bottom / auto 100%;
 }
 
@@ -172,6 +173,14 @@ body {
 .friend-loop-buttons .friend-btn:nth-child(4)::before { content: "↶"; }
 .friend-loop-buttons .friend-btn:nth-child(5)::before { content: "✕"; font-size: 14px; }
 .friend-loop-buttons .friend-btn:nth-child(6)::before { content: "⟷"; }
+.friend-loop-buttons .friend-btn:nth-child(7)::before { content: "✎"; font-size: 14px; color: var(--pencil); }
+
+/* Drag and drop: a handle shows a grab cursor; an empty loop that could take
+   the drop is drawn in dashes, and the one under the pointer in water. */
+.friend-loop-name[draggable=true], .friend-layer[draggable=true] { cursor: grab; }
+.friend-loop.can-drop { border-style: dashed; }
+.friend-loop.is-drop { border-style: solid; border-color: var(--water); background: var(--water-pale); }
+.friend-loop-notes tr.is-focus td { background: var(--water-pale); }
 
 /* The controls: a thin rule and a row of glyphs; the take's name on a line. */
 .friend-controls { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px; padding-top: 12px; border-top: 1px solid var(--ink); margin-top: 6px; }

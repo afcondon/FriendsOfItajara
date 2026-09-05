@@ -36,12 +36,12 @@ type Face =
   -- | What one layer holds, in seconds, and what the module reads past that.
   , layerSecs :: Number
   , tailSecs :: Number
-  -- | The length every loop should be recorded at, in seconds, or zero for
-  -- | free lengths. The daemon's `--fixed-secs` threads every loop as an
-  -- | empty tape of this length and a recording closes itself when it
-  -- | fills — so for a module that holds a fixed length there is no
-  -- | open-ended take to end, and nothing to trim afterwards.
-  , fixedSecs :: Number
+  -- | What the module holds of a layer, in seconds, or zero for a module
+  -- | that takes any length. Loops are recorded at any length; the Edit
+  -- | panel is then one slider — a window of exactly this much, moved
+  -- | along the loop — and what sounds is what the harvest writes. A loop
+  -- | shorter than this plays whole and the harvest lets it come round.
+  , windowSecs :: Number
   -- | What a loop becomes on the stick, and what a layer becomes.
   , unit :: String
   , layerWord :: String
@@ -70,15 +70,15 @@ arbhar =
   , layerSecs: 10.0
   , tailSecs: 3.0
   -- 13, not 10: the module captures thirteen so that grains can be drawn
-  -- evenly from any point of the ten. Record what it captures.
-  , fixedSecs: 13.0
+  -- evenly from any point of the ten. The window is what it captures.
+  , windowSecs: 13.0
   , unit: "scene"
   , layerWord: "layer"
   , holds: "36 scenes of 6 layers, and 36 single-layer library slots, per stick"
-  , daemon: "itajara loop --device <device> --layers 6 --fixed-secs 13 --yes"
+  , daemon: "itajara loop --device <device> --layers 6 --yes"
   , harvest: true
   , notes:
-      [ "Every take is 13 s, the length the module captures: 10 s of layer and the 3 s it reads past the end. Press record once; it closes itself."
+      [ "Record any length. Edit slides a 13 s window along the loop — the length the module captures, 10 s of layer and 3 s past the end — and that window is what sounds and what is written."
       , "Layers load in name order, 1_ to 6_; a scene's preset.txt with Load Layers loads audio without touching the panel."
       , "Link off and free lengths: nothing here needs a bar."
       ]
@@ -95,7 +95,7 @@ morphagene =
   , layers: 8
   , layerSecs: 174.0
   , tailSecs: 0.0
-  , fixedSecs: 0.0
+  , windowSecs: 0.0
   , unit: "reel"
   , layerWord: "splice"
   , holds: "32 reels of up to 300 splices, 174 s per reel"
@@ -115,7 +115,7 @@ rample =
   , layers: 12
   , layerSecs: 60.0
   , tailSecs: 0.0
-  , fixedSecs: 0.0
+  , windowSecs: 0.0
   , unit: "voice"
   , layerWord: "sample"
   , holds: "kits A0 to Z99, four voices each, up to 12 samples per voice"
@@ -134,7 +134,7 @@ qd =
   , layers: 8
   , layerSecs: 4.0
   , tailSecs: 0.0
-  , fixedSecs: 0.0
+  , windowSecs: 0.0
   , unit: "sample set"
   , layerWord: "sample"
   , holds: "128 samples per voice, mono"
@@ -160,11 +160,5 @@ shapeNotes f top = Array.catMaybes
       then Just ("The daemon holds " <> show top.maxLayers <> " layers per loop; a "
         <> f.module_ <> " " <> f.unit <> " holds " <> show f.layers
         <> ". Start it with --layers " <> show f.layers <> " to fill one.")
-      else Nothing
-  , if f.fixedSecs > 0.0 && top.fixedSecs /= f.fixedSecs
-      then Just ("The daemon records free lengths"
-        <> (if top.fixedSecs > 0.0 then " of " <> show top.fixedSecs <> " s" else "")
-        <> "; the " <> f.module_ <> " captures " <> show f.fixedSecs
-        <> " s. Start it with --fixed-secs " <> show f.fixedSecs <> " and every take is the right length.")
       else Nothing
   ]

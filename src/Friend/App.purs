@@ -48,6 +48,9 @@ import Halogen.HTML.Properties as HP
 import Halogen.Subscription as HS
 import Itajara.Surface.Edit as Edit
 import Itajara.Surface.Wave (viewOf, wave)
+import Web.Event.Event (preventDefault)
+import Web.HTML.Event.DragEvent (DragEvent)
+import Web.HTML.Event.DragEvent as DragEvent
 
 type State =
   { face :: Face
@@ -81,6 +84,10 @@ type State =
   , allLayers :: Boolean
   , harvestOut :: String
   , harvestBusy :: Boolean
+  -- | A drag in progress: which loop it came from and, for one layer, which
+  -- | (from one). And the empty loop the pointer is over, if any.
+  , drag :: Maybe { loop :: Int, layer :: Maybe Int }
+  , dropOn :: Maybe Int
   }
 
 -- | One modal at a time: the loop in hand's edit, the take's notes, or the
@@ -122,6 +129,13 @@ data Action
   | SetOverwrite Boolean
   | SetAllLayers Boolean
   | RunHarvest Boolean
+  | SetWindow Int Int Int
+  | NotesFor Int
+  | StartDrag Int (Maybe Int)
+  | DragOver Int DragEvent
+  | DragLeave Int
+  | DropOn Int DragEvent
+  | EndDrag
 
 component :: forall q o m. MonadAff m => H.Component q Face o m
 component =
@@ -131,7 +145,7 @@ component =
         , peaksKey: "", local: Map.empty, panel: NoPanel, ackSeq: 0, log: [], take: "take"
         , saved: [], notes: Http.emptyNotes, notesFor: "", notesStatus: ""
         , sticks: [], stick: "", bank: "1", scene: "1_1", overwrite: false, allLayers: false
-        , harvestOut: "", harvestBusy: false }
+        , harvestOut: "", harvestBusy: false, drag: Nothing, dropOn: Nothing }
     , render
     , eval: H.mkEval H.defaultEval { handleAction = handleAction, initialize = Just Initialize }
     }
@@ -208,6 +222,36 @@ handleAction = case _ of
     H.modify_ \s -> s { local = Map.insert "out" f s.local }
     duty loop (Duty.WindowOut f)
   ClearWindow loop -> duty loop Duty.ClearWindow
+  -- Both ends together: the fixed window's slider. Two verbs on one
+  -- connection, held by the daemon to the same settle, so they land as one.
+  SetWindow loop i o -> do
+    H.modify_ \s -> s { local = Map.insert "in" i s.local }
+    duty loop (Duty.WindowIn i)
+    duty loop (Duty.WindowOut o)
+  NotesFor i -> do
+    H.modify_ _ { focus = i }
+    handleAction (OpenPanel NotesPanel)
+  -- **Drag and drop is a copy onto an empty loop.** The machine decides
+  -- whether the drop means anything (empty target, a source with layers) and
+  -- the daemon decides again; here we only say which loop is under the
+  -- pointer and let the default drop be prevented, which is what makes a
+  -- browser allow one at all.
+  StartDrag i k -> H.modify_ _ { drag = Just { loop: i, layer: k } }
+  DragOver i ev -> do
+    st <- H.get
+    when (canDrop st i) do
+      liftEffect (preventDefault (DragEvent.toEvent ev))
+      when (st.dropOn /= Just i) $ H.modify_ _ { dropOn = Just i }
+  DragLeave i -> H.modify_ \s -> s { dropOn = if s.dropOn == Just i then Nothing else s.dropOn }
+  DropOn i ev -> do
+    liftEffect (preventDefault (DragEvent.toEvent ev))
+    st <- H.get
+    for_ st.drag \d ->
+      duty i (case d.layer of
+        Just k -> Duty.CopyLayer d.loop k
+        Nothing -> Duty.CopyLoop d.loop)
+    H.modify_ _ { drag = Nothing, dropOn = Nothing }
+  EndDrag -> H.modify_ _ { drag = Nothing, dropOn = Nothing }
   ShiftStart loop k -> do
     st <- H.get
     let rotNow = maybe 0 _.rot (st.looper >>= \s -> Array.index s.loops loop)
@@ -311,6 +355,13 @@ safeName s =
   in
     if cleaned == "" then "take" else cleaned
 
+-- | Whether a drop here would mean something: a drag in hand, from another
+-- | loop, onto one that holds nothing. The same rule the machine applies.
+canDrop :: State -> Int -> Boolean
+canDrop st i = case st.drag of
+  Nothing -> false
+  Just d -> d.loop /= i && maybe false (\top -> maybe false (\lp -> lp.layers == 0) (Array.index top.loops i)) st.looper
+
 setNote :: NoteField -> String -> Notes -> Notes
 setNote f v n = case f of
   NTitle -> n { title = v }
@@ -398,11 +449,26 @@ render st =
 
   card top i lp =
     HH.article
-      [ HP.class_ (HH.ClassName ("friend-loop " <> phaseClass lp <> (if i == st.focus then " is-focus" else "")))
+      [ HP.class_ (HH.ClassName ("friend-loop " <> phaseClass lp
+          <> (if i == st.focus then " is-focus" else "")
+          <> (if st.dropOn == Just i then " is-drop" else "")
+          <> (if canDrop st i then " can-drop" else "")))
       , HE.onClick \_ -> Focus i
+      , HE.onDragOver (DragOver i)
+      , HE.onDragLeave \_ -> DragLeave i
+      , HE.onDrop (DropOn i)
       ]
       [ HH.div [ HP.class_ (HH.ClassName "friend-loop-head") ]
-          [ HH.span [ HP.class_ (HH.ClassName "friend-loop-name") ] [ HH.text ("Loop " <> show (i + 1)) ]
+          -- The name is the handle for the whole loop: drag it onto an empty
+          -- loop and every layer goes.
+          [ HH.span
+              [ HP.class_ (HH.ClassName "friend-loop-name")
+              , HP.draggable (lp.layers > 0)
+              , HP.title (if lp.layers > 0 then "drag onto an empty loop to copy every layer" else "")
+              , HE.onDragStart \_ -> StartDrag i Nothing
+              , HE.onDragEnd \_ -> EndDrag
+              ]
+              [ HH.text ("Loop " <> show (i + 1)) ]
           , HH.span [ HP.class_ (HH.ClassName "friend-loop-state") ] [ HH.text (stateWord lp) ]
           , HH.span [ HP.class_ (HH.ClassName "friend-loop-len") ] [ HH.text (lengthWord top lp) ]
           , HH.span [ HP.class_ (HH.ClassName "friend-loop-dest") ] [ HH.text ("→ " <> f.unit <> " " <> show (i + 1)) ]
@@ -418,11 +484,19 @@ render st =
           , btn "Undo" (Do (OnLoop i) Duty.Undo) false
           , btn "Clear" (Do (OnLoop i) Duty.ClearLoop) false
           , btn "Edit" (ToggleEdit i) (st.panel == EditPanel && st.focus == i)
+          , btn "Notes" (NotesFor i) (st.panel == NotesPanel && st.focus == i)
           ]
       ]
 
   layerRow i lp k sh =
-    HH.div [ HP.class_ (HH.ClassName ("friend-layer" <> (if sh.on then "" else " is-off"))) ]
+    -- A layer is a handle too: drag one onto an empty loop and it goes alone.
+    HH.div
+      [ HP.class_ (HH.ClassName ("friend-layer" <> (if sh.on then "" else " is-off")))
+      , HP.draggable true
+      , HP.title "drag onto an empty loop to copy this layer"
+      , HE.onDragStart \_ -> StartDrag i (Just (k + 1))
+      , HE.onDragEnd \_ -> EndDrag
+      ]
       [ HH.input
           [ HP.type_ HP.InputCheckbox
           , HP.class_ (HH.ClassName "loop-layer-on")
@@ -481,7 +555,13 @@ render st =
           [ HH.button [ HP.class_ (HH.ClassName "looper-modal-close"), HE.onClick \_ -> ToggleEdit st.focus ] [ HH.text "×" ]
           , HH.div [ HP.class_ (HH.ClassName "looper-modal-body") ]
               [ HH.h2_ [ HH.text ("Edit — loop " <> show (st.focus + 1)) ]
-              , Edit.editPanel editHandlers { focus: st.focus, peaks: st.peaks, local: st.local } st.looper
+              , Edit.editPanel editHandlers
+                  { focus: st.focus, peaks: st.peaks, local: st.local
+                  , fixedFrames: if f.windowSecs > 0.0
+                      then map (\top -> Int.round (f.windowSecs * Int.toNumber top.sampleRate)) st.looper
+                      else Nothing
+                  }
+                  st.looper
               ]
           ]
       ]
@@ -530,7 +610,7 @@ render st =
   loopNoteRow i =
     let r = loopNote i st.notes.loops
         cell fld v = HH.td_ [ HH.input [ HP.type_ HP.InputText, HP.value v, HE.onValueInput (SetLoopNote i fld) ] ]
-    in HH.tr_
+    in HH.tr [ HP.class_ (HH.ClassName (if i == st.focus + 1 then "is-focus" else "")) ]
       [ HH.td_ [ HH.text (show i <> (if hasMaterial i then "" else " (empty)")) ]
       , cell LTitle r.title
       , cell LKey r.key
@@ -579,6 +659,7 @@ render st =
     , clearWindow: ClearWindow
     , shiftStart: ShiftStart
     , askPeaks: AskPeaks
+    , windowTo: SetWindow
     , editDone: EditDone
     }
 

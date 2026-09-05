@@ -83,3 +83,9 @@ body { margin: 0; background: var(--ground); color: var(--ink);
 .friend-loop-notes input { width: 100%; font: inherit; font-size: 13px; padding: 3px 6px; border: 1px solid var(--line); }
 .friend-harvest-out { margin: 12px 0 0; padding: 10px 12px; background: var(--ground); border: 1px solid var(--line); font-size: 12px; white-space: pre-wrap; max-height: 320px; overflow: auto; }
 .looper-modal.is-notes, .looper-modal.is-harvest { max-width: 900px; }
+
+/* Drag and drop: a handle, an empty loop that could take the drop, the one under the pointer. */
+.friend-loop-name[draggable=true], .friend-layer[draggable=true] { cursor: grab; }
+.friend-loop.can-drop { border-style: dashed; }
+.friend-loop.is-drop { border-style: solid; border-color: var(--accent); background: #eef5f2; }
+.friend-loop-notes tr.is-focus td { background: #eef5f2; }

@@ -164,15 +164,36 @@ use, tags, free text, and a row per loop. Saved as `notes.json` in the take.
 The daemon's facts — length, bars, tempo, source — are not asked for twice;
 the datasheet joins the two.
 
-**Record at the module's length.** The Arbhar captures thirteen seconds,
-not ten: ten of layer and three past the end, so grains can be drawn evenly
-from any point of the ten. So the Arbhar face asks for the daemon with
-`--fixed-secs 13` — every loop threaded as an empty tape of that length, a
-recording that closes itself when it fills — and there is no open-ended
-take to end and nothing to trim afterwards. The face checks the daemon it
-finds and says, in the title block, when it records free lengths or too few
-layers. The harvest then writes the thirteen seconds straight through, with
-no wrap to add. (`Face.fixedSecs` is zero on the other faces: free lengths.)
+**Record any length; the edit is a window of the module's length.** The
+Arbhar captures thirteen seconds, not ten: ten of layer and three past the
+end, so grains can be drawn evenly from any point of the ten. The first
+thought was to record at that length (`--fixed-secs 13`); the better one,
+Andrew's, keeps timing out of the page entirely: loops are recorded at any
+length, and on a face with `windowSecs` the Edit panel is **one slider** — a
+window of exactly that much, moved along the loop, both ends sent together
+and applied by the daemon on its own settle. What sounds is the window, and
+the window is what the harvest writes, so audition and export cannot
+disagree; rotation has no meaning here and is not offered. A loop shorter
+than the window plays whole and is not windowed: the harvest fills the
+module's length by letting it come round again, which is what a loop does.
+Nothing is cut, so a take can be re-windowed and re-harvested later.
+
+**Drag and drop is a copy onto an empty loop.** A loop's circled number is
+the handle for the whole loop; a layer row is the handle for that layer.
+Dropped on an empty loop, the layers land whole and in phase with the
+source (`cp<src>`, `cp<src>l<k>` — the daemon's verbs, through the same
+machine as every button), the source's window stays its own, and the new
+loop can be windowed to a *different* thirteen seconds. So one long take,
+dragged into several empty loops and windowed differently in each, becomes
+several scenes. Only onto empty loops, for now and on purpose: what a drop
+onto a loop that already holds something should *mean* — reconcile two
+lengths, tile, crop — is the discussion still to have, and both the machine
+and the daemon refuse rather than guess. Empty loops that could take the
+drag are drawn dashed while it is in hand; the one under the pointer fills.
+
+**Notes per loop.** Each slab carries a pencil that opens the Notes panel
+with that loop's row marked; the whole-take Notes button stays along the
+rule. Whether the pencil is discreet or hidden is a thing to watch in use.
 
 **Harvest to Arbhar** runs `msm harvest`. The mapping, from the firmware 2.0
 manual: **a loop is a library bank** (`_arbhar_library/<bank>_<layer>_sample/`,
@@ -209,6 +230,7 @@ Not built, in the order they are likely wanted:
 
 1. Morphagene, Rample and QD faces made real: one mapping each in
    `msm::harvest`, on the Arbhar's pattern.
+1a. Drops onto loops that hold something: what they mean.
 2. Per-loop level and source on the card. The daemon has both; the page
    shows neither yet.
 3. Keyboard: number keys select a loop, space is Record. Recording with a
