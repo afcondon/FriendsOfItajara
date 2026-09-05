@@ -48,7 +48,6 @@ body { margin: 0; background: var(--ground); color: var(--ink);
 .friend-layer.is-off .friend-layer-wave { opacity: 0.25; }
 .friend-layer-n { width: 12px; font-size: 11px; color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
 .friend-layer-wave { position: relative; flex: 1 1 auto; height: 100%; background: #e9efec; }
-.is-recording .friend-layer-wave .loop-wave path { fill: var(--record); }
 .is-stopped .friend-layer-wave .loop-wave path { fill: #9a958d; }
 
 .friend-loop-buttons { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -97,3 +96,7 @@ body { margin: 0; background: var(--ground); color: var(--ink);
 input, textarea, .friend-harvest-out { user-select: text; -webkit-user-select: text; }
 .friend-layer.is-solo .friend-layer-n, .friend-layer.is-solo .friend-layer-wave { cursor: pointer; }
 .friend-layer.is-solo.is-off .friend-layer-n { opacity: 0.4; }
+.friend-layer-bar { position: relative; flex: 1 1 auto; height: 100%; background: #f3f0ea; }
+.friend-layer-bar-fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--record); opacity: 0.6; }
+.friend-layer-bar-fill.is-open { background: repeating-linear-gradient(90deg, var(--record) 0 6px, transparent 6px 12px); }
+.friend-layer-bar-word { position: absolute; right: 6px; top: 0; font-size: 11px; line-height: 22px; color: var(--record); }

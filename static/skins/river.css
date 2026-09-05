@@ -165,7 +165,6 @@ body {
 .friend-layer:nth-of-type(6) .friend-layer-n::after, .friend-layer:nth-of-type(6) .loop-wave path { color: var(--l6); fill: var(--l6); }
 .friend-layer-wave { position: relative; flex: 1 1 auto; height: 100%; background: #fff; border-bottom: 1px solid var(--hair); }
 .loop-wave path { fill: var(--water); }
-.is-recording .friend-layer-wave .loop-wave path { fill: var(--record); }
 .is-stopped .friend-layer-wave { opacity: 0.45; }
 .loop-layer-on { accent-color: var(--ink); width: 10px; height: 10px; }
 
@@ -264,3 +263,10 @@ body {
    the places you type stay selectable. */
 .friend-head, .friend-shape, .friend-loops, .friend-controls, .friend-log, .friend-loop, .friend-btn, .looper-edit-actions { user-select: none; -webkit-user-select: none; }
 input, textarea, .friend-harvest-out { user-select: text; -webkit-user-select: text; }
+
+/* The layer being written: a bar filling in the recording red, its count
+   lettered beside it, in the row the layer will take. */
+.friend-layer-bar { position: relative; flex: 1 1 auto; height: 100%; background: #fff; border-bottom: 1px solid var(--hair); }
+.friend-layer-bar-fill { position: absolute; left: 0; top: 2px; bottom: 2px; background: var(--record); opacity: 0.55; }
+.friend-layer-bar-fill.is-open { background: repeating-linear-gradient(90deg, var(--record) 0 6px, transparent 6px 12px); }
+.friend-layer-bar-word { position: absolute; right: 6px; top: 0; font: 400 10px/18px var(--hand); letter-spacing: 0.1em; text-transform: uppercase; color: var(--record); }

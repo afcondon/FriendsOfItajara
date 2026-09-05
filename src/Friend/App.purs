@@ -29,6 +29,7 @@ import Data.Map as Map
 import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Data.Number as Number
 import Data.String as String
+import Data.Tuple (Tuple(..))
 import Effect.Aff (Milliseconds(..), attempt, delay)
 import Effect.Exception (message)
 import Effect.Aff as Aff
@@ -203,6 +204,13 @@ handleAction = case _ of
           when (key /= "" && key /= cur.peaksKey) do
             H.modify_ _ { peaksKey = key }
             duty cur.focus (Duty.AskPeaks 600)
+      -- **The newest layer is the one that sounds.** On a face that solos,
+      -- a loop that has just gained a layer — a take closed, a duplicate, a
+      -- drop — is asked to solo it, so what you just did is what you hear.
+      -- Read from the two snapshots, never assumed; a lone layer is left.
+      when cur.face.solo $ for_ snap \s -> for_ cur.looper \old ->
+        for_ (Array.zip old.loops s.loops) \(Tuple o n) ->
+          when (n.layers > o.layers && n.layers > 1) $ duty n.index (Duty.SoloLayer n.layers)
       -- What the daemon had to say. By sequence, so two identical refusals
       -- in a row are two lines.
       for_ snap \s ->
@@ -503,9 +511,10 @@ render st =
           , HH.span [ HP.class_ (HH.ClassName "friend-loop-dest") ] [ HH.text ("→ " <> f.unit <> " " <> show (i + 1)) ]
           ]
       , HH.div [ HP.class_ (HH.ClassName "friend-layers") ]
-          (if Array.null lp.shapes
-            then [ HH.div [ HP.class_ (HH.ClassName "friend-layer is-empty") ] [ HH.text "empty" ] ]
-            else Array.mapWithIndex (layerRow i lp) lp.shapes)
+          ( (if Array.null lp.shapes && not (Socket.isWriting lp)
+              then [ HH.div [ HP.class_ (HH.ClassName "friend-layer is-empty") ] [ HH.text "empty" ] ]
+              else Array.mapWithIndex (layerRow i lp) lp.shapes)
+            <> (if Socket.isWriting lp then [ recordingRow top lp ] else []) )
       , HH.div [ HP.class_ (HH.ClassName "friend-loop-buttons") ]
           -- No Overdub beside Record: on this page Record already reads the
           -- loop's state and says what the next press does, and the one thing
@@ -553,6 +562,32 @@ render st =
       )
     where
     soloWord = "hear " <> f.layerWord <> " " <> show (k + 1) <> " alone"
+
+  -- **The layer being written, as a bar filling.** A first take has no
+  -- length yet, so its bar fills towards what the face holds (the window)
+  -- or, with no window, just counts; an overdub's bar is the play head
+  -- across the loop. The row sits where the layer will, so it takes that
+  -- layer's letter and colour.
+  recordingRow top lp =
+    let
+      sr = Int.toNumber top.sampleRate
+      linear = case Socket.phaseOf lp of
+        Socket.Overdubbing -> false
+        _ -> true
+      elapsed = if linear then lp.recFrames else lp.pos
+      ref = if linear
+        then (if f.windowSecs > 0.0 then Int.round (f.windowSecs * sr) else lp.loopFrames)
+        else lp.loopFrames
+      pct = if ref > 0 then min 100.0 (Int.toNumber elapsed / Int.toNumber ref * 100.0) else 100.0
+      word = secs (Int.toNumber elapsed / sr) <> " s" <> (if ref > 0 then " of " <> secs (Int.toNumber ref / sr) else "")
+    in
+      HH.div [ HP.class_ (HH.ClassName "friend-layer is-writing") ]
+        [ HH.span [ HP.class_ (HH.ClassName "friend-layer-n") ] [ HH.text (show (lp.layers + 1)) ]
+        , HH.div [ HP.class_ (HH.ClassName "friend-layer-bar") ]
+            [ HH.div [ HP.class_ (HH.ClassName ("friend-layer-bar-fill" <> (if ref > 0 then "" else " is-open"))), HP.style ("width:" <> show pct <> "%") ] []
+            , HH.span [ HP.class_ (HH.ClassName "friend-layer-bar-word") ] [ HH.text word ]
+            ]
+        ]
 
   btn label act on =
     HH.button
