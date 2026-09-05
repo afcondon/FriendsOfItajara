@@ -181,16 +181,23 @@ body {
 .friend-btn:hover { color: var(--ink); }
 .friend-btn.on::before { color: var(--water); }
 .friend-loop-buttons { display: flex; gap: 6px; flex: 0 0 auto; }
-.friend-loop-buttons .friend-btn:nth-child(1)::before { content: "●"; }
-.is-armed .friend-loop-buttons .friend-btn:nth-child(1)::before { content: "◌"; color: var(--armed); }
-.is-recording .friend-loop-buttons .friend-btn:nth-child(1)::before { content: "■"; color: var(--record); }
-.is-recording .friend-loop-buttons .friend-btn:nth-child(1):hover { color: var(--record); }
-.friend-loop-buttons .friend-btn:nth-child(2)::before { content: "▶"; font-size: 14px; }
-.is-playing .friend-loop-buttons .friend-btn:nth-child(2)::before { content: "■"; }
-.friend-loop-buttons .friend-btn:nth-child(3)::before { content: "↶"; }
-.friend-loop-buttons .friend-btn:nth-child(4)::before { content: "✕"; font-size: 14px; }
-.friend-loop-buttons .friend-btn:nth-child(5)::before { content: "⟷"; }
-.friend-loop-buttons .friend-btn:nth-child(6)::before { content: "✎"; font-size: 14px; color: var(--pencil); }
+/* Glyphs by name, not by position: the fixed record is a dot with an edge
+   (the take has a bound), the open one the bare dot. A disabled button keeps
+   its place in pencil and says nothing on hover. */
+.friend-btn-fix::before { content: "◉"; }
+.friend-btn-rec::before { content: "●"; }
+.is-armed .friend-btn-rec::before { content: "◌"; color: var(--armed); }
+.is-recording .friend-btn-rec::before { content: "■"; color: var(--record); }
+.is-recording .friend-btn-rec:hover { color: var(--record); }
+.friend-btn-play::before { content: "▶"; font-size: 14px; }
+.is-playing .friend-btn-play::before { content: "■"; }
+.friend-btn-undo::before { content: "↶"; }
+.friend-btn-clear::before { content: "✕"; font-size: 14px; }
+.friend-btn-edit::before { content: "⟷"; }
+.friend-btn-notes::before { content: "✎"; font-size: 14px; color: var(--pencil); }
+.friend-btn[disabled] { cursor: default; }
+.friend-btn[disabled]::before { color: var(--pencil); opacity: 0.4; }
+.friend-btn[disabled]:hover { color: transparent; }
 
 /* Drag and drop: a handle shows a grab cursor; an empty loop that could take
    the drop is drawn in dashes, and the one under the pointer in water. */

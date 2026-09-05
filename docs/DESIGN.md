@@ -122,9 +122,13 @@ One Halogen component, `Friend.App`. From the top:
   goes — *→ scene 3* — because that is the thing the harvest will do and the
   reason a loop's layers are grouped as they are. Each layer is a row: a
   checkbox (in or out of the mix, `ly<n>1|0`) and its envelope as the loop
-  now plays it. Six buttons: Record (which says what the next press *does*,
-  because `r` is one verb that opens, closes, overdubs or cancels), Overdub,
-  Play/Stop, Undo, Clear, Edit.
+  now plays it. The buttons, as glyphs on the skin with the word beneath on
+  hover: **Record 13s** (a dot with an edge; only on a face with
+  `windowSecs`, and live only on an empty idle loop — drawn disabled
+  elsewhere so the row never shifts), **Record open** (the bare dot, which
+  says what the next press *does*, because `r` is one verb that opens,
+  closes, overdubs or cancels), Play/Stop, Undo, Clear, Edit, Notes.
+  Overdub was dropped: on this page Record already reads the loop.
 - **Controls** — click, stop all, clear all; a take name; **Save for
   \<module\>**.
 - **Log** — the daemon's acks by sequence and the app's own notes, newest
@@ -176,7 +180,20 @@ the window is what the harvest writes, so audition and export cannot
 disagree; rotation has no meaning here and is not offered. A loop shorter
 than the window plays whole and is not windowed: the harvest fills the
 module's length by letting it come round again, which is what a loop does.
-Nothing is cut, so a take can be re-windowed and re-harvested later. An
+Nothing is cut, so a take can be re-windowed and re-harvested later.
+
+**Two record buttons, and the daemon holds the clock for both.** A fixed
+take (`Duty.RecordFixed 13.0`) is `fix13` then `r`: the daemon sizes the
+empty loop — a length and no layers, the state `len` already used for bars —
+and the first take closes itself there through the closer it already has.
+An open take is `r` as ever, closed by the next press. The page sends two
+events and never times anything; the recording layer's bar fills towards
+`loopFrames`, which a fixed take has from the start and an open one has as
+zero, so it counts. Not a threaded tape (`blank13`): that carries a silent
+layer so it can play, which would make the take an overdub, and an overdub
+never closes itself. One consequence, left as it is: undo keeps the loop's
+length, so an open record after undoing a fixed take also closes at
+thirteen — the length on the slab says so. An
 overdub goes into a windowed loop and lands where you heard it — the write
 head follows the play head through the window — so a loop can be windowed
 first and layered inside the window afterwards.

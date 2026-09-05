@@ -520,13 +520,23 @@ render st =
           -- loop's state and says what the next press does, and the one thing
           -- Overdub adds — refusing a first take — is a footswitch's need, not
           -- a button's. The duty stays in the vocabulary for the pedalboard.
-          [ btn (recordWord lp) (Do (OnLoop i) Duty.RecordLoop) (Socket.isWriting lp)
-          , btn (if lp.state == "playing" then "Stop" else "Play") (Do (OnLoop i) Duty.Transport) false
-          , btn "Undo" (Do (OnLoop i) Duty.Undo) false
-          , btn "Clear" (Do (OnLoop i) Duty.ClearLoop) false
-          , btn "Edit" (ToggleEdit i) (st.panel == EditPanel && st.focus == i)
-          , btn "Notes" (NotesFor i) (st.panel == NotesPanel && st.focus == i)
-          ]
+          --
+          -- Two ways to record where the module wants one length: a take of
+          -- exactly the face's seconds, which the daemon closes itself, and an
+          -- open one that closes on the next press. The fixed one only means
+          -- something on an empty, idle loop, so it is drawn disabled
+          -- everywhere else rather than removed — the row must not shift.
+          ( (if f.windowSecs > 0.0
+              then [ slabBtn "fix" ("Record " <> show (Int.round f.windowSecs) <> "s")
+                       (Do (OnLoop i) (Duty.RecordFixed f.windowSecs)) false (not (fixable lp)) ]
+              else [])
+          <> [ slabBtn "rec" (openWord lp) (Do (OnLoop i) Duty.RecordLoop) (Socket.isWriting lp) false
+             , slabBtn "play" (if lp.state == "playing" then "Stop" else "Play") (Do (OnLoop i) Duty.Transport) false false
+             , slabBtn "undo" "Undo" (Do (OnLoop i) Duty.Undo) false false
+             , slabBtn "clear" "Clear" (Do (OnLoop i) Duty.ClearLoop) false false
+             , slabBtn "edit" "Edit" (ToggleEdit i) (st.panel == EditPanel && st.focus == i) false
+             , slabBtn "notes" "Notes" (NotesFor i) (st.panel == NotesPanel && st.focus == i) false
+             ] )
       ]
 
   layerRow i lp k sh =
@@ -563,10 +573,10 @@ render st =
     where
     soloWord = "hear " <> f.layerWord <> " " <> show (k + 1) <> " alone"
 
-  -- **The layer being written, as a bar filling.** A first take has no
-  -- length yet, so its bar fills towards what the face holds (the window)
-  -- or, with no window, just counts; an overdub's bar is the play head
-  -- across the loop. The row sits where the layer will, so it takes that
+  -- **The layer being written, as a bar filling.** A fixed first take has
+  -- its length before it starts and its bar fills towards it; an open one
+  -- has none and just counts; an overdub's bar is the play head across the
+  -- loop. The row sits where the layer will, so it takes that
   -- layer's letter and colour.
   recordingRow top lp =
     let
@@ -575,9 +585,9 @@ render st =
         Socket.Overdubbing -> false
         _ -> true
       elapsed = if linear then lp.recFrames else lp.pos
-      ref = if linear
-        then (if f.windowSecs > 0.0 then Int.round (f.windowSecs * sr) else lp.loopFrames)
-        else lp.loopFrames
+      -- A fixed take's loop already has its length while it records, so the
+      -- bar fills towards it; an open take's is zero, and the bar just counts.
+      ref = lp.loopFrames
       pct = if ref > 0 then min 100.0 (Int.toNumber elapsed / Int.toNumber ref * 100.0) else 100.0
       word = secs (Int.toNumber elapsed / sr) <> " s" <> (if ref > 0 then " of " <> secs (Int.toNumber ref / sr) else "")
     in
@@ -595,6 +605,25 @@ render st =
       , HE.onClick \_ -> act
       ]
       [ HH.text label ]
+
+  -- A slab button carries a name in its class, so the skin can give each
+  -- its glyph without counting positions — a count that moves whenever a
+  -- face adds or drops a button.
+  slabBtn key label act on off =
+    HH.button
+      [ HP.class_ (HH.ClassName ("friend-btn friend-btn-" <> key <> (if on then " on" else "")))
+      , HP.disabled off
+      , HE.onClick \_ -> act
+      ]
+      [ HH.text label ]
+
+  -- The open record's word on a face with a fixed length says it is the open
+  -- one; everywhere else it is the record word as it was.
+  openWord lp = case recordWord lp of
+    "Record" | f.windowSecs > 0.0 -> "Record open"
+    w -> w
+
+  fixable lp = lp.layers == 0 && not (Socket.isWriting lp) && not lp.armed
 
   controls top =
     HH.section [ HP.class_ (HH.ClassName "friend-controls") ]
