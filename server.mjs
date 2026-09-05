@@ -27,7 +27,7 @@ const MSM = process.env.MSM || "msm";
 const STATIC = path.join(path.dirname(new URL(import.meta.url).pathname), "static");
 const TAKES = path.join(os.homedir(), ".itajara", "takes");
 
-const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".json": "application/json" };
+const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".json": "application/json", ".svg": "image/svg+xml" };
 
 // A take name that cannot leave the takes directory: the same rule the daemon
 // applies, so the name the page sends is the folder the daemon made.

@@ -389,7 +389,7 @@ render st =
                 <> secs top.maxSecs <> " s at " <> show top.sampleRate <> " Hz") ]
         , HH.span_ [ HH.text ("A " <> f.unit <> " holds " <> show f.layers <> " " <> f.layerWord <> "s of " <> secs f.layerSecs <> " s; " <> f.holds <> ".") ]
         ]
-          <> maybe [] (\n -> [ HH.span [ HP.class_ (HH.ClassName "friend-warn") ] [ HH.text n ] ]) (Face.shapeNote f top)
+          <> map (\n -> HH.span [ HP.class_ (HH.ClassName "friend-warn") ] [ HH.text n ]) (Face.shapeNotes f top)
       )
 
   loops top =

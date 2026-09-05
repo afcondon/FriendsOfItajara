@@ -42,8 +42,15 @@ a *slab* — a wide, thin terrace with a heavy shadow line beneath it,
 with its own start and its own length, every one crossing a hatched stone
 core that rises a quarter of the way across the sheet — staggered, so the
 eight step across the page the way the house does rather than lining up on
-a margin. The water runs along the foot of the
-sheet as a shelf and spills over an edge into a widening fall. Loop numbers
+a margin. At the foot of the sheet is **the site**:
+contoured ground, every fourth contour an index line, with the run
+following its valley — Fallingwater's drawings are as much about Bear Run's
+contours as about the slabs, and contour lines are native to a drafting
+sheet while being entirely organic, which is what the austerity needed set
+against it. The field is generated (a gentle slope, four hills, a valley
+along the stream's curve, a little ripple), contoured by marching squares
+and chained into polylines, to `static/skins/river-site.svg`; the stream is
+the same speckled blue as before, following the valley. Loop numbers
 are the circled room numbers of a plan; lengths are dimension lines with
 ticks; the layers are the ribbon windows, lettered α–ζ because that is what
 they become; every button is a bare glyph whose word appears beneath it on hover, in a
@@ -51,7 +58,7 @@ line that is always there in transparent ink so nothing shifts;
 and the daemon's shape, the face's capacity and any warning go into a
 **title block** bottom-right, where a drawing keeps its data. One drafting
 hand throughout (Architects Daughter), capitals for labels, and almost
-nothing written. The water is one SVG, base64 in the stylesheet, an absolute
+nothing written. The site is one SVG file beside the stylesheet, an absolute
 layer at the foot of the page; the root element is left unpainted so the
 body's paper propagates to the canvas and the water's negative z-index sits
 between paper and page. Its filters have large absolute regions on purpose —
@@ -156,6 +163,16 @@ appears when the server sees the folder.
 use, tags, free text, and a row per loop. Saved as `notes.json` in the take.
 The daemon's facts — length, bars, tempo, source — are not asked for twice;
 the datasheet joins the two.
+
+**Record at the module's length.** The Arbhar captures thirteen seconds,
+not ten: ten of layer and three past the end, so grains can be drawn evenly
+from any point of the ten. So the Arbhar face asks for the daemon with
+`--fixed-secs 13` — every loop threaded as an empty tape of that length, a
+recording that closes itself when it fills — and there is no open-ended
+take to end and nothing to trim afterwards. The face checks the daemon it
+finds and says, in the title block, when it records free lengths or too few
+layers. The harvest then writes the thirteen seconds straight through, with
+no wrap to add. (`Face.fixedSecs` is zero on the other faces: free lengths.)
 
 **Harvest to Arbhar** runs `msm harvest`. The mapping, from the firmware 2.0
 manual: **a loop is a library bank** (`_arbhar_library/<bank>_<layer>_sample/`,
