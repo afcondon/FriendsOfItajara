@@ -521,16 +521,19 @@ render st =
           -- Overdub adds — refusing a first take — is a footswitch's need, not
           -- a button's. The duty stays in the vocabulary for the pedalboard.
           --
-          -- Two ways to record where the module wants one length: a take of
-          -- exactly the face's seconds, which the daemon closes itself, and an
-          -- open one that closes on the next press. The fixed one only means
-          -- something on an empty, idle loop, so it is drawn disabled
-          -- everywhere else rather than removed — the row must not shift.
+          -- Two ways to record where the module wants one length. The left
+          -- button is the module's own gesture: on an empty loop a take of
+          -- the face's seconds, on a loop with material another layer of the
+          -- loop's length — both closed by the daemon. The right one records
+          -- open-ended and is only for an empty loop; with material in the
+          -- loop every layer is the loop's length, so it is drawn disabled
+          -- rather than removed — the row must not shift.
           ( (if f.windowSecs > 0.0
-              then [ slabBtn "fix" ("Record " <> show (Int.round f.windowSecs) <> "s")
-                       (Do (OnLoop i) (Duty.RecordFixed f.windowSecs)) false (not (fixable lp)) ]
+              then [ slabBtn "fix" (fixWord lp)
+                       (Do (OnLoop i) (Duty.RecordFixed f.windowSecs)) (Socket.isWriting lp) lp.armed ]
               else [])
-          <> [ slabBtn "rec" (openWord lp) (Do (OnLoop i) Duty.RecordLoop) (Socket.isWriting lp) false
+          <> [ slabBtn "rec" (openWord lp) (Do (OnLoop i) Duty.RecordLoop)
+                 (Socket.isWriting lp && lp.layers == 0) (f.windowSecs > 0.0 && lp.layers > 0)
              , slabBtn "play" (if lp.state == "playing" then "Stop" else "Play") (Do (OnLoop i) Duty.Transport) false false
              , slabBtn "undo" "Undo" (Do (OnLoop i) Duty.Undo) false false
              , slabBtn "clear" "Clear" (Do (OnLoop i) Duty.ClearLoop) false false
@@ -623,7 +626,12 @@ render st =
     "Record" | f.windowSecs > 0.0 -> "Record open"
     w -> w
 
-  fixable lp = lp.layers == 0 && not (Socket.isWriting lp) && not lp.armed
+  -- The fixed button says what the daemon will do: a take of the face's
+  -- seconds, another layer, or — while writing — the close.
+  fixWord lp
+    | Socket.isWriting lp = recordWord lp
+    | lp.layers > 0 = "Add layer"
+    | otherwise = "Record " <> show (Int.round f.windowSecs) <> "s"
 
   controls top =
     HH.section [ HP.class_ (HH.ClassName "friend-controls") ]

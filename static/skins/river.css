@@ -186,9 +186,9 @@ body {
    its place in pencil and says nothing on hover. */
 .friend-btn-fix::before { content: "◉"; }
 .friend-btn-rec::before { content: "●"; }
-.is-armed .friend-btn-rec::before { content: "◌"; color: var(--armed); }
-.is-recording .friend-btn-rec::before { content: "■"; color: var(--record); }
-.is-recording .friend-btn-rec:hover { color: var(--record); }
+.is-armed .friend-btn-rec::before, .is-armed .friend-btn-fix::before { content: "◌"; color: var(--armed); }
+.is-recording .friend-btn-rec:not([disabled])::before, .is-recording .friend-btn-fix::before { content: "■"; color: var(--record); }
+.is-recording .friend-btn-rec:hover, .is-recording .friend-btn-fix:hover { color: var(--record); }
 .friend-btn-play::before { content: "▶"; font-size: 14px; }
 .is-playing .friend-btn-play::before { content: "■"; }
 .friend-btn-undo::before { content: "↶"; }

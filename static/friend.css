@@ -55,7 +55,7 @@ body { margin: 0; background: var(--ground); color: var(--ink);
   border: 1px solid var(--line); cursor: pointer; }
 .friend-btn:hover { border-color: var(--accent); }
 .friend-btn.on { background: var(--ink); color: #fff; border-color: var(--ink); }
-.is-recording .friend-btn-rec { border-color: var(--record); color: var(--record); }
+.is-recording .friend-btn-rec:not([disabled]), .is-recording .friend-btn-fix { border-color: var(--record); color: var(--record); }
 .friend-btn[disabled] { opacity: 0.4; cursor: default; }
 .friend-btn[disabled]:hover { border-color: var(--line); }
 
