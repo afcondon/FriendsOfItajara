@@ -42,10 +42,10 @@ PureScript's `spago` for the page.
 
 The face is not the skin: how the page *looks* is `static/friend.css`, the
 plain one, and a skin is a second stylesheet in `static/skins/` that replaces
-it and leaves the class names alone — `?skin=river` is the Arbhar one: warm
-grid paper, Swiss caps for structure, hand lettering for everything a person
-writes, the module's α–ζ on the layers, and the Granular Stream — the river of
-blue LEDs across the arbhar's face — as a band of light behind the takes. A
-design notebook for takes, not a copy of anyone's panel.
+it and leaves the class names alone — `?skin=river` is the Arbhar one: an architectural
+drawing, a cousin of Fallingwater — each loop a slab cantilevered from a
+hatched core, the water running beneath, a drafting hand for the few words
+there are, every button a glyph, the data in a title block. Not a copy of
+anyone's panel.
 
 MIT.

@@ -29,20 +29,31 @@ The first skin is **`river`**, for the Arbhar face, and it is deliberately
 *not* a copy of Instruo's panel — no black, no gold, no attempt at their
 lettering, which would only ever be an imperfect clone. It takes one thing
 from the module, the thing at the heart of its design: the **Granular
-Stream**, the river of blue LEDs that runs across the face, drawn here as a
-blurred, speckled band of light behind the takes. Around it, the page is a
-*design notebook*: warm grid paper with a heavier rule every five cells,
-Swiss grotesk caps for structure, a hand-lettered face for everything a
-person writes or reads as annotation (state words, destinations, the log,
-the notes fields, which get ruled lines rather than boxes), cards and
-buttons as hand-drawn boxes each a little off true, and the layers lettered
-α–ζ because that is what they become. This page exists to write things down
-about takes for later performance, so it looks like the place you would.
-The river is one SVG, base64 in the stylesheet; the root element is left
-unpainted on purpose so the body's paper propagates to the canvas and the
-river's negative z-index sits between paper and page.
+Stream**, the river of blue LEDs that runs across the face — here, the
+water.
 
----
+Its first cut (2026-09-04) was a sketchbook: grid paper, hand lettering,
+hand-drawn boxes. Andrew's verdict the next morning: what he asked for, but
+too busy — too much text, too many labels. The brief became **an
+architectural drawing**: still hand-lettered, but with the precision and
+sparseness of pre-CAD drafting, and the boxes and the river reimagined as
+**a cousin of Fallingwater**. So the skin is now an elevation. Each loop is
+a *slab* — a wide, thin terrace with a heavy shadow line beneath it,
+cantilevered to a different length from a hatched stone core at the left,
+the eight stacked as the terraces are. The water runs along the foot of the
+sheet as a shelf and spills over an edge into a widening fall. Loop numbers
+are the circled room numbers of a plan; lengths are dimension lines with
+ticks; the layers are the ribbon windows, lettered α–ζ because that is what
+they become; every button is a bare glyph whose word appears only on hover;
+and the daemon's shape, the face's capacity and any warning go into a
+**title block** bottom-right, where a drawing keeps its data. One drafting
+hand throughout (Architects Daughter), capitals for labels, and almost
+nothing written. The water is one SVG, base64 in the stylesheet, an absolute
+layer at the foot of the page; the root element is left unpainted so the
+body's paper propagates to the canvas and the water's negative z-index sits
+between paper and page. Its filters have large absolute regions on purpose —
+the default region clips a blurred stroke to a box, which is how a fall
+turns into a stripe.
 
 ## 2. Where the pieces live
 

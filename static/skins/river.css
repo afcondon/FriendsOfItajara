@@ -1,170 +1,226 @@
 /* river.css — the Arbhar skin for the Friends. ?skin=river
-   Not a panel clone: a design notebook. Warm grid paper, Swiss grotesk caps
-   for structure, a hand-lettered face for everything a person writes or reads
-   as annotation, and the Granular Stream — the river of blue LEDs that runs
-   across the arbhar's face — as a band of light behind the takes.
+   Revised 2026-09-05 from a sketchbook to an architectural drawing: a cousin
+   of Fallingwater. Each loop is a slab cantilevered from a hatched stone core
+   at the left, a different length each, with the stream running beneath and
+   falling at the right. Drafting hand throughout, capitals for labels, almost
+   nothing written; every button an icon, its word on hover only; the data in
+   a title block bottom-right, as a drawing keeps it. The Granular Stream —
+   the river of blue LEDs across the arbhar's face — is the water.
    Same class names as friend.css: this file only changes how they look. */
 
-@import url('https://fonts.googleapis.com/css2?family=Caveat:wght@400;600;700&family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Architects+Daughter&display=swap');
 
 :root {
-  --paper: #f7f4ec;
-  --grid: rgba(60, 100, 150, 0.13);
-  --grid-major: rgba(60, 100, 150, 0.24);
-  --ink: #1e1c1a;
-  --pencil: #6f6a62;
-  --river: #2f8ff0;
-  --river-deep: #1f63c9;
-  --river-pale: #cfe6fb;
-  --violet: #8a7cf0;
-  --record: #d4462e;
-  --armed: #e0a53a;
-  --hand: 'Caveat', 'Bradley Hand', 'Comic Sans MS', cursive;
-  --grot: 'Inter', 'Helvetica Neue', Helvetica, Arial, sans-serif;
-  /* The hand-drawn box: one radius for every corner, never quite the same. */
-  --sketch: 255px 12px 225px 12px / 12px 225px 12px 255px;
+  --paper: #f3f0e7;
+  --grid: rgba(40, 60, 90, 0.06);
+  --ink: #23262b;
+  --pencil: #7b7770;
+  --hair: rgba(35, 38, 43, 0.55);
+  --water: #3f86d6;
+  --water-pale: #dbe9f8;
+  --record: #c6432b;
+  --armed: #d9a13a;
+  --hand: 'Architects Daughter', 'Bradley Hand', 'Comic Sans MS', cursive;
+  --core: 26px;
 }
 
 * { box-sizing: border-box; }
 /* No background on html, on purpose: with the root unpainted the body's paper
-   and grid propagate to the canvas, which is what lets the river's negative
-   z-index sit between the paper and the page. Paint the root and the body
-   covers the river. */
+   propagates to the canvas and the stream's negative z-index sits between
+   paper and page. Paint the root and the body covers the stream. */
 body {
-  margin: 0; color: var(--ink);
-  font: 14px/1.45 var(--grot);
+  margin: 0; color: var(--ink); overflow-x: hidden;
+  font: 13px/1.4 var(--hand);
   background-color: var(--paper);
   background-image:
-    linear-gradient(var(--grid-major) 1px, transparent 1px),
-    linear-gradient(90deg, var(--grid-major) 1px, transparent 1px),
     linear-gradient(var(--grid) 1px, transparent 1px),
     linear-gradient(90deg, var(--grid) 1px, transparent 1px);
-  background-size: 120px 120px, 120px 120px, 24px 24px, 24px 24px;
-  background-position: -1px -1px;
+  background-size: 24px 24px;
 }
 
-/* The river: a fixed layer behind everything, crossing the sheet the way the
-   LEDs cross the panel. Drawn once, in SVG, and blurred and speckled there. */
+/* The water, at the foot of the elevation: a shelf running beneath the
+   lower slabs that spills over an edge into a widening fall. Part of the
+   sheet, not of the window, so it scrolls with the drawing. */
 .friend::before {
-  content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
-  background: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNDAwIDkwMCIgcHJlc2VydmVBc3BlY3RSYXRpbz0ieE1pZFlNaWQgc2xpY2UiPgo8ZGVmcz4KPGZpbHRlciBpZD0iZyIgeD0iLTIwJSIgeT0iLTUwJSIgd2lkdGg9IjE0MCUiIGhlaWdodD0iMjAwJSI+PGZlR2F1c3NpYW5CbHVyIHN0ZERldmlhdGlvbj0iMjIiLz48L2ZpbHRlcj4KPGZpbHRlciBpZD0icyIgeD0iLTIwJSIgeT0iLTUwJSIgd2lkdGg9IjE0MCUiIGhlaWdodD0iMjAwJSI+CjxmZVR1cmJ1bGVuY2UgdHlwZT0iZnJhY3RhbE5vaXNlIiBiYXNlRnJlcXVlbmN5PSIwLjciIG51bU9jdGF2ZXM9IjIiIHNlZWQ9IjExIiByZXN1bHQ9Im4iLz4KPGZlQ29sb3JNYXRyaXggaW49Im4iIHR5cGU9Im1hdHJpeCIgdmFsdWVzPSIwIDAgMCAwIDAuMTYgIDAgMCAwIDAgMC41MiAgMCAwIDAgMCAwLjkzICAwIDAgMCAxMiAtNi42IiByZXN1bHQ9ImRvdHMiLz4KPGZlQ29tcG9zaXRlIGluPSJkb3RzIiBpbjI9IlNvdXJjZUdyYXBoaWMiIG9wZXJhdG9yPSJpbiIvPgo8L2ZpbHRlcj4KPGxpbmVhckdyYWRpZW50IGlkPSJsZyIgeDE9IjAiIHkxPSIwIiB4Mj0iMSIgeTI9IjAiPgo8c3RvcCBvZmZzZXQ9IjAiIHN0b3AtY29sb3I9IiM5Y2NkZmIiIHN0b3Atb3BhY2l0eT0iMCIvPgo8c3RvcCBvZmZzZXQ9IjAuMiIgc3RvcC1jb2xvcj0iIzJmOGZmMCIvPgo8c3RvcCBvZmZzZXQ9IjAuNTUiIHN0b3AtY29sb3I9IiMxZjYzYzkiLz4KPHN0b3Agb2Zmc2V0PSIwLjgiIHN0b3AtY29sb3I9IiM3ZjZmZjAiLz4KPHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjYzlkN2ZmIiBzdG9wLW9wYWNpdHk9IjAiLz4KPC9saW5lYXJHcmFkaWVudD4KPC9kZWZzPgo8cGF0aCBkPSJNLTYwLDYwMCBDMjQwLDUyMCAzMDAsNzYwIDU0MCw2OTAgQzc2MCw2MjAgODAwLDQwMCAxMDUwLDQ1MCBDMTI0MCw0OTAgMTMyMCw2MTAgMTQ3MCw1NjAiIGZpbGw9Im5vbmUiIHN0cm9rZT0idXJsKCNsZykiIHN0cm9rZS13aWR0aD0iNjQiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgZmlsdGVyPSJ1cmwoI2cpIiBvcGFjaXR5PSIwLjYiLz4KPHBhdGggZD0iTS02MCw2MDAgQzI0MCw1MjAgMzAwLDc2MCA1NDAsNjkwIEM3NjAsNjIwIDgwMCw0MDAgMTA1MCw0NTAgQzEyNDAsNDkwIDEzMjAsNjEwIDE0NzAsNTYwIiBmaWxsPSJub25lIiBzdHJva2U9InVybCgjbGcpIiBzdHJva2Utd2lkdGg9IjExMCIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBmaWx0ZXI9InVybCgjcykiIG9wYWNpdHk9IjEiLz4KPHBhdGggZD0iTS02MCw2MDAgQzI0MCw1MjAgMzAwLDc2MCA1NDAsNjkwIEM3NjAsNjIwIDgwMCw0MDAgMTA1MCw0NTAgQzEyNDAsNDkwIDEzMjAsNjEwIDE0NzAsNTYwIiBmaWxsPSJub25lIiBzdHJva2U9IiNkZmYwZmYiIHN0cm9rZS13aWR0aD0iNiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBmaWx0ZXI9InVybCgjZykiIG9wYWNpdHk9IjAuNyIvPgo8L3N2Zz4=") no-repeat center / cover;
+  content: ""; position: absolute; left: -100vw; right: -100vw; bottom: 0; height: 520px; z-index: -1; pointer-events: none;
+  background: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNDAwIDUyMCIgcHJlc2VydmVBc3BlY3RSYXRpbz0ieE1pZFlNYXggc2xpY2UiPgo8ZGVmcz4KPGZpbHRlciBpZD0iZyIgZmlsdGVyVW5pdHM9InVzZXJTcGFjZU9uVXNlIiB4PSItMjAwIiB5PSItMjAwIiB3aWR0aD0iMTgwMCIgaGVpZ2h0PSIxMDAwIj48ZmVHYXVzc2lhbkJsdXIgc3RkRGV2aWF0aW9uPSIxMiIvPjwvZmlsdGVyPgo8ZmlsdGVyIGlkPSJ3IiBmaWx0ZXJVbml0cz0idXNlclNwYWNlT25Vc2UiIHg9Ii0yMDAiIHk9Ii0yMDAiIHdpZHRoPSIxODAwIiBoZWlnaHQ9IjEwMDAiPjxmZUdhdXNzaWFuQmx1ciBzdGREZXZpYXRpb249IjI2Ii8+PC9maWx0ZXI+CjxmaWx0ZXIgaWQ9InMiIGZpbHRlclVuaXRzPSJ1c2VyU3BhY2VPblVzZSIgeD0iLTIwMCIgeT0iLTIwMCIgd2lkdGg9IjE4MDAiIGhlaWdodD0iMTAwMCI+CjxmZVR1cmJ1bGVuY2UgdHlwZT0iZnJhY3RhbE5vaXNlIiBiYXNlRnJlcXVlbmN5PSIwLjkiIG51bU9jdGF2ZXM9IjIiIHNlZWQ9IjUiIHJlc3VsdD0ibiIvPgo8ZmVDb2xvck1hdHJpeCBpbj0ibiIgdHlwZT0ibWF0cml4IiB2YWx1ZXM9IjAgMCAwIDAgMC4yMiAgMCAwIDAgMCAwLjUyICAwIDAgMCAwIDAuODYgIDAgMCAwIDEyIC02LjkiIHJlc3VsdD0iZG90cyIvPgo8ZmVDb21wb3NpdGUgaW49ImRvdHMiIGluMj0iU291cmNlR3JhcGhpYyIgb3BlcmF0b3I9ImluIi8+CjwvZmlsdGVyPgo8ZmlsdGVyIGlkPSJzMiIgZmlsdGVyVW5pdHM9InVzZXJTcGFjZU9uVXNlIiB4PSItMjAwIiB5PSItMjAwIiB3aWR0aD0iMTgwMCIgaGVpZ2h0PSIxMDAwIj4KPGZlVHVyYnVsZW5jZSB0eXBlPSJmcmFjdGFsTm9pc2UiIGJhc2VGcmVxdWVuY3k9IjEuMyIgbnVtT2N0YXZlcz0iMiIgc2VlZD0iOSIgcmVzdWx0PSJuIi8+CjxmZUNvbG9yTWF0cml4IGluPSJuIiB0eXBlPSJtYXRyaXgiIHZhbHVlcz0iMCAwIDAgMCAwLjM1ICAwIDAgMCAwIDAuNjAgIDAgMCAwIDAgMC45MCAgMCAwIDAgMTAgLTYuMiIgcmVzdWx0PSJkb3RzIi8+CjxmZUNvbXBvc2l0ZSBpbj0iZG90cyIgaW4yPSJTb3VyY2VHcmFwaGljIiBvcGVyYXRvcj0iaW4iLz4KPC9maWx0ZXI+CjxsaW5lYXJHcmFkaWVudCBpZD0ibGciIHgxPSIwIiB5MT0iMCIgeDI9IjEiIHkyPSIwIj4KPHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjOGZiZGU4IiBzdG9wLW9wYWNpdHk9IjAiLz4KPHN0b3Agb2Zmc2V0PSIwLjI1IiBzdG9wLWNvbG9yPSIjNmFhOGU2Ii8+CjxzdG9wIG9mZnNldD0iMSIgc3RvcC1jb2xvcj0iIzNmODZkNiIvPgo8L2xpbmVhckdyYWRpZW50Pgo8bGluZWFyR3JhZGllbnQgaWQ9ImZnIiB4MT0iMCIgeTE9IjAiIHgyPSIwIiB5Mj0iMSI+CjxzdG9wIG9mZnNldD0iMCIgc3RvcC1jb2xvcj0iIzNmODZkNiIvPgo8c3RvcCBvZmZzZXQ9IjAuNyIgc3RvcC1jb2xvcj0iIzZmOGZlMCIvPgo8c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiNiOWM5ZWUiIHN0b3Atb3BhY2l0eT0iMC4xIi8+CjwvbGluZWFyR3JhZGllbnQ+CjwvZGVmcz4KPHBhdGggZD0iTS00MCwzMzAgQzIwMCwzMzggNDIwLDMxMiA2NDAsMzI2IEM3MDAsMzMwIDc0MCwzMzIgNzcyLDMzNiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJ1cmwoI2xnKSIgc3Ryb2tlLXdpZHRoPSI0MCIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBmaWx0ZXI9InVybCgjZykiIG9wYWNpdHk9IjAuNDUiLz4KPHBhdGggZD0iTS00MCwzMzAgQzIwMCwzMzggNDIwLDMxMiA2NDAsMzI2IEM3MDAsMzMwIDc0MCwzMzIgNzcyLDMzNiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJ1cmwoI2xnKSIgc3Ryb2tlLXdpZHRoPSI2NCIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBmaWx0ZXI9InVybCgjcykiIG9wYWNpdHk9IjAuOTUiLz4KPHBhdGggZD0iTS00MCwzMzAgQzIwMCwzMzggNDIwLDMxMiA2NDAsMzI2IEM3MDAsMzMwIDc0MCwzMzIgNzcyLDMzNiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjZWVmNmZmIiBzdHJva2Utd2lkdGg9IjMiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgZmlsdGVyPSJ1cmwoI2cpIiBvcGFjaXR5PSIwLjgiLz4KPHBhdGggZD0iTTc3NiwzNDAgQzc4NCwzODAgNzg2LDQzMCA3OTAsNDgwIEM3OTIsNTA1IDc5NCw1MjAgNzk2LDU0MCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJ1cmwoI2ZnKSIgc3Ryb2tlLXdpZHRoPSIxMjAiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgZmlsdGVyPSJ1cmwoI3cpIiBvcGFjaXR5PSIwLjMiLz4KPHBhdGggZD0iTTc3NiwzNDAgQzc4NCwzODAgNzg2LDQzMCA3OTAsNDgwIEM3OTIsNTA1IDc5NCw1MjAgNzk2LDU0MCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJ1cmwoI2ZnKSIgc3Ryb2tlLXdpZHRoPSI0NCIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBmaWx0ZXI9InVybCgjcykiIG9wYWNpdHk9IjAuOTUiLz4KPHBhdGggZD0iTTc3NiwzNDAgQzc3MCwzOTAgNzY4LDQ1MCA3NjIsNTIwIiBmaWxsPSJub25lIiBzdHJva2U9InVybCgjZmcpIiBzdHJva2Utd2lkdGg9IjMwIiBzdHJva2UtbGluZWNhcD0icm91bmQiIGZpbHRlcj0idXJsKCNzMikiIG9wYWNpdHk9IjAuOCIvPgo8cGF0aCBkPSJNNzc2LDM0MCBDNzg4LDM5MCA4MDAsNDUwIDgxMiw1MjAiIGZpbGw9Im5vbmUiIHN0cm9rZT0idXJsKCNmZykiIHN0cm9rZS13aWR0aD0iMzAiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgZmlsdGVyPSJ1cmwoI3MyKSIgb3BhY2l0eT0iMC44Ii8+CjxwYXRoIGQ9Ik03NzYsMzQwIEM3ODQsMzgwIDc4Niw0MzAgNzkwLDQ4MCBDNzkyLDUwNSA3OTQsNTIwIDc5Niw1NDAiIGZpbGw9Im5vbmUiIHN0cm9rZT0iI2VlZjZmZiIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIGZpbHRlcj0idXJsKCNnKSIgb3BhY2l0eT0iMC43Ii8+Cjwvc3ZnPg==") no-repeat center bottom / auto 100%;
 }
 
-.friend { position: relative; max-width: 1180px; margin: 0 auto; padding: 36px 28px 56px; display: flex; flex-direction: column; gap: 22px; }
+.friend { position: relative; max-width: 1180px; margin: 0 auto; padding: 44px 32px 140px 76px; overflow: visible; display: flex; flex-direction: column; gap: 18px; min-height: 100vh; }
 
-/* Header: the title block of a poster rough. */
-.friend-head h1 { margin: 0; font: 700 30px/1 var(--grot); letter-spacing: 0.14em; text-transform: uppercase; }
-.friend-head h1::after { content: "  ·  a design notebook for takes"; font: 400 22px var(--hand); letter-spacing: 0; text-transform: none; color: var(--pencil); }
-.friend-sub { margin: 6px 0 0; font: 400 21px/1.2 var(--hand); color: var(--pencil); }
-.friend-conn { margin: 12px 0 0; font: 500 11px var(--grot); letter-spacing: 0.1em; text-transform: uppercase; color: var(--pencil); }
-.friend-conn::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 10px; vertical-align: -1px; background: #b9b3a8; }
-.friend-conn.is-on::before { background: var(--river); box-shadow: 0 0 10px 3px rgba(47, 143, 240, 0.55); }
-.friend-conn.is-off::before { background: var(--record); }
+/* The stone core: a hatched vertical at the left that every slab bears on. */
+.friend::after {
+  content: ""; position: absolute; left: 32px; top: 40px; bottom: 120px; width: var(--core);
+  border-left: 1.5px solid var(--ink); border-right: 1.5px solid var(--ink);
+  background: repeating-linear-gradient(135deg, var(--hair) 0 1px, transparent 1px 6px);
+  pointer-events: none;
+}
 
-.friend-start pre { background: rgba(255,255,255,0.8); border: 1.5px solid var(--ink); border-radius: var(--sketch); padding: 14px 18px; margin: 0 0 10px; overflow-x: auto; font-size: 13px; }
-.friend-start p, .friend-start li { font: 400 19px/1.3 var(--hand); color: var(--pencil); }
-.friend-start ul { margin: 6px 0 0; padding-left: 20px; }
+/* Header: the drawing's name only. */
+.friend-head { position: relative; min-height: 34px; border-bottom: 1px solid var(--ink); padding-bottom: 12px; }
+.friend-head h1 { margin: 0; font: 400 24px/1 var(--hand); letter-spacing: 0.22em; text-transform: uppercase; }
+.friend-sub { display: none; }
+/* The connection, as the sheet note in the top-right corner. */
+.friend-conn { position: absolute; right: 0; top: 4px; margin: 0; font: 400 11px var(--hand); letter-spacing: 0.1em; text-transform: uppercase; color: var(--pencil); }
+.friend-conn::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; vertical-align: 0; border: 1.5px solid var(--ink); background: transparent; }
+.friend-conn.is-on::before { background: var(--water); border-color: var(--water); box-shadow: 0 0 8px 2px rgba(63,134,214,0.5); }
+.friend-conn.is-off::before { background: var(--record); border-color: var(--record); }
 
-.friend-shape { display: flex; flex-wrap: wrap; gap: 4px 28px; font: 500 11px/1.6 var(--grot); letter-spacing: 0.08em; text-transform: uppercase; color: var(--pencil); }
-.friend-warn { color: var(--record); flex-basis: 100%; font: 600 18px var(--hand); letter-spacing: 0; text-transform: none; }
+.friend-start { max-width: 640px; }
+.friend-start pre { background: #fff; border: 1px solid var(--ink); padding: 12px 16px; margin: 0 0 10px; overflow-x: auto; font: 12px/1.5 ui-monospace, Menlo, monospace; }
+.friend-start p, .friend-start li { font: 400 13px/1.45 var(--hand); color: var(--pencil); }
 
-/* Loop cards: swatches pasted on the sheet, each a little off true. */
-.friend-loops { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 22px 18px; padding-top: 6px; }
+/* The title block: bottom-right, bordered, the data in rows. */
+.friend-shape {
+  order: 10; align-self: flex-end; margin-top: 28px; width: 330px;
+  display: flex; flex-direction: column; gap: 0;
+  background: var(--paper); border: 1.5px solid var(--ink); box-shadow: 3px 3px 0 var(--paper), 3px 3px 0 1.5px var(--ink);
+  font: 400 11px/1.4 var(--hand); letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink);
+}
+.friend-controls { order: 8; }
+.friend-log { order: 9; }
+.friend-shape > span { padding: 6px 10px; border-top: 1px solid var(--ink); }
+.friend-shape > span:first-child { border-top: 0; }
+.friend-shape::before { content: "ARBHAR'S FRIEND — TAKES"; display: block; padding: 6px 10px; font-size: 11px; letter-spacing: 0.2em; }
+.friend-warn { color: var(--record); text-transform: none; letter-spacing: 0; }
+
+/* Slabs: each loop a terrace bearing on the core, a different length each,
+   a heavy shadow line beneath. The stack is the elevation. */
+.friend-loops { display: flex; flex-direction: column; gap: 16px; counter-reset: slab; margin-top: 8px; }
 .friend-loop {
-  background: rgba(255,255,255,0.88); border: 1.5px solid var(--ink); border-radius: var(--sketch);
-  padding: 14px 16px 14px; display: flex; flex-direction: column; gap: 10px; cursor: default;
-  box-shadow: 2px 3px 0 rgba(30,28,26,0.08);
+  counter-increment: slab;
+  position: relative; display: flex; flex-direction: row; align-items: center; gap: 20px;
+  background: rgba(255,255,255,0.92); border: 1px solid var(--ink); border-bottom-width: 3px;
+  padding: 12px 18px 12px 16px; margin-left: -1px; min-height: 76px; cursor: default;
+  box-shadow: 0 5px 0 -1px var(--paper), 0 6px 0 -1px var(--hair);
 }
-.friend-loop:nth-child(odd) { transform: rotate(-0.35deg); }
-.friend-loop:nth-child(even) { transform: rotate(0.3deg); }
-.friend-loop:nth-child(3n) { transform: rotate(-0.15deg); }
-.friend-loop.is-focus { box-shadow: 0 0 0 3px var(--paper), 0 0 0 4.5px var(--ink), 2px 3px 0 rgba(30,28,26,0.08); }
-.friend-loop-head { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
-.friend-loop-name { font: 700 12px var(--grot); letter-spacing: 0.16em; text-transform: uppercase; }
-.friend-loop-state { font: 600 19px/1 var(--hand); color: var(--river-deep); }
+.friend-loop:nth-child(1) { width: 78%; }
+.friend-loop:nth-child(2) { width: 94%; }
+.friend-loop:nth-child(3) { width: 64%; }
+.friend-loop:nth-child(4) { width: 88%; }
+.friend-loop:nth-child(5) { width: 72%; }
+.friend-loop:nth-child(6) { width: 98%; }
+.friend-loop:nth-child(7) { width: 58%; }
+.friend-loop:nth-child(8) { width: 84%; }
+.friend-loop:nth-child(n+9) { width: 80%; }
+.friend-loop.is-focus { box-shadow: inset 0 0 0 3px #fff, inset 0 0 0 4px var(--ink), 0 5px 0 -1px var(--paper), 0 6px 0 -1px var(--hair); }
+
+/* The head as a narrow column: the circled number, the state, the dimension. */
+.friend-loop-head { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; flex: 0 0 150px; }
+.friend-loop-name { font-size: 0; display: block; margin-bottom: 4px; }
+.friend-loop-name::before {
+  content: counter(slab); display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border: 1.5px solid var(--ink); border-radius: 50%;
+  font: 400 15px var(--hand); color: var(--ink);
+}
+.friend-loop-state { font: 400 11px var(--hand); letter-spacing: 0.14em; text-transform: uppercase; color: var(--pencil); }
+.is-playing .friend-loop-state { color: var(--water); }
 .is-recording .friend-loop-state { color: var(--record); }
 .is-armed .friend-loop-state { color: var(--armed); }
-.is-empty .friend-loop-state, .is-stopped .friend-loop-state { color: var(--pencil); }
-.friend-loop-len { font: 500 11px var(--grot); letter-spacing: 0.06em; color: var(--pencil); font-variant-numeric: tabular-nums; }
-.friend-loop-dest { margin-left: auto; font: 400 18px/1 var(--hand); color: var(--pencil); }
+/* A dimension line: ticks either side of the figure. */
+.friend-loop-len { font: 400 11px var(--hand); color: var(--pencil); font-variant-numeric: tabular-nums; display: inline-flex; align-items: center; gap: 6px; }
+.friend-loop-len:not(:empty)::before, .friend-loop-len:not(:empty)::after { content: ""; display: inline-block; width: 18px; height: 7px; border-bottom: 1px solid var(--pencil); }
+.friend-loop-len:not(:empty)::before { border-left: 1px solid var(--pencil); }
+.friend-loop-len:not(:empty)::after { border-right: 1px solid var(--pencil); }
+/* The destination as a leader note at the slab's far end. */
+.friend-loop-dest { position: absolute; right: 18px; top: 8px; margin: 0; font: 400 10px var(--hand); letter-spacing: 0.12em; text-transform: uppercase; color: var(--pencil); }
 
-/* Layers: the six the module has, by the panel's own letters. */
-.friend-layers { display: flex; flex-direction: column; gap: 4px; min-height: 26px; }
-.friend-layer { display: flex; align-items: center; gap: 10px; height: 24px; }
-.friend-layer.is-empty { font: 400 18px var(--hand); color: var(--pencil); height: auto; }
-.friend-layer.is-off .friend-layer-wave { opacity: 0.22; }
-.friend-layer-n { width: 14px; text-align: center; font: 500 13px var(--grot); color: var(--pencil); }
-.friend-layer-n { font-size: 0; }
-.friend-layer-n::after { font-size: 14px; }
+/* Layers: the ribbon windows — thin lines across the slab, lettered α–ζ. */
+.friend-layers { flex: 1 1 auto; display: flex; flex-direction: column; gap: 3px; min-height: 22px; align-self: stretch; justify-content: center; }
+.friend-layer { display: flex; align-items: center; gap: 8px; height: 18px; }
+.friend-layer.is-empty { display: none; }
+.friend-layer.is-off .friend-layer-wave { opacity: 0.25; }
+.friend-layer-n { width: 12px; text-align: center; font-size: 0; color: var(--pencil); }
+.friend-layer-n::after { font: 400 12px var(--hand); }
 .friend-layer:nth-of-type(1) .friend-layer-n::after { content: "α"; }
 .friend-layer:nth-of-type(2) .friend-layer-n::after { content: "β"; }
 .friend-layer:nth-of-type(3) .friend-layer-n::after { content: "γ"; }
 .friend-layer:nth-of-type(4) .friend-layer-n::after { content: "δ"; }
 .friend-layer:nth-of-type(5) .friend-layer-n::after { content: "ε"; }
 .friend-layer:nth-of-type(6) .friend-layer-n::after { content: "ζ"; }
-.friend-layer:nth-of-type(n+7) .friend-layer-n { font-size: 12px; }
-.friend-layer-wave { position: relative; flex: 1 1 auto; height: 100%; background: #fff; border-bottom: 1px solid rgba(60,100,150,0.25); }
-.loop-wave path { fill: var(--river); }
+.friend-layer:nth-of-type(n+7) .friend-layer-n { font-size: 11px; }
+.friend-layer-wave { position: relative; flex: 1 1 auto; height: 100%; background: #fff; border-bottom: 1px solid var(--hair); }
+.loop-wave path { fill: var(--water); }
 .is-recording .friend-layer-wave .loop-wave path { fill: var(--record); }
-.is-stopped .friend-layer-wave .loop-wave path { fill: #a29c92; }
-.loop-layer-on { accent-color: var(--river-deep); }
+.is-stopped .friend-layer-wave .loop-wave path { fill: #a8a49c; }
+.loop-layer-on { accent-color: var(--ink); width: 10px; height: 10px; }
 
-/* Buttons: small caps in a hand-drawn box. */
-.friend-btn, .looper-help-btn {
-  font: 600 10.5px var(--grot); letter-spacing: 0.12em; text-transform: uppercase;
-  padding: 6px 11px; color: var(--ink); background: rgba(255,255,255,0.9);
-  border: 1.5px solid var(--ink); border-radius: var(--sketch); cursor: pointer;
+/* Buttons: bare glyphs, the word on hover. */
+.friend-btn {
+  font: 400 0px var(--hand); letter-spacing: 0.12em; text-transform: uppercase;
+  background: none; border: 0; border-bottom: 1px solid transparent; padding: 2px 4px; color: var(--ink); cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px; min-width: 26px; justify-content: center; line-height: 1;
 }
-.friend-btn:hover, .looper-help-btn:hover { background: var(--river-pale); }
-.friend-btn.on, .looper-help-btn.on { background: var(--ink); color: var(--paper); }
-.is-recording .friend-btn:first-child { border-color: var(--record); color: var(--record); }
-.friend-loop-buttons { display: flex; flex-wrap: wrap; gap: 6px; }
+.friend-btn::before { font-size: 17px; font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif; line-height: 1; }
+.friend-btn:hover { font-size: 10px; border-bottom-color: var(--ink); }
+.friend-btn.on::before { color: var(--water); }
+.friend-loop-buttons { display: flex; gap: 10px; flex: 0 0 auto; }
+.friend-loop-buttons .friend-btn:nth-child(1)::before { content: "●"; }
+.is-armed .friend-loop-buttons .friend-btn:nth-child(1)::before { content: "◌"; color: var(--armed); }
+.is-recording .friend-loop-buttons .friend-btn:nth-child(1)::before { content: "■"; color: var(--record); }
+.is-recording .friend-loop-buttons .friend-btn:nth-child(1) { color: var(--record); }
+.friend-loop-buttons .friend-btn:nth-child(2)::before { content: "◎"; }
+.friend-loop-buttons .friend-btn:nth-child(3)::before { content: "▶"; font-size: 14px; }
+.is-playing .friend-loop-buttons .friend-btn:nth-child(3)::before { content: "■"; }
+.friend-loop-buttons .friend-btn:nth-child(4)::before { content: "↶"; }
+.friend-loop-buttons .friend-btn:nth-child(5)::before { content: "✕"; font-size: 14px; }
+.friend-loop-buttons .friend-btn:nth-child(6)::before { content: "⟷"; }
 
-.friend-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding-top: 14px; border-top: 1.5px solid var(--ink); }
+/* The controls: a thin rule and a row of glyphs; the take's name on a line. */
+.friend-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; padding-top: 12px; border-top: 1px solid var(--ink); margin-top: 6px; }
+.friend-controls .friend-btn:nth-of-type(1)::before { content: "♩"; }
+.friend-controls .friend-btn:nth-of-type(2)::before { content: "■■"; font-size: 11px; letter-spacing: 1px; }
+.friend-controls .friend-btn:nth-of-type(3)::before { content: "✕✕"; font-size: 11px; letter-spacing: 1px; }
+.friend-controls .friend-btn:nth-of-type(4)::before { content: "⤓"; }
+.friend-controls .friend-btn:nth-of-type(5)::before { content: "✎"; }
+.friend-controls .friend-btn:nth-of-type(6)::before { content: "⤴"; }
 .friend-gap { flex: 1 1 auto; }
-.friend-controls label { font: 400 19px var(--hand); color: var(--pencil); }
-.friend-take { font: 600 19px var(--hand); color: var(--ink); padding: 2px 8px; width: 170px; background: transparent; border: 0; border-bottom: 1.5px solid var(--ink); }
-.friend-saved { font: 600 18px var(--hand); color: var(--river-deep); min-width: 60px; }
-.friend-note { flex-basis: 100%; font: 400 17px/1.3 var(--hand); color: var(--pencil); }
+.friend-controls label { font: 400 11px var(--hand); letter-spacing: 0.14em; text-transform: uppercase; color: var(--pencil); }
+.friend-take { font: 400 15px var(--hand); color: var(--ink); padding: 2px 6px; width: 170px; background: transparent; border: 0; border-bottom: 1px solid var(--ink); }
+.friend-take:focus { outline: none; border-bottom-color: var(--water); }
+.friend-saved { font: 400 11px var(--hand); letter-spacing: 0.14em; text-transform: uppercase; color: var(--water); min-width: 58px; }
+.friend-note { display: none; }
 
-/* The log: notes in the margin. */
-.friend-log { font: 400 17px/1.35 var(--hand); color: var(--pencil); border-top: 1px solid rgba(60,100,150,0.3); padding-top: 10px; display: flex; flex-direction: column; gap: 1px; }
-.friend-log div:first-child { color: var(--ink); font-weight: 600; }
+/* The log: the revisions strip, small, the newest line only in ink. */
+.friend-log { font: 400 11px/1.5 var(--hand); color: var(--pencil); border-top: 1px solid var(--hair); padding-top: 8px; max-height: 3.4em; overflow: hidden; }
+.friend-log div:first-child { color: var(--ink); }
 
-/* Panels: a sheet laid on the sheet. */
+/* Panels: a sheet laid on the sheet, hairline-bordered. */
 .looper-modal-overlay { position: fixed; inset: 0; z-index: 10; display: flex; align-items: center; justify-content: center; }
-.looper-modal-backdrop { position: absolute; inset: 0; background: rgba(247,244,236,0.55); }
-.looper-modal { position: relative; background: #fff; border: 1.5px solid var(--ink); border-radius: var(--sketch); box-shadow: 4px 6px 0 rgba(30,28,26,0.1); max-width: 920px; width: calc(100% - 40px); max-height: calc(100% - 40px); overflow: hidden; }
+.looper-modal-backdrop { position: absolute; inset: 0; background: rgba(243,240,231,0.6); }
+.looper-modal { position: relative; background: #fff; border: 1px solid var(--ink); box-shadow: 4px 4px 0 var(--paper), 4px 4px 0 1px var(--ink); max-width: 920px; width: calc(100% - 40px); max-height: calc(100% - 40px); overflow: hidden; }
 .looper-modal-body { padding: 22px 26px 20px; overflow-y: auto; max-height: calc(100vh - 60px); }
-.looper-modal h2 { margin: 0 0 14px; font: 700 12px var(--grot); letter-spacing: 0.16em; text-transform: uppercase; }
-.looper-modal-close { position: absolute; top: 8px; right: 12px; border: 0; background: none; font: 400 26px var(--hand); color: var(--pencil); cursor: pointer; }
+.looper-modal h2 { margin: 0 0 16px; font: 400 12px var(--hand); letter-spacing: 0.22em; text-transform: uppercase; }
+.looper-modal-close { position: absolute; top: 8px; right: 12px; border: 0; background: none; font: 400 22px var(--hand); color: var(--pencil); cursor: pointer; }
+.looper-help-btn { font: 400 10px var(--hand); letter-spacing: 0.14em; text-transform: uppercase; padding: 4px 8px; background: none; color: var(--ink); border: 1px solid var(--ink); cursor: pointer; }
+.looper-help-btn:hover { background: var(--water-pale); }
+.looper-help-btn.on { background: var(--ink); color: var(--paper); }
 
-/* The Edit panel's waveform, in the river's colours. */
-.looper-wave { background: #fff; border: 1px solid rgba(60,100,150,0.3); }
+/* The Edit panel's waveform: water on white, ink at the edges. */
+.looper-wave { background: #fff; border: 1px solid var(--hair); }
 .looper-wave-loop { fill: #fff; }
-.looper-wave-body { fill: var(--river); }
+.looper-wave-body { fill: var(--water); }
 .looper-wave-outside { fill: var(--paper); opacity: 0.85; }
 .looper-wave-edge { stroke: var(--ink); }
 .looper-wave-start { stroke: var(--record); }
-.looper-wave-head { stroke: var(--violet); opacity: 0.9; }
-.looper-edit-label { font: 700 11px var(--grot); letter-spacing: 0.12em; text-transform: uppercase; }
-.looper-edit-word { font: 400 17px var(--hand); color: var(--pencil); }
-.looper-edit-slider { accent-color: var(--river-deep); }
-.looper-edit-note { font: 400 17px var(--hand); color: var(--pencil); }
+.looper-wave-head { stroke: var(--ink); opacity: 0.8; }
+.looper-edit-label { font: 400 11px var(--hand); letter-spacing: 0.14em; text-transform: uppercase; }
+.looper-edit-word, .looper-edit-note { font: 400 12px var(--hand); color: var(--pencil); }
+.looper-edit-slider { accent-color: var(--ink); }
 
-/* Notes: written on ruled lines, by hand. */
+/* Notes: lettered on ruled lines. */
 .friend-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px 22px; margin-bottom: 14px; }
-.friend-field { display: flex; flex-direction: column; gap: 2px; font: 600 10px var(--grot); letter-spacing: 0.12em; text-transform: uppercase; color: var(--pencil); }
-.friend-field.is-check { flex-direction: row; align-items: center; gap: 8px; align-self: end; text-transform: none; letter-spacing: 0; font: 400 17px var(--hand); }
+.friend-field { display: flex; flex-direction: column; gap: 2px; font: 400 10px var(--hand); letter-spacing: 0.16em; text-transform: uppercase; color: var(--pencil); }
+.friend-field.is-check { flex-direction: row; align-items: center; gap: 8px; align-self: end; }
 .friend-field input[type=text], .friend-field textarea, .friend-field select, .friend-loop-notes input {
-  font: 500 19px/1.25 var(--hand); color: var(--ink); padding: 3px 4px;
-  background: transparent; border: 0; border-bottom: 1px solid rgba(60,100,150,0.45); border-radius: 0;
+  font: 400 15px/1.3 var(--hand); color: var(--ink); padding: 3px 4px;
+  background: transparent; border: 0; border-bottom: 1px solid var(--hair); border-radius: 0;
 }
-.friend-field textarea { background-image: repeating-linear-gradient(transparent 0 25px, rgba(60,100,150,0.35) 25px 26px); line-height: 26px; border-bottom: 0; resize: vertical; }
-.friend-field input:focus, .friend-field textarea:focus, .friend-loop-notes input:focus { outline: none; border-bottom-color: var(--river-deep); }
-.friend-field select { font: 500 14px var(--grot); }
+.friend-field textarea { background-image: repeating-linear-gradient(transparent 0 23px, var(--hair) 23px 24px); line-height: 24px; border-bottom: 0; resize: vertical; }
+.friend-field input:focus, .friend-field textarea:focus, .friend-loop-notes input:focus { outline: none; border-bottom-color: var(--water); }
+.friend-field select { font-size: 13px; }
 .friend-loop-notes { width: 100%; border-collapse: collapse; margin-bottom: 14px; }
-.friend-loop-notes th { text-align: left; font: 600 10px var(--grot); letter-spacing: 0.12em; text-transform: uppercase; color: var(--pencil); padding: 0 8px 4px 0; }
-.friend-loop-notes td { padding: 2px 8px 2px 0; font: 400 17px var(--hand); color: var(--pencil); }
+.friend-loop-notes th { text-align: left; font: 400 10px var(--hand); letter-spacing: 0.16em; text-transform: uppercase; color: var(--pencil); padding: 0 8px 4px 0; }
+.friend-loop-notes td { padding: 2px 8px 2px 0; font: 400 13px var(--hand); color: var(--pencil); }
 .friend-loop-notes input { width: 100%; }
-.friend-harvest-out { margin: 14px 0 0; padding: 12px 14px; background: var(--paper); border: 1px solid rgba(60,100,150,0.3); font: 12px/1.45 ui-monospace, Menlo, monospace; white-space: pre-wrap; max-height: 320px; overflow: auto; }
+.friend-harvest-out { margin: 14px 0 0; padding: 12px 14px; background: var(--paper); border: 1px solid var(--hair); font: 12px/1.45 ui-monospace, Menlo, monospace; white-space: pre-wrap; max-height: 320px; overflow: auto; }
