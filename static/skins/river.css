@@ -144,10 +144,20 @@ body {
 .friend-layer:nth-of-type(5) .friend-layer-n::after { content: "ε"; }
 .friend-layer:nth-of-type(6) .friend-layer-n::after { content: "ζ"; }
 .friend-layer:nth-of-type(n+7) .friend-layer-n { font-size: 11px; }
+/* The module's own colours for its layers — alpha blue, beta magenta, gamma
+   amber, delta yellow, epsilon turquoise, zeta violet — toned for paper, on
+   the letter and on the envelope, so the slab reads like the panel's display. */
+:root { --l1: #2f8ff0; --l2: #d43a8c; --l3: #e0932b; --l4: #c9b30f; --l5: #22a596; --l6: #7a5fd0; }
+.friend-layer:nth-of-type(1) .friend-layer-n::after, .friend-layer:nth-of-type(1) .loop-wave path { color: var(--l1); fill: var(--l1); }
+.friend-layer:nth-of-type(2) .friend-layer-n::after, .friend-layer:nth-of-type(2) .loop-wave path { color: var(--l2); fill: var(--l2); }
+.friend-layer:nth-of-type(3) .friend-layer-n::after, .friend-layer:nth-of-type(3) .loop-wave path { color: var(--l3); fill: var(--l3); }
+.friend-layer:nth-of-type(4) .friend-layer-n::after, .friend-layer:nth-of-type(4) .loop-wave path { color: var(--l4); fill: var(--l4); }
+.friend-layer:nth-of-type(5) .friend-layer-n::after, .friend-layer:nth-of-type(5) .loop-wave path { color: var(--l5); fill: var(--l5); }
+.friend-layer:nth-of-type(6) .friend-layer-n::after, .friend-layer:nth-of-type(6) .loop-wave path { color: var(--l6); fill: var(--l6); }
 .friend-layer-wave { position: relative; flex: 1 1 auto; height: 100%; background: #fff; border-bottom: 1px solid var(--hair); }
 .loop-wave path { fill: var(--water); }
 .is-recording .friend-layer-wave .loop-wave path { fill: var(--record); }
-.is-stopped .friend-layer-wave .loop-wave path { fill: #a8a49c; }
+.is-stopped .friend-layer-wave { opacity: 0.45; }
 .loop-layer-on { accent-color: var(--ink); width: 10px; height: 10px; }
 
 /* Buttons: bare glyphs, the word beneath on hover. The word's line is always
@@ -167,13 +177,12 @@ body {
 .is-armed .friend-loop-buttons .friend-btn:nth-child(1)::before { content: "◌"; color: var(--armed); }
 .is-recording .friend-loop-buttons .friend-btn:nth-child(1)::before { content: "■"; color: var(--record); }
 .is-recording .friend-loop-buttons .friend-btn:nth-child(1):hover { color: var(--record); }
-.friend-loop-buttons .friend-btn:nth-child(2)::before { content: "◎"; }
-.friend-loop-buttons .friend-btn:nth-child(3)::before { content: "▶"; font-size: 14px; }
-.is-playing .friend-loop-buttons .friend-btn:nth-child(3)::before { content: "■"; }
-.friend-loop-buttons .friend-btn:nth-child(4)::before { content: "↶"; }
-.friend-loop-buttons .friend-btn:nth-child(5)::before { content: "✕"; font-size: 14px; }
-.friend-loop-buttons .friend-btn:nth-child(6)::before { content: "⟷"; }
-.friend-loop-buttons .friend-btn:nth-child(7)::before { content: "✎"; font-size: 14px; color: var(--pencil); }
+.friend-loop-buttons .friend-btn:nth-child(2)::before { content: "▶"; font-size: 14px; }
+.is-playing .friend-loop-buttons .friend-btn:nth-child(2)::before { content: "■"; }
+.friend-loop-buttons .friend-btn:nth-child(3)::before { content: "↶"; }
+.friend-loop-buttons .friend-btn:nth-child(4)::before { content: "✕"; font-size: 14px; }
+.friend-loop-buttons .friend-btn:nth-child(5)::before { content: "⟷"; }
+.friend-loop-buttons .friend-btn:nth-child(6)::before { content: "✎"; font-size: 14px; color: var(--pencil); }
 
 /* Drag and drop: a handle shows a grab cursor; an empty loop that could take
    the drop is drawn in dashes, and the one under the pointer in water. */

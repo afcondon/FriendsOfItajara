@@ -478,8 +478,11 @@ render st =
             then [ HH.div [ HP.class_ (HH.ClassName "friend-layer is-empty") ] [ HH.text "empty" ] ]
             else Array.mapWithIndex (layerRow i lp) lp.shapes)
       , HH.div [ HP.class_ (HH.ClassName "friend-loop-buttons") ]
+          -- No Overdub beside Record: on this page Record already reads the
+          -- loop's state and says what the next press does, and the one thing
+          -- Overdub adds — refusing a first take — is a footswitch's need, not
+          -- a button's. The duty stays in the vocabulary for the pedalboard.
           [ btn (recordWord lp) (Do (OnLoop i) Duty.RecordLoop) (Socket.isWriting lp)
-          , btn "Overdub" (Do (OnLoop i) Duty.OverdubLoop) false
           , btn (if lp.state == "playing" then "Stop" else "Play") (Do (OnLoop i) Duty.Transport) false
           , btn "Undo" (Do (OnLoop i) Duty.Undo) false
           , btn "Clear" (Do (OnLoop i) Duty.ClearLoop) false
