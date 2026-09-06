@@ -264,7 +264,15 @@ handleAction = case _ of
           when (lp.layers > 0) $
             for_ (Array.mapWithIndex Tuple (Array.take lp.layers lp.shapes)) \(Tuple k sh) ->
               when sh.on $ duty i (Duty.LayerOn (k + 1) false)
-      OnLoop i, Duty.RecordLoop -> H.modify_ \x -> x { growing = Array.nub (Array.cons i x.growing) }
+      -- Open means open. Undo keeps a loop's length so the pedalboard's next
+      -- take lands on the same grid; on this face a loop with no layers and
+      -- a length would close an "open" take at thirteen seconds, so the
+      -- length is let go first.
+      OnLoop i, Duty.RecordLoop -> do
+        H.modify_ \x -> x { growing = Array.nub (Array.cons i x.growing) }
+        for_ (st.looper >>= \top -> Array.index top.loops i) \lp ->
+          when (lp.layers == 0 && lp.loopFrames > 0 && not (Socket.isWriting lp) && not lp.armed) $
+            duty i Duty.ForgetLength
       _, _ -> pure unit
     traverse_ runAction (Machine.perform (rigOf st) subject d)
   Focus i -> H.modify_ _ { focus = i }
@@ -368,6 +376,7 @@ handleAction = case _ of
     let loops = maybe [] _.loops st.looper
     if Array.all (\lp -> lp.layers == 0) loops then H.modify_ (note "nothing to save: no loop has a layer")
     else do
+      when (st.notesFor == safeName st.take) $ handleAction SaveNotes
       runAction (Machine.Command (Verb.render (Verb.ExportLayers (safeName st.take))))
       -- The daemon writes on its own thread and the ack lands in the
       -- snapshot; the folder is there a moment later. Ask the server then.
@@ -376,6 +385,11 @@ handleAction = case _ of
         handleAction RefreshTakes
 
   OpenPanel p -> do
+    -- Leaving the notes panel saves it: a button nobody pressed was how a
+    -- take went to the stick with an empty datasheet.
+    before <- H.get
+    when (before.panel == NotesPanel && p /= NotesPanel && before.notesFor == safeName before.take) $
+      handleAction SaveNotes
     H.modify_ _ { panel = p }
     st <- H.get
     when (p == NotesPanel && st.notesFor /= safeName st.take) do
@@ -611,7 +625,7 @@ render st =
               else [])
           <> [ slabBtn "rec" (openWord lp) (Do (OnLoop i) Duty.RecordLoop)
                  (Socket.isWriting lp && lp.layers == 0) (f.windowSecs > 0.0 && lp.layers > 0)
-             , slabBtn "play" (if lp.state == "playing" then "Stop" else "Play") (Do (OnLoop i) Duty.Transport) false false
+             , slabBtn "play" (if lp.state == "playing" && not lp.muted then "Stop" else "Play") (Do (OnLoop i) Duty.Transport) false false
              , slabBtn "undo" "Undo" (Do (OnLoop i) Duty.Undo) false false
              , slabBtn "clear" "Clear" (Do (OnLoop i) Duty.ClearLoop) false false
              , slabBtn "edit" "Edit" (ToggleEdit i) (st.panel == EditPanel && st.focus == i) false
@@ -662,9 +676,11 @@ render st =
     let
       sr = Int.toNumber top.sampleRate
       linear = case Socket.phaseOf lp of
-        Socket.Overdubbing -> false
+        Socket.Overdubbing -> lp.recFrames > 0
         _ -> true
-      elapsed = if linear then lp.recFrames else lp.pos
+      -- A one-pass layer reports how far its pass has come; an open overdub
+      -- reports zero and the bar is the play head across the loop.
+      elapsed = if linear || lp.recFrames > 0 then lp.recFrames else lp.pos
       -- A fixed take's loop already has its length while it records, so the
       -- bar fills towards it; an open take's is zero, and the bar just counts.
       ref = lp.loopFrames
@@ -888,7 +904,7 @@ phaseClass lp = case Socket.phaseOf lp of
   Socket.RecordingFirst -> "is-recording"
   Socket.Overdubbing -> "is-recording"
   Socket.Multiplying -> "is-recording"
-  Socket.Playing -> "is-playing"
+  Socket.Playing -> if lp.muted then "is-muted" else "is-playing"
   Socket.Idle -> if lp.layers > 0 then "is-stopped" else "is-empty"
 
 lengthWord :: LooperState -> LoopState -> String
