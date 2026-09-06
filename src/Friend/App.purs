@@ -236,9 +236,14 @@ handleAction = case _ of
       -- the pedalboard's layers are not this face's business.
       when cur.face.solo $ for_ snap \s -> for_ cur.looper \old ->
         for_ (Array.zip old.loops s.loops) \(Tuple o n) -> do
-          when (n.layers > o.layers && n.layers > 1 && Array.elem n.index cur.growing) do
-            H.modify_ \x -> x { growing = Array.delete n.index x.growing, soloed = Array.nub (Array.cons n.index x.soloed) }
-            duty n.index (Duty.SoloLayer n.layers)
+          -- The request is spent when the layer lands, whether or not there
+          -- was anything to solo: a first take left in `growing` would hand
+          -- the pedalboard's next layer on that loop to this rule.
+          when (n.layers > o.layers && Array.elem n.index cur.growing) do
+            H.modify_ \x -> x { growing = Array.delete n.index x.growing }
+            when (n.layers > 1) do
+              H.modify_ \x -> x { soloed = Array.nub (Array.cons n.index x.soloed) }
+              duty n.index (Duty.SoloLayer n.layers)
           when (n.layers < o.layers && n.layers > 0 && Array.elem n.index cur.soloed
                   && not (Array.any _.on (Array.take n.layers n.shapes))) $
             duty n.index (Duty.SoloLayer n.layers)
@@ -895,7 +900,12 @@ stateWord lp = case Socket.phaseOf lp of
   Socket.RecordingFirst -> "recording"
   Socket.Overdubbing -> "overdubbing"
   Socket.Multiplying -> "multiplying"
-  Socket.Playing -> if lp.muted then "muted" else "playing"
+  -- Undo of the last layer leaves the loop turning with a length and
+  -- nothing in it: sized, not playing.
+  Socket.Playing
+    | lp.layers == 0 -> "empty"
+    | lp.muted -> "muted"
+    | otherwise -> "playing"
   Socket.Idle -> if lp.layers > 0 then "stopped" else "empty"
 
 phaseClass :: LoopState -> String
