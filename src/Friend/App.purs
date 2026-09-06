@@ -69,6 +69,14 @@ type State =
   -- | A hand on the Edit picture: where it went down, the window's start
   -- | then, and how many frames one pixel is.
   , waveDrag :: Maybe { x0 :: Int, fpp :: Number, d :: Edit.Drag }
+  -- | Loops this page has asked to grow — a take, a duplicate, a drop — and
+  -- | has not yet seen grow. Only these are soloed when they gain a layer:
+  -- | another surface (the pedalboard) laying layers on the same daemon is
+  -- | not asking for this face's rule, and a background tab applying it late
+  -- | silenced two of its layers with nothing on screen to say why.
+  , growing :: Array Int
+  -- | Loops this page has soloed, so only they get the "none sounding" repair.
+  , soloed :: Array Int
   -- | The slider a hand is on; see `Itajara.Surface.Edit.View`.
   , local :: Map String Int
   , panel :: Panel
@@ -156,7 +164,7 @@ component =
   H.mkComponent
     { initialState: \face ->
         { face, looper: Nothing, status: Nothing, age: 0.0, focus: 0, peaks: Nothing
-        , peaksKey: "", waveDrag: Nothing, local: Map.empty, panel: NoPanel, ackSeq: 0, log: [], take: "take"
+        , peaksKey: "", waveDrag: Nothing, growing: [], soloed: [], local: Map.empty, panel: NoPanel, ackSeq: 0, log: [], take: "take"
         , saved: [], notes: Http.emptyNotes, notesFor: "", notesStatus: ""
         , sticks: [], stick: "", bank: "1", scene: "1_1", overwrite: false, allLayers: false
         , harvestOut: "", harvestBusy: false, drag: Nothing, dropOn: Nothing }
@@ -222,11 +230,20 @@ handleAction = case _ of
       -- And the other direction: undo the soloed layer and the ones left are
       -- all off, so the loop plays silence with no sign of why. A loop that
       -- has just lost a layer and has none sounding gets its newest turned on.
+      --
+      -- Only for loops this page asked to grow (`growing`), and the repair
+      -- only for loops it has soloed (`soloed`): the daemon is shared, and
+      -- the pedalboard's layers are not this face's business.
       when cur.face.solo $ for_ snap \s -> for_ cur.looper \old ->
         for_ (Array.zip old.loops s.loops) \(Tuple o n) -> do
-          when (n.layers > o.layers && n.layers > 1) $ duty n.index (Duty.SoloLayer n.layers)
-          when (n.layers < o.layers && n.layers > 0 && not (Array.any _.on (Array.take n.layers n.shapes))) $
+          when (n.layers > o.layers && n.layers > 1 && Array.elem n.index cur.growing) do
+            H.modify_ \x -> x { growing = Array.delete n.index x.growing, soloed = Array.nub (Array.cons n.index x.soloed) }
             duty n.index (Duty.SoloLayer n.layers)
+          when (n.layers < o.layers && n.layers > 0 && Array.elem n.index cur.soloed
+                  && not (Array.any _.on (Array.take n.layers n.shapes))) $
+            duty n.index (Duty.SoloLayer n.layers)
+          when (n.layers == 0 && o.layers > 0) $
+            H.modify_ \x -> x { soloed = Array.delete n.index x.soloed, growing = Array.delete n.index x.growing }
       -- What the daemon had to say. By sequence, so two identical refusals
       -- in a row are two lines.
       for_ snap \s ->
@@ -242,9 +259,12 @@ handleAction = case _ of
     -- hearing the old layer, as a looper should; this is the face's choice.
     when st.face.solo $ case subject, d of
       OnLoop i, Duty.RecordFixed _ -> for_ (st.looper >>= \top -> Array.index top.loops i) \lp ->
-        when (lp.layers > 0 && not (Socket.isWriting lp) && not lp.armed) $
-          for_ (Array.mapWithIndex Tuple (Array.take lp.layers lp.shapes)) \(Tuple k sh) ->
-            when sh.on $ duty i (Duty.LayerOn (k + 1) false)
+        when (not (Socket.isWriting lp) && not lp.armed) do
+          H.modify_ \x -> x { growing = Array.nub (Array.cons i x.growing) }
+          when (lp.layers > 0) $
+            for_ (Array.mapWithIndex Tuple (Array.take lp.layers lp.shapes)) \(Tuple k sh) ->
+              when sh.on $ duty i (Duty.LayerOn (k + 1) false)
+      OnLoop i, Duty.RecordLoop -> H.modify_ \x -> x { growing = Array.nub (Array.cons i x.growing) }
       _, _ -> pure unit
     traverse_ runAction (Machine.perform (rigOf st) subject d)
   Focus i -> H.modify_ _ { focus = i }
@@ -318,6 +338,7 @@ handleAction = case _ of
       when (st.dropOn /= Just i) $ H.modify_ _ { dropOn = Just i }
   DragLeave i -> H.modify_ \s -> s { dropOn = if s.dropOn == Just i then Nothing else s.dropOn }
   DropOn i ev -> do
+    H.modify_ \x -> x { growing = Array.nub (Array.cons i x.growing) }
     liftEffect (preventDefault (DragEvent.toEvent ev))
     st <- H.get
     for_ st.drag \d ->
