@@ -169,6 +169,8 @@ rigOf :: State -> Machine.Rig
 rigOf st =
   { loops: maybe [] _.loops st.looper
   , focus: st.focus
+  -- The daemon's own default until it says otherwise; see `Machine.Rig`.
+  , maxLayers: maybe 4 _.maxLayers st.looper
   , click: maybe false _.click st.looper
   , monitor: maybe false _.monitor st.looper
   , armDb: maybe (-36.0) _.armDb st.looper
