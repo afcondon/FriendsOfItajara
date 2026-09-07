@@ -3,3 +3,4 @@ output/
 static/index.js
 static/looper.css
 node_modules/
+.DS_Store
