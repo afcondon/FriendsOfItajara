@@ -41,6 +41,7 @@ import Friend.Face (Face)
 import Friend.Face as Face
 import Friend.Http (Notes, LoopNote)
 import Friend.Http as Http
+import Friend.Library as Library
 import Halogen as H
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
@@ -90,6 +91,16 @@ type State =
   , allLayers :: Boolean
   , harvestOut :: String
   , harvestBusy :: Boolean
+  -- | **The library browser.** Every shelf the server can see, the shelf and
+  -- | scene in hand, that scene's audio once its headers have been read, and
+  -- | what is sounding. Deliberately independent of the daemon: browsing and
+  -- | auditioning samples is worth doing with no looper running at all.
+  , shelves :: Array Library.Shelf
+  , shelfId :: Maybe String
+  , openScene :: Maybe { lib :: String, path :: String, name :: String }
+  , sceneAt :: Library.SceneInfo
+  , hearing :: Maybe { url :: String, name :: String }
+  , libStatus :: String
   -- | A drag in progress: which loop it came from and, for one layer, which
   -- | (from one). And the empty loop the pointer is over, if any.
   , drag :: Maybe { loop :: Int, layer :: Maybe Int }
@@ -98,7 +109,7 @@ type State =
 
 -- | One modal at a time: the loop in hand's edit, the take's notes, or the
 -- | harvest. The Edit panel is the shared one; the other two are this page's.
-data Panel = NoPanel | EditPanel | NotesPanel | HarvestPanel
+data Panel = NoPanel | EditPanel | NotesPanel | HarvestPanel | LibraryPanel
 
 derive instance Eq Panel
 
@@ -135,6 +146,11 @@ data Action
   | SetOverwrite Boolean
   | SetAllLayers Boolean
   | RunHarvest Boolean
+  -- | The library browser; see `libraryModal`.
+  | OpenLibrary
+  | PickShelf String
+  | PickScene String String String
+  | Audition String String
   | SetWindow Int Int Int
   | SetLayerWindow Int Int Int Int
   | ClearLayerWindow Int Int
@@ -159,7 +175,9 @@ component =
         , peaksKey: "", waveDrag: Nothing, local: Map.empty, panel: NoPanel, ackSeq: 0, log: [], take: "take"
         , saved: [], notes: Http.emptyNotes, notesFor: "", notesStatus: ""
         , sticks: [], stick: "", bank: "1", scene: "1_1", overwrite: false, allLayers: false
-        , harvestOut: "", harvestBusy: false, drag: Nothing, dropOn: Nothing }
+        , harvestOut: "", harvestBusy: false, drag: Nothing, dropOn: Nothing
+        , shelves: [], shelfId: Nothing, openScene: Nothing, sceneAt: Library.emptyScene
+        , hearing: Nothing, libStatus: "" }
     , render
     , eval: H.mkEval H.defaultEval { handleAction = handleAction, initialize = Just Initialize }
     }
@@ -385,6 +403,26 @@ handleAction = case _ of
         Right n -> H.modify_ _ { notes = n, notesFor = safeName st.take, notesStatus = "" }
         Left e -> H.modify_ _ { notes = Http.emptyNotes, notesFor = safeName st.take, notesStatus = "could not load notes: " <> message e }
     when (p == HarvestPanel) $ handleAction RefreshSticks
+  OpenLibrary -> do
+    handleAction (OpenPanel LibraryPanel)
+    H.modify_ _ { libStatus = "reading…" }
+    r <- H.liftAff (attempt (toAffE Library.listLibrary))
+    case r of
+      Right sh -> H.modify_ _
+        { shelves = sh
+        , libStatus = if Array.null sh then "No libraries. Add one to ~/.itajara/libraries.json and open this again." else ""
+        }
+      Left e -> H.modify_ _ { libStatus = "could not read the libraries: " <> message e }
+  PickShelf k -> H.modify_ _ { shelfId = Just k, openScene = Nothing, sceneAt = Library.emptyScene }
+  PickScene lib pth name -> do
+    -- The names are already in hand from the tree; only the headers are not,
+    -- so the column fills at once and the durations arrive behind them.
+    H.modify_ _ { openScene = Just { lib, path: pth, name }, sceneAt = Library.emptyScene }
+    r <- H.liftAff (attempt (toAffE (Library.sceneInfo lib pth)))
+    case r of
+      Right d -> H.modify_ _ { sceneAt = d }
+      Left e -> H.modify_ _ { libStatus = "could not read the scene: " <> message e }
+  Audition url name -> H.modify_ _ { hearing = Just { url, name } }
   RefreshTakes -> do
     r <- H.liftAff (attempt (toAffE Http.listTakes))
     case r of
@@ -529,7 +567,8 @@ render st =
               NoPanel -> []
               EditPanel -> [ editModal ]
               NotesPanel -> [ notesModal ]
-              HarvestPanel -> [ harvestModal ])
+              HarvestPanel -> [ harvestModal ]
+              LibraryPanel -> [ libraryModal ])
     )
   where
   f = st.face
@@ -541,6 +580,13 @@ render st =
           [ HH.text ("A looper that writes " <> f.unit <> "s for the " <> f.maker <> " " <> f.module_ <> ". ") ]
       , HH.p [ HP.class_ (HH.ClassName ("friend-conn " <> connClass)) ] [ HH.text connWord ]
       , maybe (HH.text "") sourceBar st.looper
+      -- In the header, not the controls: the controls only exist when a
+      -- daemon does, and a sample browser has no business needing one.
+      , HH.button
+          [ HP.class_ (HH.ClassName ("friend-libbtn" <> if st.panel == LibraryPanel then " is-on" else ""))
+          , HE.onClick \_ -> OpenLibrary
+          ]
+          [ HH.text "Library" ]
       ]
 
   connClass = case st.status of
@@ -862,6 +908,105 @@ render st =
       , HH.input [ HP.type_ HP.InputText, HP.value value, HE.onValueInput onV ]
       ]
 
+  -- **Three columns, and what is sounding.** Shelf, scene, layer — the shape
+  -- the server discovers rather than one it imposes, so the same columns read
+  -- our own takes (`take/loop-3/`) and Instruo's stick image
+  -- (`_arbhar_scenes/1_2_scene/`) without either being a special case.
+  --
+  -- The names are the directories' own. `_arbhar_library_4` is not tidied into
+  -- "bank 4" on purpose: what the module shows you is these names, and the
+  -- browser is partly here to teach them.
+  libraryModal =
+    modal "is-library" "Library"
+      [ HH.p [ HP.class_ (HH.ClassName "friend-note") ]
+          [ HH.text ("Scenes by name, wherever they live. What the "
+              <> f.module_ <> " reads is slots — "
+              <> f.holds
+              <> " — and Harvest is what puts a scene into one. Roots come from ~/.itajara/libraries.json.")
+          ]
+      , if st.libStatus == "" then HH.text ""
+        else HH.p [ HP.class_ (HH.ClassName "friend-lib-status") ] [ HH.text st.libStatus ]
+      , HH.div [ HP.class_ (HH.ClassName "friend-lib") ]
+          [ HH.div [ HP.class_ (HH.ClassName "friend-lib-col") ]
+              ([ HH.h3_ [ HH.text "Library" ] ] <> map shelfRow st.shelves)
+          , HH.div [ HP.class_ (HH.ClassName "friend-lib-col") ]
+              ([ HH.h3_ [ HH.text (capital f.unit) ] ]
+                <> case openShelf of
+                     Nothing -> [ HH.p [ HP.class_ (HH.ClassName "friend-lib-empty") ] [ HH.text "Pick a library." ] ]
+                     Just h -> map (sceneRow h) h.scenes)
+          , HH.div [ HP.class_ (HH.ClassName "friend-lib-col is-layers") ]
+              ([ HH.h3_ [ HH.text (capital f.layerWord) ] ] <> layerRows <> textRows)
+          ]
+      , player
+      ]
+
+  openShelf = st.shelfId >>= \k -> Array.find (\h -> h.id == k) st.shelves
+
+  shelfRow h =
+    HH.button
+      [ HP.class_ (HH.ClassName ("friend-lib-row" <> if Just h.id == st.shelfId then " is-on" else ""))
+      , HE.onClick \_ -> PickShelf h.id
+      ]
+      [ HH.span [ HP.class_ (HH.ClassName "friend-lib-lib") ] [ HH.text h.libName ]
+      , HH.span [ HP.class_ (HH.ClassName "friend-lib-name") ] [ HH.text h.name ]
+      , HH.span [ HP.class_ (HH.ClassName "friend-lib-meta") ] [ HH.text (show (Array.length h.scenes)) ]
+      ]
+
+  sceneRow h sc =
+    HH.button
+      [ HP.class_ (HH.ClassName ("friend-lib-row" <> if Just sc.path == map _.path st.openScene then " is-on" else ""))
+      , HE.onClick \_ -> PickScene h.lib sc.path sc.name
+      ]
+      [ HH.span [ HP.class_ (HH.ClassName "friend-lib-name") ] [ HH.text sc.name ]
+      , HH.span [ HP.class_ (HH.ClassName "friend-lib-meta") ] [ HH.text (show (Array.length sc.layers)) ]
+      ]
+
+  layerRows = case st.openScene of
+    Nothing -> [ HH.p [ HP.class_ (HH.ClassName "friend-lib-empty") ] [ HH.text ("Pick a " <> f.unit <> ".") ] ]
+    Just sc
+      | Array.null st.sceneAt.layers ->
+          [ HH.p [ HP.class_ (HH.ClassName "friend-lib-empty") ] [ HH.text "reading…" ] ]
+      | otherwise -> map (libLayerRow sc) st.sceneAt.layers
+
+  libLayerRow sc l =
+    let url = Library.audioUrl sc.lib (if sc.path == "" then l.name else sc.path <> "/" <> l.name)
+    in HH.button
+         [ HP.class_ (HH.ClassName ("friend-lib-row" <> if Just url == map _.url st.hearing then " is-on" else ""))
+         , HE.onClick \_ -> Audition url (sc.name <> " / " <> l.name)
+         ]
+         [ HH.span [ HP.class_ (HH.ClassName "friend-lib-play") ] [ HH.text "\x25b6" ]
+         , HH.span [ HP.class_ (HH.ClassName "friend-lib-name") ] [ HH.text l.name ]
+         , HH.span [ HP.class_ (HH.ClassName "friend-lib-meta") ] [ HH.text (layerMeta l) ]
+         ]
+
+  -- A zero means the header did not say, and the page prints nothing rather
+  -- than a plausible lie.
+  layerMeta l = String.joinWith " · " (Array.catMaybes
+    [ if l.secs > 0.0 then Just (secs l.secs <> " s") else Nothing
+    , if l.rate > 0 then Just (show (l.rate / 1000) <> "k") else Nothing
+    , if l.bits > 0 then Just (show l.bits <> " bit") else Nothing
+    , if l.channels > 0 then Just (if l.channels == 1 then "mono" else "stereo") else Nothing
+    ])
+
+  -- An Arbhar scene's preset is a text file whose *name* is the preset's, so
+  -- the name is shown as loudly as the contents.
+  textRows = case st.openScene of
+    Nothing -> []
+    Just _ -> map
+      (\t -> HH.div [ HP.class_ (HH.ClassName "friend-lib-text") ]
+        [ HH.strong_ [ HH.text t.name ]
+        , HH.pre_ [ HH.text t.content ]
+        ])
+      st.sceneAt.texts
+
+  player = case st.hearing of
+    Nothing -> HH.text ""
+    Just h ->
+      HH.div [ HP.class_ (HH.ClassName "friend-lib-player") ]
+        [ HH.span [ HP.class_ (HH.ClassName "friend-lib-now") ] [ HH.text h.name ]
+        , HH.audio [ HP.src h.url, HP.controls true, HP.autoplay true ] []
+        ]
+
   -- **What only the player knows.** The daemon's facts — length, bars,
   -- tempo, source — go on the datasheet by themselves; these are the rest.
   notesModal =
@@ -991,3 +1136,8 @@ lengthWord top lp
 
 secs :: Number -> String
 secs n = show (Int.toNumber (Int.round (n * 10.0)) / 10.0)
+
+-- | A face's words are lower case because they are used in sentences; a
+-- | column heading wants one capital and no other change.
+capital :: String -> String
+capital s = String.toUpper (String.take 1 s) <> String.drop 1 s

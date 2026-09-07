@@ -12,6 +12,9 @@
 //   GET  /api/takes/:name/notes    the take's notes.json, or {}
 //   PUT  /api/takes/:name/notes    write it
 //   GET  /api/sticks               mounted volumes that look like an Arbhar stick
+//   GET  /api/library              every library's shelves and scenes, names only
+//   GET  /api/scene?lib=&path=     one scene: its audio with headers, its texts
+//   GET  /api/audio?lib=&path=     one file, with byte ranges, for auditioning
 //   POST /api/harvest              { take, module, stick, bank, scene, overwrite,
 //                                    allLayers, dryRun } → runs msm harvest,
 //                                    answers { ok, output }
@@ -99,6 +102,175 @@ function harvest(body) {
   });
 }
 
+// ---------------------------------------------------------------- libraries
+//
+// A *library* is a directory of scenes; a *scene* is any directory whose
+// children include audio. That one rule reads all of them with no
+// per-library configuration: the takes directory (`take/loop-3/layer-00.wav`),
+// Instruo's v2 stick image (`_arbhar_scenes/1_1_scene/2_Buzzfade.wav`, and the
+// single-sample banks, `_arbhar_library_4/3_2_sample/`), and a plain folder of
+// samples such as Lubadh's `01 Drums A`.
+//
+// Note what is deliberately absent: the module's own namespace. A stick
+// addresses *positionally* — six banks of thirty-six, and thirty-six scenes —
+// while a library addresses *by name*. `msm harvest` is the compiler between
+// the two; this browser only ever knows the naming side, and shows the stick's
+// directory names raw rather than prettified, because recognising them is half
+// of what the browser is for.
+
+const LIBRARIES = path.join(os.homedir(), ".itajara", "libraries.json");
+
+// Written out on first run so there is a file to edit rather than a setting to
+// discover. A root that is not mounted stays in the file and simply does not
+// list, so unplugging the disk is not a reason to lose the entry.
+const DEFAULT_LIBRARIES = [
+  { name: "Takes", path: TAKES },
+  { name: "Instruo — Arbhar 2.0", path: "/Volumes/Crucial4TB/Books/Manuals/Music/Instruo/Instruo samples/Arbhar 2.0" },
+];
+
+const AUDIO = /\.(wav|aif|aiff|flac)$/i;
+const AUDIO_TYPES = { ".wav": "audio/wav", ".aif": "audio/aiff", ".aiff": "audio/aiff", ".flac": "audio/flac" };
+const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+
+// Dotfiles, and with them macOS's `._` AppleDouble sidecars — which are not
+// samples but do end in .wav, and which bit the harvest once already.
+const visible = (n) => !n.startsWith(".");
+
+// Numbers inside a name sort as numbers, so `2_1_scene` follows `1_6_scene`
+// and `layer-10` follows `layer-9`. Lexical order puts 10 before 2, which
+// makes a scene list read wrong in exactly the place it matters.
+const sortKey = (s) => s.replace(/\d+/g, (d) => d.padStart(12, "0"));
+const natural = (a, b) => (sortKey(a) < sortKey(b) ? -1 : sortKey(a) > sortKey(b) ? 1 : 0);
+
+function libraries() {
+  let conf;
+  try {
+    conf = JSON.parse(fs.readFileSync(LIBRARIES, "utf8"));
+  } catch {
+    conf = DEFAULT_LIBRARIES;
+    try {
+      fs.mkdirSync(path.dirname(LIBRARIES), { recursive: true });
+      fs.writeFileSync(LIBRARIES, JSON.stringify(conf, null, 2) + "\n");
+    } catch {}
+  }
+  return (Array.isArray(conf) ? conf : [])
+    .filter((l) => l && l.name && l.path)
+    .map((l) => ({ id: slug(l.name), name: l.name, path: path.resolve(String(l.path).replace(/^~/, os.homedir())) }))
+    .filter((l) => { try { return fs.statSync(l.path).isDirectory(); } catch { return false; } });
+}
+
+// A path inside one library, or null. The whole of this module's safety: a
+// relative path that climbs out of its root resolves outside it and is refused.
+function resolveIn(libId, rel) {
+  const l = libraries().find((x) => x.id === libId);
+  if (!l) return null;
+  const p = path.resolve(l.path, rel || "");
+  return p === l.path || p.startsWith(l.path + path.sep) ? p : null;
+}
+
+// Every directory at or under `root` that holds audio, with the audio in it.
+// A directory can be both a scene and a shelf — a flat take has wavs of its
+// own beside its loop folders — so this pushes and recurses, never either/or.
+function scenesUnder(root, rel = "", depth = 4, out = []) {
+  let entries;
+  try { entries = fs.readdirSync(path.join(root, rel), { withFileTypes: true }); } catch { return out; }
+  const here = entries.filter((e) => e.isFile() && visible(e.name) && AUDIO.test(e.name)).map((e) => e.name).sort(natural);
+  if (here.length) {
+    const dir = rel === "" ? "" : path.dirname(rel);
+    out.push({ path: rel, name: rel === "" ? "(root)" : path.basename(rel), group: dir === "." ? "" : dir, layers: here });
+  }
+  if (depth > 0)
+    for (const e of entries.filter((e) => e.isDirectory() && visible(e.name)).sort((a, b) => natural(a.name, b.name)))
+      scenesUnder(root, rel ? path.join(rel, e.name) : e.name, depth - 1, out);
+  return out;
+}
+
+// The whole tree, names only: readdir is cheap and WAV headers are not, so the
+// shape of every library arrives in one call and a scene's durations are read
+// when a scene is actually opened.
+function shelves() {
+  return libraries().flatMap((l) => {
+    const by = new Map();
+    for (const s of scenesUnder(l.path)) {
+      if (!by.has(s.group)) by.set(s.group, []);
+      by.get(s.group).push({ path: s.path, name: s.name, layers: s.layers });
+    }
+    return [...by.entries()]
+      .sort((a, b) => natural(a[0], b[0]))
+      .map(([group, ss]) => ({ id: l.id + " " + group, lib: l.id, libName: l.name, group, name: group || l.name, scenes: ss }));
+  });
+}
+
+// What a WAV says about itself, from its header alone: walk the chunks for
+// `fmt ` and `data`. A `data` size that overruns the file (or the streaming
+// 0xffffffff) is not believed — the file's own length is.
+function wavInfo(p) {
+  let fd;
+  try { fd = fs.openSync(p, "r"); } catch { return {}; }
+  try {
+    const size = fs.fstatSync(fd).size;
+    const head = Buffer.alloc(Math.min(size, 8192));
+    const n = fs.readSync(fd, head, 0, head.length, 0);
+    if (n < 12 || head.toString("ascii", 0, 4) !== "RIFF") return { bytes: size };
+    let off = 12, f = null;
+    while (off + 8 <= n) {
+      const id = head.toString("ascii", off, off + 4);
+      const sz = head.readUInt32LE(off + 4);
+      if (id === "fmt " && off + 24 <= n) {
+        f = { channels: head.readUInt16LE(off + 10), rate: head.readUInt32LE(off + 12), bits: head.readUInt16LE(off + 22) };
+      } else if (id === "data") {
+        const bytes = sz === 0xffffffff || off + 8 + sz > size ? size - (off + 8) : sz;
+        const frame = f ? (f.bits / 8) * f.channels : 0;
+        return { bytes: size, ...(f || {}), secs: frame && f.rate ? bytes / frame / f.rate : null };
+      }
+      off += 8 + sz + (sz & 1);
+    }
+    return { bytes: size, ...(f || {}) };
+  } catch {
+    return {};
+  } finally {
+    try { fs.closeSync(fd); } catch {}
+  }
+}
+
+// One scene: its audio with headers read, and its text files with their
+// contents — an Arbhar scene's preset is a .txt whose *name* is the preset's
+// ("arbharClassic.txt"), so both halves are worth showing.
+function sceneInfo(dir) {
+  let entries;
+  try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return { layers: [], texts: [] }; }
+  const files = entries.filter((e) => e.isFile() && visible(e.name)).map((e) => e.name);
+  return {
+    layers: files.filter((n) => AUDIO.test(n)).sort(natural).map((n) => ({ name: n, ...wavInfo(path.join(dir, n)) })),
+    texts: files.filter((n) => /\.txt$/i.test(n)).sort(natural).map((n) => {
+      let content = "";
+      try { content = fs.readFileSync(path.join(dir, n), "utf8").slice(0, 2000); } catch {}
+      return { name: n, content };
+    }),
+  };
+}
+
+// Audio, with byte ranges: Safari will not play a media element from a server
+// that answers 200 to a Range request, so this is not optional politeness.
+function sendAudio(req, res, file) {
+  const size = fs.statSync(file).size;
+  const type = AUDIO_TYPES[path.extname(file).toLowerCase()] || "application/octet-stream";
+  const m = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || "");
+  if (m && (m[1] !== "" || m[2] !== "")) {
+    let start, end;
+    if (m[1] === "") { start = Math.max(0, size - Number(m[2])); end = size - 1; }
+    else { start = Number(m[1]); end = m[2] === "" ? size - 1 : Math.min(Number(m[2]), size - 1); }
+    if (start > end || start >= size) {
+      res.writeHead(416, { "content-range": `bytes */${size}` });
+      return res.end();
+    }
+    res.writeHead(206, { "content-type": type, "accept-ranges": "bytes", "content-range": `bytes ${start}-${end}/${size}`, "content-length": end - start + 1 });
+    return fs.createReadStream(file, { start, end }).pipe(res);
+  }
+  res.writeHead(200, { "content-type": type, "accept-ranges": "bytes", "content-length": size });
+  fs.createReadStream(file).pipe(res);
+}
+
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, "http://x");
   const m = url.pathname.match(/^\/api\/takes\/([^/]+)\/notes$/);
@@ -119,6 +291,17 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === "/api/harvest" && req.method === "POST") {
       const body = await readBody(req);
       return json(res, 200, await harvest(body));
+    }
+    if (url.pathname === "/api/library" && req.method === "GET") return json(res, 200, shelves());
+    if (url.pathname === "/api/scene" && req.method === "GET") {
+      const dir = resolveIn(url.searchParams.get("lib"), url.searchParams.get("path"));
+      if (!dir) return json(res, 404, { error: "no such library" });
+      return json(res, 200, sceneInfo(dir));
+    }
+    if (url.pathname === "/api/audio" && req.method === "GET") {
+      const file = resolveIn(url.searchParams.get("lib"), url.searchParams.get("path"));
+      if (!file || !fs.existsSync(file) || fs.statSync(file).isDirectory()) return json(res, 404, { error: "no such file" });
+      return sendAudio(req, res, file);
     }
     if (url.pathname.startsWith("/api/")) return json(res, 404, { error: "no such route" });
 

@@ -32,6 +32,30 @@ The two repositories sit side by side: this one reaches the daemon's
 (`cargo install --path SamplesProject/msm`). Node 18+ for `server.mjs`;
 PureScript's `spago` for the page.
 
+## The library
+
+**Library** in the header browses samples by name: shelf, scene, layer, click
+to hear it. The rule is one rule — *a library is a directory of scenes, and a
+scene is any directory holding audio* — so the same three columns read the
+takes you recorded (`take/loop-3/layer-00.wav`), Instruo's v2 stick image
+(`_arbhar_scenes/1_2_scene/`, and the single-sample banks), and any plain
+folder of samples, without any of them being a special case.
+
+Roots come from `~/.itajara/libraries.json`, written on first run:
+
+```json
+[ { "name": "Takes", "path": "~/.itajara/takes" } ]
+```
+
+A root that is not mounted stays in the file and simply does not list.
+
+What a library is *not* is the stick. A library addresses by name and holds as
+many scenes as it likes; a module addresses positionally and holds exactly what
+it holds. `msm harvest` is the compiler from the one to the other, and the
+browser never speaks in slots.
+
+Needs a foreground tab: Chrome does not load media in a background one.
+
 ## Reading it
 
 - `docs/DESIGN.md` — what a face is and is not, where the pieces live, the
