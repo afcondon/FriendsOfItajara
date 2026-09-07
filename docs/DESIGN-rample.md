@@ -3,6 +3,35 @@
 Design notes, 2026-09-07. Not built yet; this is the shape agreed in the
 session that surveyed the module, the manual and what is already on disk.
 
+## Which firmware this describes — read this first
+
+**The module runs rampleOS 3.00** (February 2026; confirmed by Andrew in
+SETTINGS > INFO, 2026-09-07). **Everything below comes from the older "wave
+system" quickstart manual**, which predates it. Treat the file-layout rules as
+probable, not certain, until the 3.0 documentation is checked.
+
+Reassuringly, the 3.0 binary's own strings show the model this design rests on
+is intact: the layer modes are still `MANUAL`, `RANDOM`, `CYCLIC`, `R CYCLIC`,
+`VELOCITY`, and the per-voice parameters are still `SP1`–`SP4` × `PITCH`,
+`BIT`, `FILTER`, `FREEZE`, `LEVEL`, with `ALL …` variants. So voices, layers
+and the CC map survive into 3.0.
+
+What is visibly *new* in 3.0 and absent from the old manual is a **`VOICE FX`
+section** with named processors — `AGGRESSIVE FET`, `SLOW OPTO`, `PUNCH VCA`,
+`LEVELING AMP`, `PARALLEL COMP`, `PEAK LIMITER`, `DRUM TRANSIENT`, `COMPRESS`,
+`GLUE`, `TAPE`, `BLAST`, `CLASSIC`, `FLIP` — plus `CHROMATIC`, `VU-METER`,
+`AUTOSAVE`, `PROG CHG` and `INFO` in the menus. Those are additive and do not
+touch the filesystem.
+
+**Still to confirm against 3.0 documentation**, because each would change what
+a writer must do: the 12-layer ceiling, the accepted sample formats (the old
+manual says 44.1 kHz, 16- or 8-bit, mono, with stereo "see the online manual"),
+and whether layer ordering is still a plain filename sort.
+
+Firmware lives as `rample.bin` at the card root and **only flashes when the
+encoder is held at power-on** — so a `.bin` sitting on a card is inert and
+cannot downgrade anything by accident.
+
 ## The module, as the manual states it
 
 Squarp Rample, 4 voices, one MIDI channel per unit.
