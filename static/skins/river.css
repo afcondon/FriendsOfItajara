@@ -270,11 +270,63 @@ body {
 .friend-loop-notes input { width: 100%; }
 .friend-harvest-out { margin: 14px 0 0; padding: 12px 14px; background: var(--paper); border: 1px solid var(--hair); font: 12px/1.45 ui-monospace, Menlo, monospace; white-space: pre-wrap; max-height: 320px; overflow: auto; }
 
+/* The library, as the drawing's schedule: three ruled columns, a sheet index.
+   Two kinds of selection and they must not look alike — the first two columns
+   are navigation and read AMBER, the colour an armed thing has everywhere on
+   this sheet; the third is what is sounding and reads WATER, because water is
+   what sounding means here. One glance answers both "where am I" and "what am
+   I hearing". */
+.looper-modal.is-library { max-width: 1040px; }
+.friend-lib { display: grid; grid-template-columns: 1.1fr 1fr 1.5fr;
+  border: 1px solid var(--ink); background: #fff; }
+.friend-lib-col { display: flex; flex-direction: column; min-width: 0;
+  height: 46vh; min-height: 260px; overflow-y: auto; border-right: 1px solid var(--hair); }
+.friend-lib-col:last-child { border-right: 0; }
+.friend-lib-col h3 { position: sticky; top: 0; z-index: 1; margin: 0; padding: 8px 12px;
+  background: var(--paper); border-bottom: 1px solid var(--ink);
+  font: 400 10px var(--hand); letter-spacing: 0.18em; text-transform: uppercase; color: var(--pencil); }
+
+.friend-lib-row { display: flex; align-items: baseline; gap: 10px; width: 100%; text-align: left;
+  font: 400 13px var(--hand); color: var(--ink); background: none; border: 0;
+  border-bottom: 1px solid rgba(35, 38, 43, 0.09); padding: 5px 12px; cursor: pointer; }
+.friend-lib-row:hover { background: var(--paper); }
+.friend-lib-col:not(.is-layers) .friend-lib-row.is-on { background: rgba(217, 161, 58, 0.18); box-shadow: inset 3px 0 0 var(--armed); }
+.friend-lib-col.is-layers .friend-lib-row.is-on { background: var(--water-pale); box-shadow: inset 3px 0 0 var(--water); }
+.friend-lib-head { padding: 11px 12px 3px; font: 400 10px var(--hand); letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--pencil); }
+.friend-lib-col h3 + .friend-lib-head { padding-top: 7px; }
+.friend-lib-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.friend-lib-meta { flex: 0 0 auto; font-size: 11px; color: var(--pencil); }
+.friend-lib-play { flex: 0 0 auto; font-size: 9px; color: rgba(35, 38, 43, 0.22); }
+.friend-lib-row:hover .friend-lib-play { color: var(--pencil); }
+.friend-lib-col.is-layers .friend-lib-row.is-on .friend-lib-play { color: var(--water); }
+
+.friend-lib-empty, .friend-lib-status { margin: 10px 12px; font: 400 12px var(--hand); color: var(--pencil); }
+.friend-lib-text { margin: 12px; }
+.friend-lib-text strong { display: block; font: 400 10px var(--hand); letter-spacing: 0.16em; text-transform: uppercase; color: var(--pencil); }
+.friend-lib-text pre { margin: 5px 0 0; padding: 8px 10px; background: var(--paper); border: 1px solid var(--hair);
+  font: 11px/1.5 ui-monospace, Menlo, monospace; white-space: pre-wrap; max-height: 120px; overflow: auto; }
+
+/* Above the columns, ruled off from them: a preset makes the third column long
+   and this is the one thing that must never need scrolling to. */
+.friend-lib-player { display: flex; align-items: center; gap: 16px; margin: 0 0 16px;
+  padding: 10px 14px; background: var(--paper); border: 1px solid var(--hair); }
+.friend-lib-now { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font: 400 12px var(--hand); letter-spacing: 0.06em; color: var(--pencil); }
+.friend-lib-player audio { flex: 1 1 auto; height: 32px; }
+
+/* The Library button, as a second sheet note under the connection. */
+.friend-libbtn { position: absolute; right: 0; top: 24px; padding: 2px 1px 3px;
+  font: 400 10px var(--hand); letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--pencil); background: none; border: 0; border-bottom: 1px solid var(--hair); cursor: pointer; }
+.friend-libbtn:hover { color: var(--ink); border-bottom-color: var(--ink); }
+.friend-libbtn.is-on { color: var(--ink); border-bottom-color: var(--water); }
+
 /* Nothing on the sheet is text to select — a drag that misses its handle must
    not paint the hover words, which are on the page in transparent ink. Only
    the places you type stay selectable. */
 .friend-head, .friend-shape, .friend-loops, .friend-controls, .friend-log, .friend-loop, .friend-btn, .looper-edit-actions { user-select: none; -webkit-user-select: none; }
-input, textarea, .friend-harvest-out { user-select: text; -webkit-user-select: text; }
+input, textarea, .friend-harvest-out, .friend-lib-text { user-select: text; -webkit-user-select: text; }
 
 /* The layer being written: a bar filling in the recording red, its count
    lettered beside it, in the row the layer will take. */

@@ -926,9 +926,13 @@ render st =
           ]
       , if st.libStatus == "" then HH.text ""
         else HH.p [ HP.class_ (HH.ClassName "friend-lib-status") ] [ HH.text st.libStatus ]
+      -- Above the columns, not below them: a scene with a preset pushes the
+      -- third column down the page, and what is sounding is the one thing that
+      -- must never need scrolling to.
+      , player
       , HH.div [ HP.class_ (HH.ClassName "friend-lib") ]
           [ HH.div [ HP.class_ (HH.ClassName "friend-lib-col") ]
-              ([ HH.h3_ [ HH.text "Library" ] ] <> map shelfRow st.shelves)
+              ([ HH.h3_ [ HH.text "Library" ] ] <> shelfRows)
           , HH.div [ HP.class_ (HH.ClassName "friend-lib-col") ]
               ([ HH.h3_ [ HH.text (capital f.unit) ] ]
                 <> case openShelf of
@@ -937,18 +941,26 @@ render st =
           , HH.div [ HP.class_ (HH.ClassName "friend-lib-col is-layers") ]
               ([ HH.h3_ [ HH.text (capital f.layerWord) ] ] <> layerRows <> textRows)
           ]
-      , player
       ]
 
   openShelf = st.shelfId >>= \k -> Array.find (\h -> h.id == k) st.shelves
+
+  -- The library's name once per run, not once per row. Seven shelves that all
+  -- begin "Instruo — Arbhar 2.0" spend the whole width on the part they share
+  -- and truncate the part that tells them apart, which is the wrong way round.
+  shelfRows = Array.concat (Array.mapWithIndex shelfGroup st.shelves)
+
+  shelfGroup i h =
+    (if map _.lib (Array.index st.shelves (i - 1)) == Just h.lib then []
+     else [ HH.div [ HP.class_ (HH.ClassName "friend-lib-head") ] [ HH.text h.libName ] ])
+      <> [ shelfRow h ]
 
   shelfRow h =
     HH.button
       [ HP.class_ (HH.ClassName ("friend-lib-row" <> if Just h.id == st.shelfId then " is-on" else ""))
       , HE.onClick \_ -> PickShelf h.id
       ]
-      [ HH.span [ HP.class_ (HH.ClassName "friend-lib-lib") ] [ HH.text h.libName ]
-      , HH.span [ HP.class_ (HH.ClassName "friend-lib-name") ] [ HH.text h.name ]
+      [ HH.span [ HP.class_ (HH.ClassName "friend-lib-name") ] [ HH.text h.name ]
       , HH.span [ HP.class_ (HH.ClassName "friend-lib-meta") ] [ HH.text (show (Array.length h.scenes)) ]
       ]
 

@@ -116,14 +116,21 @@ body { margin: 0; background: var(--ground); color: var(--ink);
   font: inherit; color: var(--ink); background: none; border: 0; border-bottom: 1px solid var(--ground);
   padding: 6px 12px; cursor: pointer; }
 .friend-lib-row:hover { background: var(--ground); }
-.friend-lib-row.is-on { background: #eef5f2; box-shadow: inset 3px 0 0 var(--accent); }
-.friend-lib-lib { flex: 0 0 auto; color: var(--muted); font-size: 11px; }
+/* Two kinds of selection, and they must not look alike. The first two columns
+   are *navigation* — where you are — and read amber, the colour an armed thing
+   has everywhere else here. The third is *what is sounding*, and reads accent.
+   One glance then answers both "where am I" and "what am I hearing". */
+.friend-lib-col:not(.is-layers) .friend-lib-row.is-on { background: #fbf2e0; box-shadow: inset 3px 0 0 var(--armed); }
+.friend-lib-col.is-layers .friend-lib-row.is-on { background: #eef5f2; box-shadow: inset 3px 0 0 var(--accent); }
+.friend-lib-head { padding: 11px 12px 3px; color: var(--muted); font-size: 10px;
+  font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; }
+.friend-lib-col h3 + .friend-lib-head { padding-top: 7px; }
 .friend-lib-name { flex: 1 1 auto; min-width: 0; font-size: 13px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .friend-lib-meta { flex: 0 0 auto; color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
 .friend-lib-play { flex: 0 0 auto; color: var(--line); font-size: 9px; }
 .friend-lib-row:hover .friend-lib-play { color: var(--muted); }
-.friend-lib-row.is-on .friend-lib-play { color: var(--accent); }
+.friend-lib-col.is-layers .friend-lib-row.is-on .friend-lib-play { color: var(--accent); }
 
 .friend-lib-empty, .friend-lib-status { margin: 10px 12px; color: var(--muted); font-size: 12px; }
 .friend-lib-text { margin: 10px 12px; }
@@ -131,9 +138,12 @@ body { margin: 0; background: var(--ground); color: var(--ink);
 .friend-lib-text pre { margin: 4px 0 0; padding: 6px 8px; background: var(--ground);
   border: 1px solid var(--line); font-size: 11px; white-space: pre-wrap; max-height: 120px; overflow: auto; }
 
-/* What is sounding: one element under the columns whose src changes, rather
-   than a player per row. Which layer it is, is said in words beside it. */
-.friend-lib-player { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
+/* What is sounding: one element above the columns whose src changes, rather
+   than a player per row. Which layer it is, is said in words beside it. Above,
+   because a scene with a preset makes the third column long and this is the
+   one thing that must never need scrolling to. */
+.friend-lib-player { display: flex; align-items: center; gap: 16px; margin: 4px 0 16px;
+  padding: 10px 14px; background: var(--ground); border: 1px solid var(--line); }
 .friend-lib-now { flex: 0 1 auto; min-width: 0; font-size: 12px; color: var(--muted);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .friend-lib-player audio { flex: 1 1 auto; height: 32px; }
@@ -155,7 +165,7 @@ body { margin: 0; background: var(--ground); color: var(--ink);
    not paint the hover words, which are on the page in transparent ink. Only
    the places you type stay selectable. */
 .friend-head, .friend-shape, .friend-loops, .friend-controls, .friend-log, .friend-loop, .friend-btn, .looper-edit-actions { user-select: none; -webkit-user-select: none; }
-input, textarea, .friend-harvest-out { user-select: text; -webkit-user-select: text; }
+input, textarea, .friend-harvest-out, .friend-lib-text { user-select: text; -webkit-user-select: text; }
 .friend-layer.is-solo .friend-layer-n, .friend-layer.is-solo .friend-layer-wave { cursor: pointer; }
 .friend-layer.is-solo.is-off .friend-layer-n { opacity: 0.4; }
 .friend-layer-bar { position: relative; flex: 1 1 auto; height: 100%; background: #f3f0ea; }
