@@ -152,11 +152,22 @@ existing conventions are good ones: conform, do not reinvent.**
   empty `A/A0` scaffolding with **zero wav files**, and both use a *nested*
   layout the card does not want. Ignore them; do not resurrect the nesting.
 
-**A constraint the archive imposes:** it is large enough that `find -maxdepth 4`
-over it does not return promptly. The Library panel's `/api/library` walks every
-root on every call, which is fine for the takes and the Arbhar image and will
-not be fine here. **Adding this root needs the walk cached or made lazy first** —
-otherwise opening the Library panel stalls.
+**A constraint the archive imposes, now measured:** `/Volumes/Crucial4TB/Samples`
+is **191 GB, 7,815 directories within depth 4, and 441,588 wav files**.
+
+The Library panel's `/api/library` walks every root and returns the whole tree,
+names included, on **every call**. That is right for the takes and the Arbhar
+stick image — eleven shelves, ~1,300 names, 400 ms cold. It is hopeless here:
+nearly eight thousand `readdir`s over USB and a JSON response of a third of a
+million filenames.
+
+**So this root cannot simply be added.** The fix is not caching the walk, it is
+not walking: **msm already has the answer** — a SQLite library with `scan`,
+`search`, `tag` and `stats` over exactly this kind of archive. For a root of
+this size the Library panel should query that index, and keep the live walk for
+roots small enough to be authoritative in the moment (takes, a mounted stick, a
+card). Two strategies, chosen per root, is the honest shape; one live walk for
+everything is not.
 
 ## The spine: two namespaces, and a compiler between them
 
