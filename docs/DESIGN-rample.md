@@ -228,10 +228,41 @@ label went stale, and nobody could have noticed from the module.
 out in folders `1`–`8`. A precedent for exactly the conversion this document
 proposes. **`A8` (WestCoastKit)** appears nowhere in the archive; origin unknown.
 
-**Not one byte of Samples From Mars is on the card.** The 39 kits in `RamKits`
-were built from it in March 2024 and never loaded; the card's `D`–`M` banks are
-factory Devine and DET, matching the archive. 191 GB, bought for this module,
-still unused — which is the thing actually worth fixing.
+**Correction, made when a second card was read.** An earlier draft said "not
+one byte of Samples From Mars is on the card". That was true of the 16 GB card
+and false of the setup: **all 39 `RamKits` are on a second, 64 GB card labelled
+`RAMPLE`**, filename for filename identical to the archive. They were built in
+March 2024 and they *were* loaded. The 191 GB library is less unused than it
+looked — though what reached the module is 39 kits of it.
+
+### The `RAMPLE` card: card two already exists
+
+Read 2026-09-07. 64 GB, FAT32, **2% used**. 42 kits in banks `A`–`M`: the 39
+`RamKits` plus `A0` (the Alois Plays kit), `B0` (Maman Kuesters — `A7` on the
+other card) and `C0` (WestCoastKit — `A8` there). `_save/autosave_E1.rpl` says
+it has been in the module.
+
+**It is clean.** 1,189 playable files and **not one unreadable byte** — against
+106 on the 16 GB card. Whatever ails that card has not touched this one.
+
+**And it validates the naming convention on real data.** Every file is
+`<voice> <letter> <name>` — `1 a 1 KICK LOW 01.wav` — and across all 1,189 the
+reader finds **zero ORDER faults**, because lettering the layers makes byte
+order and human order agree by construction. That is the empirical case for the
+convention, on Andrew's own material rather than on a factory card's.
+
+So the two-card plan is half-built already: **this is card two.** It wants
+three things and no redesign — the AIFF kit fixed, the litter swept, and kinds
+assigned across the alphabet it is only using half of.
+
+One real fault, and it is the same one twice: **`C0` is twenty AIFF files
+wearing `.wav` names**, the identical content to `A8` on the other card. That
+kit has never played on either card. Also 1,253 AppleDouble `._` files.
+
+A cosmetic note: `A0`–`C0` carry a doubled prefix, `1 a 1 KICK LOW 01.wav` —
+the layer letter was inserted before a name that already began with a voice
+digit. Harmless, since only the first character means anything, but a writer
+should strip the old prefix rather than nest it.
 
 ### The consequence for kinds
 
