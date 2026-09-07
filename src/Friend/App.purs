@@ -29,7 +29,6 @@ import Data.Map as Map
 import Data.Maybe (Maybe(..), fromMaybe, isJust, maybe)
 import Data.Number as Number
 import Data.String as String
-import Data.Tuple (Tuple(..))
 import Effect.Aff (Milliseconds(..), attempt, delay)
 import Effect.Exception (message)
 import Effect.Aff as Aff
@@ -49,9 +48,8 @@ import Halogen.HTML.Properties as HP
 import Halogen.Subscription as HS
 import Itajara.Surface.Edit as Edit
 import Itajara.Surface.Wave (viewOf, wave)
-import Web.Event.Event (preventDefault)
 import Web.DOM.Element as Element
-import Web.Event.Event (currentTarget)
+import Web.Event.Event (currentTarget, preventDefault)
 import Web.HTML.Event.DragEvent (DragEvent)
 import Web.HTML.Event.DragEvent as DragEvent
 import Web.UIEvent.MouseEvent (MouseEvent)
@@ -69,14 +67,6 @@ type State =
   -- | A hand on the Edit picture: where it went down, the window's start
   -- | then, and how many frames one pixel is.
   , waveDrag :: Maybe { x0 :: Int, fpp :: Number, d :: Edit.Drag }
-  -- | Loops this page has asked to grow — a take, a duplicate, a drop — and
-  -- | has not yet seen grow. Only these are soloed when they gain a layer:
-  -- | another surface (the pedalboard) laying layers on the same daemon is
-  -- | not asking for this face's rule, and a background tab applying it late
-  -- | silenced two of its layers with nothing on screen to say why.
-  , growing :: Array Int
-  -- | Loops this page has soloed, so only they get the "none sounding" repair.
-  , soloed :: Array Int
   -- | The slider a hand is on; see `Itajara.Surface.Edit.View`.
   , local :: Map String Int
   , panel :: Panel
@@ -148,7 +138,7 @@ data Action
   | SetWindow Int Int Int
   | SetLayerWindow Int Int Int Int
   | ClearLayerWindow Int Int
-  | Solo Int Int
+  | Hear Int Int
   | NotesFor Int
   | StartDrag Int (Maybe Int)
   | WaveDown Edit.Drag MouseEvent
@@ -164,7 +154,7 @@ component =
   H.mkComponent
     { initialState: \face ->
         { face, looper: Nothing, status: Nothing, age: 0.0, focus: 0, peaks: Nothing
-        , peaksKey: "", waveDrag: Nothing, growing: [], soloed: [], local: Map.empty, panel: NoPanel, ackSeq: 0, log: [], take: "take"
+        , peaksKey: "", waveDrag: Nothing, local: Map.empty, panel: NoPanel, ackSeq: 0, log: [], take: "take"
         , saved: [], notes: Http.emptyNotes, notesFor: "", notesStatus: ""
         , sticks: [], stick: "", bank: "1", scene: "1_1", overwrite: false, allLayers: false
         , harvestOut: "", harvestBusy: false, drag: Nothing, dropOn: Nothing }
@@ -222,33 +212,12 @@ handleAction = case _ of
           when (key /= "" && key /= cur.peaksKey) do
             H.modify_ _ { peaksKey = key }
             duty cur.focus (Duty.AskPeaks 600)
-      -- **The newest layer is the one that sounds.** On a face that solos,
-      -- a loop that has just gained a layer — a take closed, a duplicate, a
-      -- drop — is asked to solo it, so what you just did is what you hear.
-      -- Read from the two snapshots, never assumed; a lone layer is left.
-      --
-      -- And the other direction: undo the soloed layer and the ones left are
-      -- all off, so the loop plays silence with no sign of why. A loop that
-      -- has just lost a layer and has none sounding gets its newest turned on.
-      --
-      -- Only for loops this page asked to grow (`growing`), and the repair
-      -- only for loops it has soloed (`soloed`): the daemon is shared, and
-      -- the pedalboard's layers are not this face's business.
-      when cur.face.solo $ for_ snap \s -> for_ cur.looper \old ->
-        for_ (Array.zip old.loops s.loops) \(Tuple o n) -> do
-          -- The request is spent when the layer lands, whether or not there
-          -- was anything to solo: a first take left in `growing` would hand
-          -- the pedalboard's next layer on that loop to this rule.
-          when (n.layers > o.layers && Array.elem n.index cur.growing) do
-            H.modify_ \x -> x { growing = Array.delete n.index x.growing }
-            when (n.layers > 1) do
-              H.modify_ \x -> x { soloed = Array.nub (Array.cons n.index x.soloed) }
-              duty n.index (Duty.SoloLayer n.layers)
-          when (n.layers < o.layers && n.layers > 0 && Array.elem n.index cur.soloed
-                  && not (Array.any _.on (Array.take n.layers n.shapes))) $
-            duty n.index (Duty.SoloLayer n.layers)
-          when (n.layers == 0 && o.layers > 0) $
-            H.modify_ \x -> x { soloed = Array.delete n.index x.soloed, growing = Array.delete n.index x.growing }
+      -- **No solo rule here any more.** The newest layer sounding alone, the
+      -- silence while the next one goes down, the repair after an undo: all
+      -- of it is the loop's `alt` property, kept by the daemon since
+      -- 2026-09-07, and this page's whole part is `ensureAlternates` before
+      -- a take. The snapshot diff that used to do it from here silenced the
+      -- pedalboard's layers from a background tab, which is the reason.
       -- What the daemon had to say. By sequence, so two identical refusals
       -- in a row are two lines.
       for_ snap \s ->
@@ -256,29 +225,27 @@ handleAction = case _ of
           H.modify_ (note s.ack <<< _ { ackSeq = s.ackSeq })
 
   Do subject d -> do
-    st <- H.get
-    -- **Silent while the next layer goes down**, on a face that solos. The
-    -- layers here are alternates for one scene, not parts of one piece, so
-    -- the one sounding is switched off before the take and the new one
-    -- solos itself when it lands (the poll does that). The pedalboard keeps
-    -- hearing the old layer, as a looper should; this is the face's choice.
-    when st.face.solo $ case subject, d of
-      OnLoop i, Duty.RecordFixed _ -> for_ (st.looper >>= \top -> Array.index top.loops i) \lp ->
-        when (not (Socket.isWriting lp) && not lp.armed) do
-          H.modify_ \x -> x { growing = Array.nub (Array.cons i x.growing) }
-          when (lp.layers > 0) $
-            for_ (Array.mapWithIndex Tuple (Array.take lp.layers lp.shapes)) \(Tuple k sh) ->
-              when sh.on $ duty i (Duty.LayerOn (k + 1) false)
+    -- **Every take this page starts declares the loop's layers alternates
+    -- first**, on a face that wants them so; the daemon then silences the
+    -- loop while the layer goes down, solos it when it lands, and sums a
+    -- held overdub into the one that sounds. The pedalboard never sends it,
+    -- and a loop it cleared has forgotten it, so ask before each take rather
+    -- than once.
+    case subject, d of
+      OnLoop i, Duty.RecordFixed _ -> ensureAlternates i
+      OnLoop i, Duty.OverdubLoop -> ensureAlternates i
       -- Open means open. Undo keeps a loop's length so the pedalboard's next
       -- take lands on the same grid; on this face a loop with no layers and
       -- a length would close an "open" take at thirteen seconds, so the
       -- length is let go first.
       OnLoop i, Duty.RecordLoop -> do
-        H.modify_ \x -> x { growing = Array.nub (Array.cons i x.growing) }
+        ensureAlternates i
+        st <- H.get
         for_ (st.looper >>= \top -> Array.index top.loops i) \lp ->
-          when (lp.layers == 0 && lp.loopFrames > 0 && not (Socket.isWriting lp) && not lp.armed) $
+          when (lp.sized && not (Socket.isWriting lp) && not lp.armed) $
             duty i Duty.ForgetLength
       _, _ -> pure unit
+    st <- H.get
     traverse_ runAction (Machine.perform (rigOf st) subject d)
   Focus i -> H.modify_ _ { focus = i }
   ToggleEdit i -> do
@@ -303,9 +270,11 @@ handleAction = case _ of
     H.modify_ \s -> s { local = Map.insert "in" i s.local }
     duty loop (Duty.LayerWindow k i o)
   ClearLayerWindow loop k -> duty loop (Duty.ClearLayerWindow k)
-  Solo loop k -> do
+  -- The Layer knob: on an alternate loop the daemon reads "layer k on" as
+  -- "this one, and only this one", so nothing here works out the rest.
+  Hear loop k -> do
     H.modify_ _ { focus = loop, peaksKey = "" }
-    duty loop (Duty.SoloLayer k)
+    duty loop (Duty.LayerOn k true)
   NotesFor i -> do
     H.modify_ _ { focus = i }
     handleAction (OpenPanel NotesPanel)
@@ -351,8 +320,9 @@ handleAction = case _ of
       when (st.dropOn /= Just i) $ H.modify_ _ { dropOn = Just i }
   DragLeave i -> H.modify_ \s -> s { dropOn = if s.dropOn == Just i then Nothing else s.dropOn }
   DropOn i ev -> do
-    H.modify_ \x -> x { growing = Array.nub (Array.cons i x.growing) }
     liftEffect (preventDefault (DragEvent.toEvent ev))
+    -- A drop grows the loop as a take does, so it declares the same thing.
+    ensureAlternates i
     st <- H.get
     for_ st.drag \d ->
       duty i (case d.layer of
@@ -442,6 +412,17 @@ handleAction = case _ of
   duty loop d = do
     st <- H.get
     traverse_ runAction (Machine.perform (rigOf st) (OnLoop loop) d)
+  -- **The one thing this page adds to a take.** On a face whose layers are
+  -- alternates, a loop that is not yet declared so is declared before the
+  -- take, the copy or the duplicate that grows it — every path here that
+  -- grows a loop goes through this. Not while the loop is writing or
+  -- listening: the press is then a close or a cancel, not a take.
+  ensureAlternates loop = do
+    st <- H.get
+    when st.face.alternates $
+      for_ (st.looper >>= \top -> Array.index top.loops loop) \lp ->
+        unless (lp.alt || Socket.isWriting lp || lp.armed) $
+          duty loop (Duty.Alternates true)
 
 runAction :: forall o m. MonadAff m => Machine.Action -> H.HalogenM State Action () o m Unit
 runAction a = do
@@ -484,11 +465,12 @@ canDrop st i = case st.drag of
         | d.loop == i -> d.layer /= Nothing && lp.layers < top.maxLayers
         | otherwise -> lp.layers == 0
 
--- | The layer sounding alone, from one, when the face solos: the first one
--- | the daemon reports on. The Edit panel edits its window.
+-- | The layer sounding alone, from one, on a face whose layers are
+-- | alternates: the first one the daemon reports on. The Edit panel edits
+-- | its window.
 activeLayer :: State -> Int -> Maybe Int
 activeLayer st i
-  | not st.face.solo = Nothing
+  | not st.face.alternates = Nothing
   | otherwise = do
       top <- st.looper
       lp <- Array.index top.loops i
@@ -603,6 +585,9 @@ render st =
               ]
               [ HH.text ("Loop " <> show (i + 1)) ]
           , HH.span [ HP.class_ (HH.ClassName "friend-loop-state") ] [ HH.text (stateWord lp) ]
+          , if lp.alt
+              then HH.span [ HP.class_ (HH.ClassName "friend-loop-alt"), HP.title "the layers are alternates: one sounds" ] [ HH.text "alt" ]
+              else HH.text ""
           , HH.span [ HP.class_ (HH.ClassName "friend-loop-len") ] [ HH.text (lengthWord top lp) ]
           , HH.span [ HP.class_ (HH.ClassName "friend-loop-dest") ] [ HH.text ("→ " <> f.unit <> " " <> show (i + 1)) ]
           ]
@@ -624,13 +609,27 @@ render st =
           -- open-ended and is only for an empty loop; with material in the
           -- loop every layer is the loop's length, so it is drawn disabled
           -- rather than removed — the row must not shift.
+          --
+          -- And a third, on a face whose layers are alternates: **Sum** is
+          -- sound-on-sound, a held `r` on an alternate loop with material,
+          -- which the daemon sums into the layer that sounds rather than
+          -- opening a new one — "loop N sums into layer K", and on the close
+          -- "layer K has another pass". Close while it sums; nothing while
+          -- the loop is empty, listening, or writing something else. Add
+          -- layer waits while a sum is going down: two takes in one loop at
+          -- once is not a thing.
           ( (if f.windowSecs > 0.0
               then [ slabBtn "fix" (fixWord lp)
-                       (Do (OnLoop i) (Duty.RecordFixed f.windowSecs)) (Socket.isWriting lp) lp.armed ]
+                       (Do (OnLoop i) (Duty.RecordFixed f.windowSecs)) (Socket.isWriting lp) (lp.armed || summing lp) ]
               else [])
           <> [ slabBtn "rec" (openWord lp) (Do (OnLoop i) Duty.RecordLoop)
-                 (Socket.isWriting lp && lp.layers == 0) (f.windowSecs > 0.0 && lp.layers > 0)
-             , slabBtn "play" (if lp.state == "playing" && not lp.muted then "Stop" else "Play") (Do (OnLoop i) Duty.Transport) false false
+                 (Socket.isWriting lp && lp.layers == 0) (f.windowSecs > 0.0 && lp.layers > 0) ]
+          <> (if f.alternates
+              then [ slabBtn "sum" (if overdubbing lp then "Close" else "Sum") (Do (OnLoop i) Duty.OverdubLoop)
+                       (overdubbing lp)
+                       (lp.layers == 0 || lp.armed || (Socket.isWriting lp && not (overdubbing lp))) ]
+              else [])
+          <> [ slabBtn "play" (if lp.state == "playing" && not lp.muted then "Stop" else "Play") (Do (OnLoop i) Duty.Transport) false false
              , slabBtn "undo" "Undo" (Do (OnLoop i) Duty.Undo) false false
              , slabBtn "clear" "Clear" (Do (OnLoop i) Duty.ClearLoop) false false
              , slabBtn "edit" "Edit" (ToggleEdit i) (st.panel == EditPanel && st.focus == i) false
@@ -641,13 +640,13 @@ render st =
   layerRow i lp k sh =
     -- A layer is a handle too: drag one onto an empty loop and it goes alone.
     HH.div
-      [ HP.class_ (HH.ClassName ("friend-layer" <> (if sh.on then "" else " is-off") <> (if f.solo then " is-solo" else "")))
+      [ HP.class_ (HH.ClassName ("friend-layer" <> (if sh.on then "" else " is-off") <> (if f.alternates then " is-solo" else "")))
       , HP.draggable true
       , HP.title "drag onto an empty loop to copy this layer"
       , HE.onDragStart \_ -> StartDrag i (Just (k + 1))
       , HE.onDragEnd \_ -> EndDrag
       ]
-      ( (if f.solo then []
+      ( (if f.alternates then []
           else
             [ HH.input
                 [ HP.type_ HP.InputCheckbox
@@ -657,15 +656,15 @@ render st =
                 , HE.onChecked (SetLayer i (k + 1))
                 ]
             ])
-        -- On a face that solos, the letter and the envelope are the Layer
-        -- knob: a click makes this the one that sounds.
+        -- On a face whose layers are alternates, the letter and the envelope
+        -- are the Layer knob: a click makes this the one that sounds.
         <> [ HH.span
                ( [ HP.class_ (HH.ClassName "friend-layer-n") ]
-                   <> (if f.solo then [ HE.onClick \_ -> Solo i (k + 1), HP.title soloWord ] else []) )
+                   <> (if f.alternates then [ HE.onClick \_ -> Hear i (k + 1), HP.title soloWord ] else []) )
                [ HH.text (show (k + 1)) ]
            , HH.div
                ( [ HP.class_ (HH.ClassName "friend-layer-wave") ]
-                   <> (if f.solo then [ HE.onClick \_ -> Solo i (k + 1), HP.title soloWord ] else []) )
+                   <> (if f.alternates then [ HE.onClick \_ -> Hear i (k + 1), HP.title soloWord ] else []) )
                (wave (viewOf lp sh))
            ]
       )
@@ -730,6 +729,13 @@ render st =
     | Socket.isWriting lp = recordWord lp
     | lp.layers > 0 = "Add layer"
     | otherwise = "Record " <> show (Int.round f.windowSecs) <> "s"
+
+  overdubbing lp = Socket.phaseOf lp == Socket.Overdubbing
+
+  -- An open overdub — the sum — reports no pass length; a one-pass layer
+  -- (Add layer) reports how far its pass has come. Same test the recording
+  -- row draws its bar by.
+  summing lp = overdubbing lp && lp.recFrames == 0
 
   controls top =
     HH.section [ HP.class_ (HH.ClassName "friend-controls") ]
@@ -901,9 +907,9 @@ stateWord lp = case Socket.phaseOf lp of
   Socket.Overdubbing -> "overdubbing"
   Socket.Multiplying -> "multiplying"
   -- Undo of the last layer leaves the loop turning with a length and
-  -- nothing in it: sized, not playing.
+  -- nothing in it: sized, not playing — the daemon's word for it.
   Socket.Playing
-    | lp.layers == 0 -> "empty"
+    | lp.sized -> "empty"
     | lp.muted -> "muted"
     | otherwise -> "playing"
   Socket.Idle -> if lp.layers > 0 then "stopped" else "empty"

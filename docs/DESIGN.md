@@ -122,16 +122,22 @@ One Halogen component, `Friend.App`. From the top:
   goes — *→ scene 3* — because that is the thing the harvest will do and the
   reason a loop's layers are grouped as they are. Each layer is a row: a
   checkbox (in or out of the mix, `ly<n>1|0`) and its envelope as the loop
-  now plays it. The buttons, as glyphs on the skin with the word beneath on
+  now plays it; on a face whose layers are alternates the checkbox goes and
+  the letter is the Layer knob (`ly<n>1`, which the daemon reads as a solo
+  there), and the card carries a small *alt* mark once the loop is declared.
+  The buttons, as glyphs on the skin with the word beneath on
   hover. On a face with `windowSecs` the left one is the module's own
   gesture (a dot with an edge): **Record 13s** on an empty loop, **Add
   layer** on one with material — another layer of the loop's length, from
   its zero — both closed by the daemon. The right one (the bare dot) is
   **Record open** on an empty loop and disabled with material in it, since
   every layer is the loop's length; disabled rather than removed, so the row
-  never shifts. Then Play/Stop, Undo, Clear, Edit, Notes. Overdub was
-  dropped: it is what Add layer does, without the tape-echo summing of a
-  second pass.
+  never shifts. On a face with `alternates` a third, **Sum** (∑), is
+  sound-on-sound: a held `r` that the daemon sums into the layer that
+  sounds, **Close** while it runs, disabled while the loop is empty,
+  listening, or writing anything else. Then Play/Stop, Undo, Clear, Edit,
+  Notes. Overdub as a fourth was dropped: Add layer is the new-layer form
+  and Sum the summing one.
 - **Controls** — click, stop all, clear all; a take name; **Save for
   \<module\>**.
 - **Log** — the daemon's acks by sequence and the app's own notes, newest
@@ -218,22 +224,34 @@ step and held to the bounds, released on mouse-up or when the pointer
 leaves — and the slider beneath is the fine hand with the same range. No
 "unbounded" switch: the window is already that.
 
-**Silent while the next layer goes down.** On the Arbhar face the layers
-are alternates for one scene, so the one sounding is switched off before
-Add layer records and the new layer solos itself when it lands. The
-pedalboard keeps hearing the old layer, as a looper should; this is the
-face's choice, made in the page, not the daemon. An
-overdub goes into a windowed loop and lands where you heard it — the write
-head follows the play head through the window — so a loop can be windowed
-first and layered inside the window afterwards.
+**The layers are alternates, and the daemon keeps the rule.** On the
+Arbhar face a loop's layers are takes of one scene, of which one sounds —
+and since 2026-09-07 that is a property of the loop (`alt1`, TAXONOMY §6
+decision 1), not a rule this page keeps over the snapshot. The daemon
+silences the loop while the next layer goes down, solos the one that lands,
+brings the one beneath back after an undo, and reads `ly<k>1` as "this one
+alone"; the pedalboard sees the same loop and never sets it. The page's
+whole contribution is `ensureAlternates`: before any take it starts on a
+loop — Record 13s, Add layer, Record open, Sum, a drop, a duplicate — it
+sends `alt1` if the loop is not yet declared, through the same machine as
+everything else. (The first cut kept `growing` and `soloed` here and
+diffed snapshots; from a background tab it silenced the pedalboard's
+layers, which is why it went.) An overdub goes into a windowed loop and
+lands where you heard it — the write head follows the play head through
+the window — so a loop can be windowed first and layered inside it after.
 
-**One layer sounds at a time, and each layer has its own window.** The
-module plays one layer at a time — the Layer knob — so on this face the
-layers behave as a radio: clicking a letter or its envelope solos it, the
-rest are drawn parked, and a lone layer cannot be parked. (The summed loop,
-the omega, stays what the pedalboard hears; the daemon still sums, this
-face just leaves one on.) And the window belongs to the layer, not the
-loop: each layer carries its own in and out, plays that stretch coming
+**Sum is sound-on-sound.** A held `r` on an alternate loop with material
+does not open a new layer: the daemon sums the passes into the layer that
+sounds — "loop N sums into layer K", and on the close "layer K has another
+pass" — while a one-pass take (Add layer) is still a new alternate. So a
+layer can be thickened in place, with no feedback and the whole layer as
+its undo, and the scene's count of takes does not move. **Each layer has
+its own window.** The module plays one layer at a time — the Layer knob —
+so on this face the layers behave as a radio: clicking a letter or its
+envelope makes it the one that sounds and the rest are drawn parked. (The
+summed loop, the omega, stays what the pedalboard hears; the daemon still
+sums, this face just leaves one on.) And the window belongs to the layer,
+not the loop: each layer carries its own in and out, plays that stretch coming
 round inside the loop's cycle, and the Edit panel edits the window of the
 layer in hand, in its colour. So a scene is built the way you would want
 to: record a long take once, drop its layer on its own slab to duplicate it

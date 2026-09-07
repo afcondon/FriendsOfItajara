@@ -189,6 +189,11 @@ body {
 .is-armed .friend-btn-rec::before, .is-armed .friend-btn-fix::before { content: "◌"; color: var(--armed); }
 .is-recording .friend-btn-rec:not([disabled])::before, .is-recording .friend-btn-fix::before { content: "■"; color: var(--record); }
 .is-recording .friend-btn-rec:hover, .is-recording .friend-btn-fix:hover { color: var(--record); }
+/* Sum is sound-on-sound: passes go into the layer that sounds. */
+.friend-btn-sum::before { content: "∑"; }
+.is-recording .friend-btn-sum:not([disabled])::before { content: "■"; color: var(--record); }
+.is-recording .friend-btn-sum:not([disabled]):hover { color: var(--record); }
+.friend-loop-alt { font: 400 9px/1 var(--hand); letter-spacing: 0.1em; text-transform: uppercase; color: var(--pencil); }
 .friend-btn-play::before { content: "▶"; font-size: 14px; }
 .is-playing .friend-btn-play::before { content: "■"; }
 .friend-btn-undo::before { content: "↶"; }
