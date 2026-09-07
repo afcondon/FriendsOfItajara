@@ -41,8 +41,22 @@ Squarp Rample, 4 voices, one MIDI channel per unit.
 | Kits | 2600, folders named `?X` — `?` a letter `A`–`Z`, `X` a number `0`–`99` — **flat at the card root** |
 | Voices | 4. **The first character of a filename is the voice**, `1`–`4`. The rest is free text |
 | Layers | up to **12 per voice**, ordered by the **alphabetical sort of the filename** |
-| Format | `.wav`, mono (stereo also plays), **16-bit or 8-bit, 44100 Hz** |
-| Length | **no size or duration limit at all** — the manual offers hours-long samples |
+| Format | `.wav`, **16-bit or 8-bit, 44100 Hz** |
+| Length | **minimum 50 ms**; no maximum at all — hours-long samples are offered |
+| Stereo | allowed, but **"a stereo sample will fill 2 mono voices"** — a stereo file in voice 1 consumes voices 1 *and* 2, so a kit of stereo samples holds **two**, not four |
+| To open at all | **"A kit folder must include at least the voice 1 sample (a valid .wav file starting with `1`). Otherwise, you will not be allowed to open this kit."** |
+
+Those last three come from the **online** manual at
+<https://squarp.net/rample/manual/>, not the quickstart PDF, and the last is the
+sharpest silent failure on the module: a kit with voices 2, 3 and 4 and no
+voice 1 looks entirely normal in a file listing and **cannot be opened**. There
+is nothing to hear and nothing to see. `msm kit read` reports it as
+`UNOPENABLE`, ranked above every other fault.
+
+Also from the online manual, and directly serving the chromatic use: each voice
+has a **MIDI note range** (Settings → SP1…SP4), which gives keyboard splits
+across two-octave ranges *and* **layer selection by note**. Twelve layers and
+twelve semitones are not a coincidence you have to exploit by hand.
 
 Everything is reachable over MIDI, which matters later:
 
