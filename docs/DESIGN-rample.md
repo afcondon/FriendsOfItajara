@@ -169,6 +169,54 @@ roots small enough to be authoritative in the moment (takes, a mounted stick, a
 card). Two strategies, chosen per root, is the honest shape; one live walk for
 everything is not.
 
+## Two cards
+
+Decided 2026-09-07: **one card stays factory, one card is ours.** The factory
+content is how you get playing on day one, and it goes generic in your own music
+soon after; mixing the two on one card is what makes the addressing a lottery.
+
+The diff between the card and the archive at
+`Samples/Rample/Rample Factory Samples/` makes the split cheap:
+
+| | |
+|---|---|
+| archive | 210 kits, **all 210 also on the card**, none missing |
+| card | 246 kits — the same 210, plus **34 Waveshaper** (`W0`–`W33`, with its own `W - WAVESHAPER.rtf`) and **two of ours** (`A7` MamanKuesters, `A8` WestCoastKit) |
+| identical | 205 of the shared kits, filename for filename |
+| differ | `C4`, `F4`, `F5`, `M13`, `M14` — i.e. **the damaged ones** |
+
+Two facts follow, and they point opposite ways.
+
+**The archive heals the card.** All five damaged kits are present and readable in
+it, and a full scan of the archive — 2,801 files — finds *no* corruption at all.
+So the factory card can be rebuilt clean rather than repaired.
+
+**But the archive is not a superset.** Thirty-six kits exist **only** on a card
+that is visibly degrading: the entire Waveshaper pack and the two of ours.
+Restoring from the archive alone would silently drop them. **Copy those off
+before anything else happens to that card.**
+
+### The consequence for kinds
+
+The earlier section concluded that our kinds must fit into the eight letters the
+factory leaves free — `G H I L Q T V Y`. **A second card retires that
+constraint: on our own card the whole alphabet is ours**, 26 kinds of 100 kits.
+The cramped allocation was an artefact of sharing, and it is worth not designing
+around it.
+
+It also means `RamKits`' existing `D`–`M` banking no longer collides with
+anything, and may be able to stay as it is.
+
+### Recipe
+
+- **Factory card** — archive's 210 + `W0`–`W33` + the fifteen `.rtf` legends,
+  written to a freshly formatted card. `A7`/`A8` do not belong here.
+- **Our card** — `A7`, `A8`, `RamKits`, Samples From Mars, and takes. Empty of
+  factory content, and kinds assigned across the full alphabet.
+
+Neither card should carry the 875 AppleDouble `._` files, and neither should be
+built by copying the damaged one.
+
 ## The spine: two namespaces, and a compiler between them
 
 Third time this shape has appeared, after the Arbhar's library and its stick.
