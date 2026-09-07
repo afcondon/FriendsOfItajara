@@ -139,6 +139,8 @@ data Action
   | SetLayerWindow Int Int Int Int
   | ClearLayerWindow Int Int
   | Hear Int Int
+  -- | One source for every loop; see `sourceBar`.
+  | SetSourceAll Int
   | NotesFor Int
   | StartDrag Int (Maybe Int)
   | WaveDown Edit.Drag MouseEvent
@@ -277,6 +279,14 @@ handleAction = case _ of
   Hear loop k -> do
     H.modify_ _ { focus = loop, peaksKey = "" }
     duty loop (Duty.LayerOn k true)
+  -- **Every loop, not the focused one.** The verb is per loop because the
+  -- daemon's model is; the decision is per session because this page's is.
+  -- Sent to all of them so the readout can be a single word rather than a
+  -- word plus a footnote about which loops it did not reach.
+  SetSourceAll n -> do
+    st <- H.get
+    let count = maybe 0 (Array.length <<< _.loops) st.looper
+    traverse_ (\i -> duty i (Duty.SetSource n)) (Array.range 0 (count - 1))
   NotesFor i -> do
     H.modify_ _ { focus = i }
     handleAction (OpenPanel NotesPanel)
@@ -530,6 +540,7 @@ render st =
       , HH.p [ HP.class_ (HH.ClassName "friend-sub") ]
           [ HH.text ("A looper that writes " <> f.unit <> "s for the " <> f.maker <> " " <> f.module_ <> ". ") ]
       , HH.p [ HP.class_ (HH.ClassName ("friend-conn " <> connClass)) ] [ HH.text connWord ]
+      , maybe (HH.text "") sourceBar st.looper
       ]
 
   connClass = case st.status of
@@ -718,6 +729,51 @@ render st =
       , HE.onClick \_ -> act
       ]
       [ HH.text label ]
+
+  -- | **What the whole page is listening to.**
+  -- |
+  -- | The daemon's own model is per loop — `<n>src<i>`, and it has to be,
+  -- | because `ClaimPast` reaches back into a *source's* pre-roll ring and
+  -- | "the last eight seconds" is ambiguous the moment two loops want
+  -- | different pasts. The pedalboard uses that: drums off the iPad on two
+  -- | loops, a bass on another, the stereo board on the rest, each loop
+  -- | remembering its own.
+  -- |
+  -- | This page is not that. Here you are harvesting *one thing* — the
+  -- | modular today, the guitar tomorrow — and eight per-loop choices would
+  -- | be eight copies of a decision made once a session. So it is one
+  -- | control, and it broadcasts: every loop gets the `src` verb.
+  -- |
+  -- | It does not lie about the underlying model. If something else moved a
+  -- | single loop — the pedalboard on the same daemon — the control says
+  -- | *mixed* rather than showing one source and meaning another, and the
+  -- | next click puts them back together.
+  -- |
+  -- | Not disabled while recording. Changing the input mid-take is a strange
+  -- | thing to want and a legitimate one to reach for, and the daemon takes
+  -- | the verb whenever it is sent; foreclosing it here would be this page
+  -- | inventing a rule the engine does not have.
+  sourceBar top
+    | Array.length top.sources <= 1 = HH.text ""
+    | otherwise =
+        let here = Array.nub (map _.src top.loops)
+            one = case here of
+              [ n ] -> Just n
+              _ -> Nothing
+        in HH.div [ HP.class_ (HH.ClassName "friend-source") ]
+             ( [ HH.span [ HP.class_ (HH.ClassName "friend-source-label") ]
+                   [ HH.text (if one == Nothing then "hearing (mixed)" else "hearing") ]
+               ]
+               <> Array.mapWithIndex (srcChip one) top.sources )
+
+  srcChip one n src =
+    HH.button
+      [ HP.class_ (HH.ClassName ("friend-src" <> (if one == Just (n + 1) then " on" else "")))
+      , HP.title ("every loop hears " <> src.name
+                    <> (if src.mono then " (mono)" else " (stereo)"))
+      , HE.onClick \_ -> SetSourceAll (n + 1)
+      ]
+      [ HH.text src.name ]
 
   -- The open record's word on a face with a fixed length says it is the open
   -- one; everywhere else it is the record word as it was.

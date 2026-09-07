@@ -33,6 +33,7 @@ body { margin: 0; background: var(--ground); color: var(--ink);
 .friend-loops { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 14px; }
 .friend-loop { background: var(--card); border: 1px solid var(--line); padding: 12px 14px 12px; display: flex; flex-direction: column; gap: 10px; cursor: default; }
 .friend-loop.is-focus { border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink) inset; }
+.friend-head { position: relative; }
 .friend-loop-head { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
 .friend-loop-name { font-weight: 700; }
 .friend-loop-state { color: var(--muted); }
@@ -41,6 +42,17 @@ body { margin: 0; background: var(--ground); color: var(--ink);
 .is-playing .friend-loop-state { color: var(--accent); }
 .friend-loop-len { color: var(--muted); font-variant-numeric: tabular-nums; }
 .friend-loop-dest { margin-left: auto; color: var(--muted); font-size: 12px; }
+
+/* What the whole page is listening to — top right of the header, because it is
+   a session-level fact you set once and then want to be able to confirm without
+   hunting. Read far more often than it is set, so: quiet, but never ambiguous. */
+.friend-source { position: absolute; top: 0; right: 0; display: flex; align-items: center; gap: 5px; }
+.friend-source-label { color: var(--muted); font-size: 11px; letter-spacing: 0.04em;
+  text-transform: uppercase; }
+.friend-src { font: inherit; font-size: 12px; padding: 3px 9px; background: transparent;
+  color: var(--muted); border: 1px solid var(--line); border-radius: 11px; cursor: pointer; }
+.friend-src:hover { border-color: var(--accent); color: var(--ink); }
+.friend-src.on { background: var(--ink); color: #fff; border-color: var(--ink); }
 
 .friend-layers { display: flex; flex-direction: column; gap: 3px; min-height: 24px; }
 .friend-layer { display: flex; align-items: center; gap: 8px; height: 22px; }
