@@ -30,8 +30,16 @@ Everything is reachable over MIDI, which matters later:
 
 ## The card itself, read 2026-09-07
 
-The physical card was mounted and inventoried. **Everything below is measured,
-not inferred from the manual.** 15 GB, 9% used, **246 kits**.
+The physical card was mounted and inventoried, read-only. 15 GB, 9% used,
+**246 kit folders**.
+
+**A warning about what this evidence is.** An earlier draft of this document
+said the module "demonstrably plays" these kits. It does not say that any more,
+because nothing here was ever played. Presence on the card is evidence of *what
+Squarp and the artists shipped* — a source of hypotheses — and nothing at all
+about what the module accepts. The card refutes the inference by itself: five of
+its kits are damaged (below). **No naming rule in this document should be relied
+on until a test kit has been played on the module.**
 
 Kits per bank:
 
@@ -59,6 +67,39 @@ At the card root, beside the kit folders:
   independently of audio. Small enough to be worth decoding.
 - OS litter: `System Volume Information`, `.Spotlight-V100`, `.fseventsd`.
 
+### The card has filesystem damage
+
+FAT32, and five kits are damaged. Found by a full read-only scan; nothing was
+written or repaired.
+
+| Kit | Bad | Of | What |
+|---|---|---|---|
+| `C4` | 30 | ? | directory entries unreadable |
+| `E2` | 6 | 48 | names read, `stat` fails — bad cluster chain |
+| `F5` | 11 | 13 | **mangled 8.3 short names** (`7rwb\t~1.WAV`) — long-name entries gone |
+| `M13` | 3 | ? | directory entries unreadable |
+| `M14` | 7 | 7 | the whole kit |
+
+Two things follow.
+
+**Image the card before writing anything to it.** This is also a better
+candidate explanation for past unexplained failures than either audio format or
+filename convention, and it is the kind of fault that spreads.
+
+**`F5` raises a hypothesis worth testing.** Those `~1.WAV` names are FAT32
+*short* names surfacing because the long-name entries were damaged. If the
+module's FAT driver ever reads short names rather than long ones, then the
+alphabetical sort — and therefore the layer order — is computed on mangled
+eight-character names, not the ones we chose. Untested, and nasty if true.
+
+### A file that is silently ignored, on the card, right now
+
+`X5/PAR 12.wav`. An ordinary filename, a valid wav, in a real kit folder. **The
+module ignores it, because the first character is not `1`–`4`.** No error and no
+sound: exactly the failure mode where one goes looking at audio formats. This
+single file is the argument for the whole design. (`Z9/Neuer Ordner` is just an
+empty stray folder, and harmless.)
+
 **875 AppleDouble `._` files.** The card is full of them, including
 `._rample.bin` and one per kit folder. This is exactly the class of file that
 broke the Arbhar harvest mid-bank; msm has since learned to filter them, and
@@ -77,8 +118,14 @@ human convention, and the card proves nobody agrees:
 | `Z0` | `1 baffsample.wav` | voice, space, name |
 | `RamKits/D0` | `1 a BD A 808 Decay C 04_16bit.wav` | **voice, space, layer letter, name** |
 
-The last is ours and it is the best of them: `a`–`l` covers exactly the twelve
-layers allowed, sorts correctly by construction, and stays readable. **Adopt it.**
+The last is ours, and `a`–`l` covers exactly the twelve layers allowed, sorts
+correctly by construction, and stays readable.
+
+**But do not derive the rules from this table.** Be conservative: take the
+narrowest envelope Squarp themselves ship — `1. Kick.wav`, a digit, plain
+printable ASCII, short, lowercase `.wav` — and place our layer letter inside it.
+The wider conventions on the card are evidence that somebody once wrote them,
+not that the module read them.
 
 **And `K0` is direct evidence for the general-ordinal decision:** its four
 layers are `A_Cm`, `B_Csus2`, `C_Csus4`, `D_Cm7` — the ordinal is *harmony*,
@@ -183,6 +230,21 @@ voice — `CCx4`, `CCx5`, `CCx7` — which is very nearly the Arbhar's Edit pane
 already built and shared in `itajara/surface`.
 
 Kinds make this legible on the card: a bank is one mode as well as one category.
+
+## Before anything is built: the test kit
+
+One kit written into a free bank — `G0` — with four voices whose layer order is
+unmistakable by ear. Played on the module, it settles in a single sitting what
+no amount of reading the card can:
+
+1. whether the naming envelope works at all;
+2. whether the sort order is the one we intended, or the FAT short-name order;
+3. whether a 13th layer is read or dropped — **the card has an `S62` with 18
+   layers on one voice**, against a documented limit of 12, and it is not known
+   which of those is wrong;
+4. whether a file the module ignores is silent or breaks the kit.
+
+Nothing below should be trusted until this has been done.
 
 ## What to build, in order
 
