@@ -196,6 +196,43 @@ that is visibly degrading: the entire Waveshaper pack and the two of ours.
 Restoring from the archive alone would silently drop them. **Copy those off
 before anything else happens to that card.**
 
+### What the card-only content actually is
+
+Checked, because the guess was that it came from Samples From Mars. It does not.
+
+**`W0`–`W33` are Waveshaper**, and the card's own credit file says so verbatim:
+*"ALL SAMPLES RECORDED AND EDITED BY WAVESHAPER – payhip.com/WaveShaperDrumSamples"*,
+followed by a list of `WS 606 Fat Kit1`, `WS 707 kit1`, `WS 808 slowK7`,
+`WS Dusty kit`, `WS MicroKit`. A separate purchase. The confusion is a fair one:
+Waveshaper's kits are named `WS606`, `WS707`, `WS808`, and Samples From Mars
+sells *606 From Mars*, *707 From Mars* and *808 From Mars*. The same drum
+machines, a different vendor.
+
+**And Waveshaper is not only in `W`.** Bank `S` — 68 kits — is `WS-DR110`,
+`WS-NoisyMemory`, `WS-Anatronix TeK2`, `WS Synthax BD`: sixty-seven of its
+sixty-eight are Waveshaper too (`S24` is a lone `GranuSFX-sfx render`). Its
+legend file still reads `S - SINK.rtf`. **SINK's factory content is gone — from
+the card and from the archive alike** — and the legend has been misdescribing
+that bank for at least as long as the archive has existed. Waveshaper spans
+`W` + `S` = 101 kits, one more than a bank holds, which is presumably why it
+spilled in the first place.
+
+**So the "factory" card is not factory, and cannot be restored to factory from
+what we have.** Either re-fetch SINK's bank from Squarp, or accept that `S` is
+Waveshaper now and make the legend say so. Either way this is the argument for
+the split, in miniature: third-party content crept into an artist's bank and the
+label went stale, and nobody could have noticed from the module.
+
+**`A7` is Endorphin.es' Maman Kuesters**, already reshaped for Rample — 4 voices
+× 8 layers, `1 MamanKuesters 01`…`4 MamanKuesters 08` — from a source pack laid
+out in folders `1`–`8`. A precedent for exactly the conversion this document
+proposes. **`A8` (WestCoastKit)** appears nowhere in the archive; origin unknown.
+
+**Not one byte of Samples From Mars is on the card.** The 39 kits in `RamKits`
+were built from it in March 2024 and never loaded; the card's `D`–`M` banks are
+factory Devine and DET, matching the archive. 191 GB, bought for this module,
+still unused — which is the thing actually worth fixing.
+
 ### The consequence for kinds
 
 The earlier section concluded that our kinds must fit into the eight letters the
