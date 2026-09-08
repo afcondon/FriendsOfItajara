@@ -1,5 +1,15 @@
 # Rample's Friend
 
+> **Superseded in part, 2026-09-08.** The plan is now
+> `afc-work/docs/kb/plans/rample-as-an-instrument.md`, which carries what the
+> module *measurably* does — this document was written before any of it was
+> tested on the hardware, and the module disagreed with the manual in four
+> places. What stands here: the two modes of use, the kinds, and the two-card
+> reasoning. What has moved on: layer ordering (a byte sort, not natural), the
+> twelve-layer ceiling (hard, measured), `.rpl` (CBOR we can write), SLICER, and
+> the scope — the Rample is now an instrument to play, not only a card to
+> curate.
+
 Design notes, 2026-09-07. Not built yet; this is the shape agreed in the
 session that surveyed the module, the manual and what is already on disk.
 
