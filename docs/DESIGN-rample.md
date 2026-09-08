@@ -10,6 +10,12 @@
 > the scope — the Rample is now an instrument to play, not only a card to
 > curate.
 
+> **See also, 2026-09-08:** `afc-work/docs/kb/plans/friend-as-sampler.md` — the
+> Friend as a sampling instrument rather than a card writer: four record
+> buttons by scale, conducted hit sessions, one classified library, and the
+> card as an export. That is the plan the *page* follows; this document is
+> about the card.
+
 Design notes, 2026-09-07. Not built yet; this is the shape agreed in the
 session that surveyed the module, the manual and what is already on disk.
 
