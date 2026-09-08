@@ -135,6 +135,9 @@ rample =
       , "Loop 1 is voice 1, and a kit with no voice 1 cannot be opened at all."
       , "Twelve layers is a hard ceiling — a thirteenth is dropped in silence."
       , "As a drum kit, VELOCITY picks the layer and the module reads the stack in order, so record softest first."
+      , "Chords and breaks go the other way: cut into equal slots and addressed by the START POINT, so there can be up to 128 of them instead of 12."
+      , "Those two write cut audio and a manifest beside the take rather than onto the card; `msm kit build` compiles it, and the manifest is text you can read and edit first."
+      , "SLICER is global and the card cannot carry it — the manifest says which division to set."
       ]
   }
 

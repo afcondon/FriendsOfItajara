@@ -1081,12 +1081,18 @@ render st =
     | f.id == "rample" =
         [ field "Kit (A0 … Z99)" st.slot SetSlot
         , HH.label [ HP.class_ (HH.ClassName "friend-field") ]
-            [ HH.span_ [ HH.text "The layers are" ]
+            [ HH.span_ [ HH.text "The material is" ]
             , HH.select [ HE.onValueChange SetKindAs ]
                 (map (\o -> HH.option [ HP.value o.v, HP.selected (o.v == st.kindAs) ] [ HH.text o.label ])
-                  [ { v: "drum-kit", label: "dynamics of one drum (velocity picks)" }
-                  , { v: "chords", label: "different chords" }
-                  , { v: "progressions", label: "long alternates" }
+                  -- The first two become LAYERS, picked by the layer selector
+                  -- and capped at twelve; the last two become SLICES, joined
+                  -- into equal slots and addressed by the start point. Which
+                  -- axis a kind wants is a fact about the music, so it is the
+                  -- kind that is chosen here and never the axis.
+                  [ { v: "drum-kit", label: "hits — dynamics of one drum (layers, velocity picks)" }
+                  , { v: "progressions", label: "progressions — long takes, kept whole (layers)" }
+                  , { v: "chords", label: "chords — one per capture, cut to slices" }
+                  , { v: "break", label: "a break — one bar, cut into its hits (slices)" }
                   ])
             ]
         ]
