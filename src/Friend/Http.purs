@@ -50,6 +50,12 @@ type HarvestRequest =
   , stick :: String
   , bank :: String
   , scene :: String
+  -- The Rample addresses by KIT, not by bank and scene. `card` is left empty
+  -- to let msm find the mounted card; `slot` is the kit (`G0`), and `as` is
+  -- what the layers mean, which is what sets the layer mode on the card.
+  , card :: String
+  , slot :: String
+  , as :: String
   , overwrite :: Boolean
   , allLayers :: Boolean
   , dryRun :: Boolean

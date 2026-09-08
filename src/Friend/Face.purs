@@ -129,8 +129,13 @@ rample =
   , layerWord: "sample"
   , holds: "kits A0 to Z99, four voices each, up to 12 samples per voice"
   , daemon: "itajara loop --device <device> --loops 4 --layers 12 --yes"
-  , harvest: false
-  , notes: [ "Four loops make one kit; a layer is one sample in the voice's stack." ]
+  , harvest: true
+  , notes:
+      [ "Four loops make one kit; a layer is one sample in the voice's stack."
+      , "Loop 1 is voice 1, and a kit with no voice 1 cannot be opened at all."
+      , "Twelve layers is a hard ceiling — a thirteenth is dropped in silence."
+      , "As a drum kit, VELOCITY picks the layer and the module reads the stack in order, so record softest first."
+      ]
   }
 
 -- | vpme.de Quad Drum: short mono windows, a folder of samples per voice.

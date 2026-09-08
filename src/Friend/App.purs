@@ -87,6 +87,9 @@ type State =
   , stick :: String
   , bank :: String
   , scene :: String
+  -- Rample: the kit to write, and what its layers mean.
+  , slot :: String
+  , kindAs :: String
   , overwrite :: Boolean
   , allLayers :: Boolean
   , harvestOut :: String
@@ -145,6 +148,8 @@ data Action
   | SetScene String
   | SetOverwrite Boolean
   | SetAllLayers Boolean
+  | SetSlot String
+  | SetKindAs String
   | RunHarvest Boolean
   -- | The library browser; see `libraryModal`.
   | OpenLibrary
@@ -175,6 +180,9 @@ component =
         , peaksKey: "", waveDrag: Nothing, local: Map.empty, panel: NoPanel, ackSeq: 0, log: [], take: "take"
         , saved: [], notes: Http.emptyNotes, notesFor: "", notesStatus: ""
         , sticks: [], stick: "", bank: "1", scene: "1_1", overwrite: false, allLayers: false
+        -- No default slot: which kit to overwrite is not a thing to guess at,
+        -- and msm refuses an empty one rather than picking.
+        , slot: "", kindAs: "drum-kit"
         , harvestOut: "", harvestBusy: false, drag: Nothing, dropOn: Nothing
         , shelves: [], shelfId: Nothing, openScene: Nothing, sceneAt: Library.emptyScene
         , hearing: Nothing, libStatus: "" }
@@ -446,6 +454,8 @@ handleAction = case _ of
   SetStick v -> H.modify_ _ { stick = v }
   SetBank v -> H.modify_ _ { bank = v }
   SetScene v -> H.modify_ _ { scene = v }
+  SetSlot v -> H.modify_ _ { slot = v }
+  SetKindAs v -> H.modify_ _ { kindAs = v }
   SetOverwrite v -> H.modify_ _ { overwrite = v }
   SetAllLayers v -> H.modify_ _ { allLayers = v }
   RunHarvest dryRun -> do
@@ -453,6 +463,7 @@ handleAction = case _ of
     H.modify_ _ { harvestBusy = true, harvestOut = if dryRun then "dry run…" else "harvesting…" }
     r <- H.liftAff (attempt (toAffE (Http.harvest
       { take: safeName st.take, module: st.face.id, stick: st.stick, bank: st.bank, scene: st.scene
+      , card: "", slot: st.slot, as: st.kindAs
       , overwrite: st.overwrite, allLayers: st.allLayers, dryRun })))
     H.modify_ _ { harvestBusy = false, harvestOut = case r of
       Right res -> res.output <> (if res.ok then "" else "\n(msm reported a failure)")
@@ -1061,31 +1072,64 @@ render st =
   -- **The stick, and where on it.** A loop is a library bank and a scene;
   -- the form says which bank and scene the first loop takes and the rest
   -- follow. Dry run first is cheap and says exactly what would land where.
+  -- Where a take LANDS differs by module, and by more than a label: the Arbhar
+  -- addresses positionally (a library bank, a scene) while the Rample addresses
+  -- by kit. The card is not asked for — msm finds the mounted one, and refuses
+  -- if there are two — but the KIT is, because which kit to overwrite is not a
+  -- thing to guess at.
+  whereItGoes
+    | f.id == "rample" =
+        [ field "Kit (A0 … Z99)" st.slot SetSlot
+        , HH.label [ HP.class_ (HH.ClassName "friend-field") ]
+            [ HH.span_ [ HH.text "The layers are" ]
+            , HH.select [ HE.onValueChange SetKindAs ]
+                (map (\o -> HH.option [ HP.value o.v, HP.selected (o.v == st.kindAs) ] [ HH.text o.label ])
+                  [ { v: "drum-kit", label: "dynamics of one drum (velocity picks)" }
+                  , { v: "chords", label: "different chords" }
+                  , { v: "progressions", label: "long alternates" }
+                  ])
+            ]
+        ]
+    | otherwise =
+        [ HH.label [ HP.class_ (HH.ClassName "friend-field") ]
+            [ HH.span_ [ HH.text "Stick" ]
+            , if Array.null st.sticks
+                then HH.span [ HP.class_ (HH.ClassName "friend-warn") ] [ HH.text "no mounted volume has an _arbhar_library folder" ]
+                else HH.select [ HE.onValueChange SetStick ]
+                  (map (\p -> HH.option [ HP.value p, HP.selected (p == st.stick) ] [ HH.text p ]) st.sticks)
+            ]
+        , field "First library bank (1–6)" st.bank SetBank
+        , field "First scene (1_1 … 6_6)" st.scene SetScene
+        ]
+
   harvestModal =
     modal "is-harvest" ("Harvest " <> safeName st.take <> " to the " <> f.module_)
       ( (if Array.elem (safeName st.take) st.saved then []
           else [ HH.p [ HP.class_ (HH.ClassName "friend-warn") ] [ HH.text "This take has not been saved yet — Save take first." ] ])
       <> [ HH.div [ HP.class_ (HH.ClassName "friend-fields") ]
-            [ HH.label [ HP.class_ (HH.ClassName "friend-field") ]
-                [ HH.span_ [ HH.text "Stick" ]
-                , if Array.null st.sticks
-                    then HH.span [ HP.class_ (HH.ClassName "friend-warn") ] [ HH.text "no mounted volume has an _arbhar_library folder" ]
-                    else HH.select [ HE.onValueChange SetStick ]
-                      (map (\p -> HH.option [ HP.value p, HP.selected (p == st.stick) ] [ HH.text p ]) st.sticks)
-                ]
-            , field "First library bank (1–6)" st.bank SetBank
-            , field "First scene (1_1 … 6_6)" st.scene SetScene
-            , HH.label [ HP.class_ (HH.ClassName "friend-field is-check") ]
-                [ HH.input [ HP.type_ HP.InputCheckbox, HP.checked st.overwrite, HE.onChecked SetOverwrite ], HH.span_ [ HH.text "Overwrite slots already holding audio" ] ]
-            , HH.label [ HP.class_ (HH.ClassName "friend-field is-check") ]
-                [ HH.input [ HP.type_ HP.InputCheckbox, HP.checked st.allLayers, HE.onChecked SetAllLayers ], HH.span_ [ HH.text "Include layers switched off" ] ]
-            ]
+            ( whereItGoes <>
+              [ HH.label [ HP.class_ (HH.ClassName "friend-field is-check") ]
+                  [ HH.input [ HP.type_ HP.InputCheckbox, HP.checked st.overwrite, HE.onChecked SetOverwrite ], HH.span_ [ HH.text "Overwrite slots already holding audio" ] ]
+              , HH.label [ HP.class_ (HH.ClassName "friend-field is-check") ]
+                  [ HH.input [ HP.type_ HP.InputCheckbox, HP.checked st.allLayers, HE.onChecked SetAllLayers ], HH.span_ [ HH.text "Include layers switched off" ] ]
+              ]
+            )
         , HH.div [ HP.class_ (HH.ClassName "looper-edit-actions") ]
             [ btn "Refresh sticks" RefreshSticks false
             , btn "Dry run" (RunHarvest true) false
             , btn ("Harvest to " <> f.module_) (RunHarvest false) st.harvestBusy
             , HH.span [ HP.class_ (HH.ClassName "looper-edit-note") ]
-                [ HH.text "Each loop takes one bank and one scene, ten seconds plus the three that follow, 24-bit at 48 kHz. The datasheet lands in the take and in _harvest/ on the stick." ]
+                [ HH.text
+                    ( if f.id == "rample" then
+                        "Loop 1 becomes voice 1 — a kit with no voice 1 cannot be opened at all. "
+                          <> "Twelve layers per voice is a hard ceiling; a thirteenth is dropped in silence, "
+                          <> "so the rest are refused here instead. Mono, 16-bit at 44.1 kHz, because a "
+                          <> "stereo sample fills two voices. The layer mode is written to the card's .rpl, "
+                          <> "which is what stops it having to be set by hand after every power-off."
+                      else
+                        "Each loop takes one bank and one scene, ten seconds plus the three that follow, "
+                          <> "24-bit at 48 kHz. The datasheet lands in the take and in _harvest/ on the stick."
+                    ) ]
             ]
         , HH.pre [ HP.class_ (HH.ClassName "friend-harvest-out") ] [ HH.text st.harvestOut ]
         ]

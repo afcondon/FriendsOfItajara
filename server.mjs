@@ -15,8 +15,9 @@
 //   GET  /api/library              every library's shelves and scenes, names only
 //   GET  /api/scene?lib=&path=     one scene: its audio with headers, its texts
 //   GET  /api/audio?lib=&path=     one file, with byte ranges, for auditioning
-//   POST /api/harvest              { take, module, stick, bank, scene, overwrite,
-//                                    allLayers, dryRun } → runs msm harvest,
+//   POST /api/harvest              { take, module, stick, bank, scene, card, slot,
+//                                    as, overwrite, allLayers, dryRun }
+//                                  → runs msm harvest,
 //                                    answers { ok, output }
 
 import http from "node:http";
@@ -82,6 +83,11 @@ function sticks() {
 function harvest(body) {
   const args = ["harvest", safe(body.take), "--module", body.module || "arbhar"];
   if (body.stick) args.push("--stick", String(body.stick));
+  // The Rample addresses by KIT, not by bank and scene: a card path and a slot
+  // like G0, plus what the layers mean, which is what sets the layer mode.
+  if (body.card) args.push("--card", String(body.card));
+  if (body.slot) args.push("--slot", String(body.slot).toUpperCase().replace(/[^A-Z0-9]/g, ""));
+  if (body.as) args.push("--as", String(body.as).replace(/[^a-z-]/g, ""));
   if (body.bank) args.push("--bank", String(Number(body.bank)));
   if (body.scene) args.push("--scene", String(body.scene).replace(/[^0-9_]/g, ""));
   if (body.overwrite) args.push("--overwrite");
