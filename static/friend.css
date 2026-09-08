@@ -183,3 +183,8 @@ input, textarea, .friend-harvest-out, .friend-lib-text { user-select: text; -web
   border: 1px solid var(--rule, #c8c8c8); background: transparent;
 }
 .friend-pip.is-done { background: var(--ink, #222); border-color: var(--ink, #222); }
+
+/* An input whose interface is not switched on. It keeps its place in the row —
+   the numbering is positional, so removing it would move every source after
+   it — and reads as present-but-unreachable rather than as missing. */
+.friend-src.off { opacity: 0.4; text-decoration: line-through; cursor: not-allowed; }

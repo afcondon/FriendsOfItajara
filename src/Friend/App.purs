@@ -971,9 +971,15 @@ render st =
 
   srcChip one n src =
     HH.button
-      [ HP.class_ (HH.ClassName ("friend-src" <> (if one == Just (n + 1) then " on" else "")))
-      , HP.title ("every loop hears " <> src.name
-                    <> (if src.mono then " (mono)" else " (stereo)"))
+      [ HP.class_ (HH.ClassName ("friend-src"
+          <> (if one == Just (n + 1) then " on" else "")
+          <> (if src.available then "" else " off")))
+      , HP.disabled (not src.available)
+      , HP.title (if src.available
+                    then "every loop hears " <> src.name
+                           <> (if src.mono then " (mono)" else " (stereo)")
+                    else src.name <> " is on an interface that is not switched on. "
+                           <> "It keeps its place in the list so nothing else is renumbered.")
       , HE.onClick \_ -> SetSourceAll (n + 1)
       ]
       [ HH.text src.name ]
@@ -1211,8 +1217,11 @@ render st =
                         (\n src -> HH.option
                           [ HP.value (show (n + 1))
                           , HP.selected (maybe false (\l -> l.src == n + 1) lp)
+                          , HP.disabled (not src.available)
                           ]
-                          [ HH.text (src.name <> (if src.mono then " (mono)" else " (stereo)")) ])
+                          [ HH.text (src.name
+                              <> (if src.mono then " (mono)" else " (stereo)")
+                              <> (if src.available then "" else " — not switched on")) ])
                         top.sources)
                   ]
               _ -> HH.text ""
