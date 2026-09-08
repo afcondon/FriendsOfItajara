@@ -172,3 +172,14 @@ input, textarea, .friend-harvest-out, .friend-lib-text { user-select: text; -web
 .friend-layer-bar-fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--record); opacity: 0.6; }
 .friend-layer-bar-fill.is-open { background: repeating-linear-gradient(90deg, var(--record) 0 6px, transparent 6px 12px); }
 .friend-layer-bar-word { position: absolute; right: 6px; top: 0; font-size: 11px; line-height: 22px; color: var(--record); }
+
+/* The conductor. A count and a row of pips: the panel's job is to say how
+   many have landed and how many are left, so both are readable at playing
+   distance rather than at reading distance. */
+.friend-session-count { margin: 12px 0 8px; font-size: 20px; font-weight: 500; }
+.friend-session-pips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+.friend-pip {
+  width: 14px; height: 14px; border-radius: 50%;
+  border: 1px solid var(--rule, #c8c8c8); background: transparent;
+}
+.friend-pip.is-done { background: var(--ink, #222); border-color: var(--ink, #222); }

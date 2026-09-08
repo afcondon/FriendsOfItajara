@@ -56,6 +56,43 @@ import Web.HTML.Event.DragEvent as DragEvent
 import Web.UIEvent.MouseEvent (MouseEvent)
 import Web.UIEvent.MouseEvent as ME
 
+-- | **A conducted capture: many takes of one sound, counted.**
+-- |
+-- | *"Give me ten kicks"* is not a thing the looper can be asked for. It can
+-- | record a pass, and it can wait for a sound before starting one, and the
+-- | player can do the rest by pressing record ten times. This does the
+-- | pressing.
+-- |
+-- | **Nothing here detects a hit.** The daemon already does: `lev` makes `r`
+-- | arm rather than start, and the take begins on the sound that follows. That
+-- | mode *survives every take* (`engine/next_take.rs`), so a session is one
+-- | `lev1` and then a bare `r` per hit — the conductor watches the layer count
+-- | and presses again when the last one has landed.
+-- |
+-- | **And nothing here trims.** The passes are the loop's own length, so ten
+-- | hits are ten mostly-silent layers, and `msm` cuts them on the way to a
+-- | card. That is *store everything, flatten late* — the same reason the take
+-- | keeps full-fidelity layers rather than what a module happens to want.
+type Session =
+  { -- | The loop the session records into. One voice's stack.
+    loop :: Int
+  -- | What is being played, for the prompt: "kick 3 of 10".
+  , label :: String
+  , want :: Int
+  -- | Each pass is this long. Only the first pass sets it; after that the
+  -- | loop has a length and every layer matches it, which is what a stack
+  -- | needs and what `RecordFixed` already does on a loop with material.
+  , secs :: Number
+  -- | Layers the loop already had when Start was pressed. `done` is measured
+  -- | against this rather than counted here, so an undo mid-session is
+  -- | simply a smaller number and not a desynchronised tally.
+  , base :: Int
+  , running :: Boolean
+  -- | An `r` has gone out and the daemon has not yet shown its effect. Held
+  -- | so a tick two hundred milliseconds later does not press again.
+  , pending :: Boolean
+  }
+
 type State =
   { face :: Face
   , looper :: Maybe LooperState
@@ -90,6 +127,8 @@ type State =
   -- Rample: the kit to write, and what its layers mean.
   , slot :: String
   , kindAs :: String
+  -- | The conducted capture; see `Session`.
+  , session :: Session
   , overwrite :: Boolean
   , allLayers :: Boolean
   , harvestOut :: String
@@ -112,7 +151,7 @@ type State =
 
 -- | One modal at a time: the loop in hand's edit, the take's notes, or the
 -- | harvest. The Edit panel is the shared one; the other two are this page's.
-data Panel = NoPanel | EditPanel | NotesPanel | HarvestPanel | LibraryPanel
+data Panel = NoPanel | EditPanel | NotesPanel | HarvestPanel | LibraryPanel | SessionPanel
 
 derive instance Eq Panel
 
@@ -150,6 +189,13 @@ data Action
   | SetAllLayers Boolean
   | SetSlot String
   | SetKindAs String
+  -- | The conductor; see `Session` and `sessionModal`.
+  | OpenSession Int
+  | SetSessionLabel String
+  | SetSessionWant String
+  | SetSessionSecs String
+  | StartSession
+  | StopSession
   | RunHarvest Boolean
   -- | The library browser; see `libraryModal`.
   | OpenLibrary
@@ -183,6 +229,7 @@ component =
         -- No default slot: which kit to overwrite is not a thing to guess at,
         -- and msm refuses an empty one rather than picking.
         , slot: "", kindAs: "drum-kit"
+        , session: { loop: 0, label: "kick", want: 10, secs: 2.0, base: 0, running: false, pending: false }
         , harvestOut: "", harvestBusy: false, drag: Nothing, dropOn: Nothing
         , shelves: [], shelfId: Nothing, openScene: Nothing, sceneAt: Library.emptyScene
         , hearing: Nothing, libStatus: "" }
@@ -252,7 +299,44 @@ handleAction = case _ of
       -- in a row are two lines.
       for_ snap \s ->
         when (s.ackSeq /= cur.ackSeq && s.ack /= "") do
+          -- An ack is also the answer to a press: if the daemon refused the
+          -- one just sent, the session must not wait for ever for a take that
+          -- will never open.
           H.modify_ (note s.ack <<< _ { ackSeq = s.ackSeq })
+          H.modify_ \x -> x { session = x.session { pending = false } }
+
+      -- **The conductor's whole body.**
+      --
+      -- Press, wait for the pass to land, press again, stop at N. It knows a
+      -- hit landed because the layer count went up, which is the daemon's
+      -- own account of it rather than a second opinion formed here — and it
+      -- counts from `base` rather than tallying its own presses, so an undo
+      -- mid-session is a smaller number instead of a desynchronised session.
+      for_ snap \s -> do
+        now <- H.get
+        when now.session.running $
+          for_ (Array.index s.loops now.session.loop) \lp -> do
+            let done = lp.layers - now.session.base
+                -- Listening or writing: the last press is being answered, so
+                -- there is nothing to do but let it finish.
+                busy = Socket.isWriting lp || lp.armed
+            when busy $
+              H.modify_ \x -> x { session = x.session { pending = false } }
+            if done >= now.session.want then do
+              setListening now.session.loop false
+              H.modify_ \x -> x { session = x.session { running = false, pending = false } }
+              H.modify_ (note
+                (show now.session.want <> " × " <> now.session.label
+                  <> " on loop " <> show (now.session.loop + 1)
+                  <> " — they are layers of the loop's own length, so they are mostly "
+                  <> "silence until msm trims them"))
+            else
+              when (not busy && not now.session.pending) do
+                H.modify_ \x -> x { session = x.session { pending = true } }
+                -- Only an empty loop needs a length; after that every layer
+                -- takes the loop's, which is what a stack requires.
+                duty now.session.loop
+                  (if lp.layers == 0 then Duty.RecordFixed now.session.secs else Duty.RecordLoop)
 
   Do subject d -> do
     -- **Every take this page starts declares the loop's layers alternates
@@ -455,6 +539,55 @@ handleAction = case _ of
   SetBank v -> H.modify_ _ { bank = v }
   SetScene v -> H.modify_ _ { scene = v }
   SetSlot v -> H.modify_ _ { slot = v }
+  OpenSession i -> do
+    st <- H.get
+    H.modify_ _ { focus = i, panel = SessionPanel
+                , session = st.session { loop = i } }
+  SetSessionLabel v -> H.modify_ \s -> s { session = s.session { label = v } }
+  SetSessionWant v ->
+    H.modify_ \s -> s { session = s.session { want = clamp 1 128 (fromMaybe s.session.want (Int.fromString v)) } }
+  SetSessionSecs v ->
+    H.modify_ \s -> s { session = s.session { secs = fromMaybe s.session.secs (Number.fromString v) } }
+  StopSession -> do
+    st <- H.get
+    -- Take the mode back off with the session. A loop left listening holds
+    -- the input for a recording that is no longer coming, and the next thing
+    -- the player does would start a take they did not ask for.
+    setListening st.session.loop false
+    H.modify_ \s -> s { session = s.session { running = false, pending = false } }
+    H.modify_ (note "session stopped")
+  StartSession -> do
+    st <- H.get
+    let i = st.session.loop
+    case st.looper >>= \top -> Array.index top.loops i of
+      Nothing -> H.modify_ (note ("loop " <> show (i + 1) <> " is not in the snapshot"))
+      Just lp
+        | Socket.isWriting lp ->
+            H.modify_ (note ("loop " <> show (i + 1) <> " is recording — close it first"))
+        | otherwise -> do
+            ensureAlternates i
+            -- **The grid has to be off.** Armed and quantised, the daemon
+            -- finds the crossing and then waits for the bar — so the hit that
+            -- started the take is behind the recording by up to a bar, and
+            -- what lands is silence followed by the next hit. A hit session
+            -- is not tempo-locked by definition; say so rather than let that
+            -- happen quietly.
+            when lp.quant do
+              runAction (Machine.Command (Verb.at i (Verb.OnGrid false)))
+              H.modify_ (note ("loop " <> show (i + 1) <> "'s grid is off for the session: "
+                <> "an armed take on the grid waits for the bar, and the hit that armed it "
+                <> "would be behind the recording"))
+            -- The one mode the session needs, and the whole of its hit
+            -- detection: `r` now waits for a sound instead of starting on
+            -- the press. The daemon reaches back past the threshold crossing,
+            -- so the attack is not clipped by the thing that detected it.
+            setListening i true
+            H.modify_ \s -> s
+              { session = s.session { base = lp.layers, running = true, pending = false } }
+            H.modify_ (note
+              ("listening for " <> show st.session.want <> " × " <> st.session.label
+                <> " on loop " <> show (i + 1)
+                <> " — softest first, and do not stop between them"))
   SetKindAs v -> H.modify_ _ { kindAs = v }
   SetOverwrite v -> H.modify_ _ { overwrite = v }
   SetAllLayers v -> H.modify_ _ { allLayers = v }
@@ -473,6 +606,14 @@ handleAction = case _ of
   duty loop d = do
     st <- H.get
     traverse_ runAction (Machine.perform (rigOf st) (OnLoop loop) d)
+  -- | Set the loop's level-arm, rather than flipping it.
+  -- |
+  -- | `Duty.LevelArm` is the toggle a footswitch wants; a session has to know
+  -- | the mode is on at the start and off at the end, and a flip that started
+  -- | from the wrong place would leave the loop listening after Stop — holding
+  -- | the input for a take nobody asked for.
+  setListening loop on =
+    runAction (Machine.Command (Verb.at loop (Verb.LevelArm on)))
   -- **The one thing this page adds to a take.** On a face whose layers are
   -- alternates, a loop that is not yet declared so is declared before the
   -- take, the copy or the duplicate that grows it — every path here that
@@ -579,7 +720,8 @@ render st =
               EditPanel -> [ editModal ]
               NotesPanel -> [ notesModal ]
               HarvestPanel -> [ harvestModal ]
-              LibraryPanel -> [ libraryModal ])
+              LibraryPanel -> [ libraryModal ]
+              SessionPanel -> [ sessionModal ])
     )
   where
   f = st.face
@@ -869,6 +1011,8 @@ render st =
       , HH.span [ HP.class_ (HH.ClassName "friend-saved") ]
           [ HH.text (if Array.elem (safeName st.take) st.saved then "saved ✓" else "") ]
       , btn "Notes" (OpenPanel NotesPanel) (st.panel == NotesPanel)
+      , btn (if st.session.running then "Session ●" else "Session")
+            (OpenSession st.focus) (st.panel == SessionPanel)
       , if f.harvest
           then btn ("Harvest to " <> f.module_) (OpenPanel HarvestPanel) (st.panel == HarvestPanel)
           else HH.text ""
@@ -1032,6 +1176,68 @@ render st =
 
   -- **What only the player knows.** The daemon's facts — length, bars,
   -- tempo, source — go on the datasheet by themselves; these are the rest.
+  -- | **The conductor.** Many takes of one sound, counted, on one loop.
+  -- |
+  -- | Deliberately small: three fields and two buttons, because the work it
+  -- | does is pressing record and the interesting decisions were all made
+  -- | elsewhere — by the daemon, which waits for the sound, and by `msm`,
+  -- | which trims what lands. What is left here is the count and the prompt.
+  sessionModal =
+    let ses = st.session
+        lp = st.looper >>= \top -> Array.index top.loops ses.loop
+        done = maybe 0 (\l -> l.layers - ses.base) lp
+        left = ses.want - done
+        listening = maybe false _.armed lp
+        writing = maybe false Socket.isWriting lp
+    in modal "is-session" ("Session — loop " <> show (ses.loop + 1))
+      [ HH.div [ HP.class_ (HH.ClassName "friend-fields") ]
+          [ field "Playing" ses.label SetSessionLabel
+          , field "How many" (show ses.want) SetSessionWant
+          , field "Seconds each" (show ses.secs) SetSessionSecs
+          ]
+      , HH.p [ HP.class_ (HH.ClassName "friend-note") ]
+          [ HH.text
+              ("Press Start and play. The loop waits for a sound, records "
+                <> show ses.secs <> "s from it, closes itself, and waits again — "
+                <> "so the takes are yours to time and the counting is not.")
+          ]
+      , HH.p [ HP.class_ (HH.ClassName "friend-note") ]
+          [ HH.strong_ [ HH.text "Softest first." ]
+          , HH.text
+              (" The module reads a stack in order and velocity picks along it, "
+                <> "so the order you play them in is the order they answer to. "
+                <> "Nothing downstream reorders them and nothing levels them.")
+          ]
+      , HH.p [ HP.class_ (HH.ClassName "friend-session-count") ]
+          [ HH.text
+              (if ses.running
+                 then (if writing then "recording " else if listening then "listening for " else "next: ")
+                        <> ses.label <> " " <> show (min ses.want (done + 1))
+                        <> " of " <> show ses.want
+                 else if done > 0 then show done <> " × " <> ses.label <> " on this loop"
+                 else "not started")
+          ]
+      , HH.div [ HP.class_ (HH.ClassName "friend-session-pips") ]
+          (map (\n -> HH.span
+                  [ HP.class_ (HH.ClassName
+                      ("friend-pip" <> if n <= done then " is-done" else "")) ]
+                  [ HH.text "" ])
+              (Array.range 1 (max 1 ses.want)))
+      , HH.div [ HP.class_ (HH.ClassName "looper-edit-actions") ]
+          [ if ses.running
+              then btn "Stop" StopSession false
+              else btn "Start" StartSession false
+          , HH.span [ HP.class_ (HH.ClassName "looper-edit-note") ]
+              [ HH.text
+                  (if ses.running
+                     then show left <> " to go — Stop takes the loop off listening"
+                     else "records into loop " <> show (ses.loop + 1)
+                            <> ", which is voice " <> show (ses.loop + 1)
+                            <> " of the kit")
+              ]
+          ]
+      ]
+
   notesModal =
     modal "is-notes" ("Notes — " <> safeName st.take)
       [ HH.div [ HP.class_ (HH.ClassName "friend-fields") ]
