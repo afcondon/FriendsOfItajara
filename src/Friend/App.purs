@@ -208,6 +208,9 @@ data Action
   | Hear Int Int
   -- | One source for every loop; see `sourceBar`.
   | SetSourceAll Int
+  -- | One source for ONE loop — what a capture session needs, where the bar
+  -- | above is what a performance needs.
+  | SetSourceOne Int Int
   | NotesFor Int
   | StartDrag Int (Maybe Int)
   | WaveDown Edit.Drag MouseEvent
@@ -393,6 +396,7 @@ handleAction = case _ of
   -- daemon's model is; the decision is per session because this page's is.
   -- Sent to all of them so the readout can be a single word rather than a
   -- word plus a footnote about which loops it did not reach.
+  SetSourceOne loop n -> duty loop (Duty.SetSource n)
   SetSourceAll n -> do
     st <- H.get
     let count = maybe 0 (Array.length <<< _.loops) st.looper
@@ -1194,6 +1198,24 @@ render st =
           [ field "Playing" ses.label SetSessionLabel
           , field "How many" (show ses.want) SetSessionWant
           , field "Seconds each" (show ses.secs) SetSessionSecs
+          -- **Which input, for this loop alone.** The bar at the top of the
+          -- page points every loop at one source, which is what a performance
+          -- wants; a capture session is one voice off one jack while the rest
+          -- of the rig keeps hearing what it was hearing.
+          , case st.looper of
+              Just top | Array.length top.sources > 1 ->
+                HH.label [ HP.class_ (HH.ClassName "friend-field") ]
+                  [ HH.span_ [ HH.text "Recording from" ]
+                  , HH.select [ HE.onValueChange (\v -> SetSourceOne ses.loop (fromMaybe 1 (Int.fromString v))) ]
+                      (Array.mapWithIndex
+                        (\n src -> HH.option
+                          [ HP.value (show (n + 1))
+                          , HP.selected (maybe false (\l -> l.src == n + 1) lp)
+                          ]
+                          [ HH.text (src.name <> (if src.mono then " (mono)" else " (stereo)")) ])
+                        top.sources)
+                  ]
+              _ -> HH.text ""
           ]
       , HH.p [ HP.class_ (HH.ClassName "friend-note") ]
           [ HH.text
