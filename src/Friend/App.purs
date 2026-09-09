@@ -327,6 +327,7 @@ handleAction = case _ of
               H.modify_ \x -> x { session = x.session { pending = false } }
             if done >= now.session.want then do
               setListening now.session.loop false
+              setVerb now.session.loop (Verb.Sounding true)
               H.modify_ \x -> x { session = x.session { running = false, pending = false } }
               H.modify_ (note
                 (show now.session.want <> " × " <> now.session.label
@@ -336,10 +337,11 @@ handleAction = case _ of
             else
               when (not busy && not now.session.pending) do
                 H.modify_ \x -> x { session = x.session { pending = true } }
-                -- Only an empty loop needs a length; after that every layer
-                -- takes the loop's, which is what a stack requires.
-                duty now.session.loop
-                  (if lp.layers == 0 then Duty.RecordFixed now.session.secs else Duty.RecordLoop)
+                -- Just the press. The length, the mode and the silencing
+                -- were all settled at Start, and the daemon keeps them across
+                -- every take — so there is nothing to re-assert here, and
+                -- re-asserting it would be a second place for them to differ.
+                duty now.session.loop Duty.RecordLoop
 
   Do subject d -> do
     -- **Every take this page starts declares the loop's layers alternates
@@ -558,6 +560,7 @@ handleAction = case _ of
     -- the input for a recording that is no longer coming, and the next thing
     -- the player does would start a take they did not ask for.
     setListening st.session.loop false
+    setVerb st.session.loop (Verb.Sounding true)
     H.modify_ \s -> s { session = s.session { running = false, pending = false } }
     H.modify_ (note "session stopped")
   StartSession -> do
@@ -569,7 +572,23 @@ handleAction = case _ of
         | Socket.isWriting lp ->
             H.modify_ (note ("loop " <> show (i + 1) <> " is recording — close it first"))
         | otherwise -> do
-            ensureAlternates i
+            -- **Alternates OFF, which is the opposite of every other take this
+            -- page starts.**
+            --
+            -- Alternates means "takes of one scene, one of which sounds", and
+            -- the daemon implements that by summing a further pass into the
+            -- layer that sounds rather than opening a new one — measured:
+            -- `loop 0 sums into layer 1`. A hit session is the other thing
+            -- entirely: ten passes that are all the material, stacked, and
+            -- with alternates on all ten land in layer 1. That is exactly what
+            -- happened the first time this ran.
+            setVerb i (Verb.Alternates false)
+            -- And the loop is silenced while it fills. Every pass starts on
+            -- its own hit, so every hit sits at the same place in its layer:
+            -- unmuted, by the fourth kick you are playing along to a chord of
+            -- your own previous ones. Muting changes no layer and nothing that
+            -- is stored — it is a monitoring decision, undone at Stop.
+            setVerb i (Verb.Sounding false)
             -- **The grid has to be off.** Armed and quantised, the daemon
             -- finds the crossing and then waits for the bar — so the hit that
             -- started the take is behind the recording by up to a bar, and
@@ -581,6 +600,12 @@ handleAction = case _ of
               H.modify_ (note ("loop " <> show (i + 1) <> "'s grid is off for the session: "
                 <> "an armed take on the grid waits for the bar, and the hit that armed it "
                 <> "would be behind the recording"))
+            -- The length, once, while the loop is still empty. After the
+            -- first pass every layer takes the loop's own length, and the
+            -- daemon refuses to change it — which is right, a stack whose
+            -- layers were different lengths would not be a stack.
+            when (lp.layers == 0 && st.session.secs > 0.0) $
+              setVerb i (Verb.Fix st.session.secs)
             -- The one mode the session needs, and the whole of its hit
             -- detection: `r` now waits for a sound instead of starting on
             -- the press. The daemon reaches back past the threshold crossing,
@@ -610,14 +635,15 @@ handleAction = case _ of
   duty loop d = do
     st <- H.get
     traverse_ runAction (Machine.perform (rigOf st) (OnLoop loop) d)
-  -- | Set the loop's level-arm, rather than flipping it.
+  -- | Send one verb to one loop, unmediated.
   -- |
-  -- | `Duty.LevelArm` is the toggle a footswitch wants; a session has to know
-  -- | the mode is on at the start and off at the end, and a flip that started
-  -- | from the wrong place would leave the loop listening after Stop — holding
-  -- | the input for a take nobody asked for.
-  setListening loop on =
-    runAction (Machine.Command (Verb.at loop (Verb.LevelArm on)))
+  -- | The duties are gestures — a footswitch flips a mode because it has one
+  -- | press and two meanings. A session is not a gesture: it has to KNOW the
+  -- | mode is on at the start and off at the end, and a flip that started from
+  -- | the wrong place leaves the loop listening after Stop, holding the input
+  -- | for a take nobody asked for.
+  setVerb loop v = runAction (Machine.Command (Verb.at loop v))
+  setListening loop on = setVerb loop (Verb.LevelArm on)
   -- **The one thing this page adds to a take.** On a face whose layers are
   -- alternates, a loop that is not yet declared so is declared before the
   -- take, the copy or the duplicate that grows it — every path here that
