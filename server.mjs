@@ -700,7 +700,17 @@ const server = http.createServer(async (req, res) => {
       const dest = String(body.dest || "");
       if (!cards().includes(dest)) return json(res, 200, { ok: false, output: `${dest} is not a mounted card` });
       writeCard(readCard());
-      const r = await run(["kit", "build", CARD_TOML, dest, "--write", "--overwrite"]);
+      // **Never `--overwrite` a card without being asked to.**
+      //
+      // `execute` removes each kit slot's whole directory before writing it,
+      // so an unconditional --overwrite turns "write my nine kits" into
+      // "delete whatever nine kits happen to share those letters". On the
+      // FACTORY card, whose banks A, B and C hold Squarp's artist content,
+      // that would have been nine of theirs. The flag that exists to stop this
+      // was being passed every time, so the guard never fired once.
+      const args = ["kit", "build", CARD_TOML, dest, "--write"];
+      if (body.replace) args.push("--overwrite");
+      const r = await run(args);
       return json(res, 200, r);
     }
     if (url.pathname === "/api/card/clear" && req.method === "POST") {
