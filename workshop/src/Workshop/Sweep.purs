@@ -40,6 +40,8 @@ module Workshop.Sweep
   , Step
   , steps
   , resample
+  , remember
+  , restore
   ) where
 
 import Prelude
@@ -48,6 +50,7 @@ import Data.Array as Array
 import Data.Int as Int
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Number as Number
+import Effect (Effect)
 
 -- | **Only the monotone families.**
 -- |
@@ -365,3 +368,110 @@ steps p = map one (Array.range 0 (p.positions - 1))
     }
   v q i = fromMaybe 0.0 (Array.index q.values i)
   lerp a b t = a + (b - a) * t
+
+
+-- ---------------------------------------------------------------------------
+-- Keeping it across a reload
+-- ---------------------------------------------------------------------------
+
+-- | **A plan has to survive a force-reload**, and this was learned the hard
+-- | way: the second BIA run captured all twelve hits and every one of them was
+-- | at the default spacing, because reloading the page to pick up a fix had
+-- | quietly reset the plan that had just been tuned. The take says so — 0.836 s
+-- | between triggers, which is `120 + 700` and nothing else.
+-- |
+-- | Which matters more here than for most settings, because the whole feature
+-- | IS a loop of run, listen, bend, run again — and a page you reload between
+-- | runs is a loop that keeps starting over.
+-- |
+-- | Stored flat, with `-1` for "not routed": `Maybe` does not survive a round
+-- | trip through `JSON.stringify` in any shape worth defending, and a sentinel
+-- | that cannot collide with a real bus number is honest about what it is.
+type PlainParam =
+  { name :: String
+  , cv :: Int, cvLo :: Number, cvHi :: Number
+  , cc :: Int, ccLo :: Int, ccHi :: Int
+  , channel :: Int
+  , values :: Array Number
+  , seed :: String
+  }
+
+type Plain =
+  { positions :: Int
+  , params :: Array PlainParam
+  , gate :: Int
+  , gateLevel :: Number
+  , note :: Int
+  , trigChannel :: Int
+  , velocity :: Int
+  , holdMs :: Int
+  , port :: String
+  , settleMs :: Int
+  , spacingMs :: Int
+  }
+
+-- | The JS keeps the default as the base and merges the stored fields over it,
+-- | so a plan written by an older build — one with a field this one has since
+-- | added — comes back usable instead of coming back broken.
+foreign import savePlain :: Plain -> Effect Unit
+foreign import loadPlain :: Plain -> Effect Plain
+
+remember :: Plan -> Effect Unit
+remember = savePlain <<< flatten
+
+restore :: Plan -> Effect Plan
+restore d = map unflatten (loadPlain (flatten d))
+
+flatten :: Plan -> Plain
+flatten p =
+  { positions: p.positions
+  , params: map one p.params
+  , gate: fromMaybe (-1) p.trigger.gate
+  , gateLevel: p.trigger.gateLevel
+  , note: fromMaybe (-1) p.trigger.note
+  , trigChannel: p.trigger.channel
+  , velocity: p.trigger.velocity
+  , holdMs: p.trigger.ms
+  , port: p.port
+  , settleMs: p.settleMs
+  , spacingMs: p.spacingMs
+  }
+  where
+  one q =
+    { name: q.name
+    , cv: fromMaybe (-1) q.cv, cvLo: q.cvLo, cvHi: q.cvHi
+    , cc: fromMaybe (-1) q.cc, ccLo: q.ccLo, ccHi: q.ccHi
+    , channel: q.channel
+    , values: q.values
+    , seed: shapeName q.seed
+    }
+
+unflatten :: Plain -> Plan
+unflatten p =
+  { positions: clamp 2 24 p.positions
+  , params: map one p.params
+  , trigger:
+      { gate: some p.gate
+      , gateLevel: clamp (-1.0) 1.0 p.gateLevel
+      , note: some p.note
+      , channel: clamp 1 16 p.trigChannel
+      , velocity: clamp 1 127 p.velocity
+      , ms: clamp 1 5000 p.holdMs
+      }
+  , port: p.port
+  , settleMs: clamp 0 5000 p.settleMs
+  , spacingMs: clamp 50 20000 p.spacingMs
+  }
+  where
+  some n = if n < 0 then Nothing else Just n
+  one q =
+    { name: q.name
+    , cv: some q.cv, cvLo: clamp (-1.0) 1.0 q.cvLo, cvHi: clamp (-1.0) 1.0 q.cvHi
+    , cc: some q.cc, ccLo: clamp 0 127 q.ccLo, ccHi: clamp 0 127 q.ccHi
+    , channel: clamp 1 16 q.channel
+    -- The stored row may be a different length from the stored position count
+    -- if either was written by a build that disagreed; resampling makes them
+    -- agree rather than leaving a row the grid cannot draw.
+    , values: resample (clamp 2 24 p.positions) (map (clamp 0.0 1.0) q.values)
+    , seed: fromMaybe Linear (shapeOf q.seed)
+    }

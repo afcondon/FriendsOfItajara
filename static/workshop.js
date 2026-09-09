@@ -9543,12 +9543,37 @@
     };
   };
 
+  // output/Workshop.Sweep/foreign.js
+  var KEY = "workshop.sweep.v1";
+  var savePlain = (p2) => () => {
+    try {
+      localStorage.setItem(KEY, JSON.stringify(p2));
+    } catch (_) {
+    }
+  };
+  var loadPlain = (dflt) => () => {
+    let stored = null;
+    try {
+      const s = localStorage.getItem(KEY);
+      stored = s ? JSON.parse(s) : null;
+    } catch (_) {
+    }
+    if (!stored || typeof stored !== "object") return dflt;
+    const params = Array.isArray(stored.params) && stored.params.length ? stored.params.map((q2) => ({
+      ...dflt.params[0],
+      ...q2,
+      values: Array.isArray(q2.values) ? q2.values.map(Number) : dflt.params[0].values
+    })) : dflt.params;
+    return { ...dflt, ...stored, params };
+  };
+
   // output/Workshop.Sweep/index.js
   var map29 = /* @__PURE__ */ map(functorMaybe);
   var map111 = /* @__PURE__ */ map(functorArray);
-  var identity10 = /* @__PURE__ */ identity(categoryFn);
   var clamp2 = /* @__PURE__ */ clamp(ordNumber);
   var clamp1 = /* @__PURE__ */ clamp(ordInt);
+  var map210 = /* @__PURE__ */ map(functorEffect);
+  var identity10 = /* @__PURE__ */ identity(categoryFn);
   var show6 = /* @__PURE__ */ show(showInt);
   var Linear = /* @__PURE__ */ (function() {
     function Linear2() {
@@ -10108,7 +10133,7 @@
       return "CircleInOut";
     }
     ;
-    throw new Error("Failed pattern match at Workshop.Sweep (line 88, column 13 - line 104, column 31): " + [v.constructor.name]);
+    throw new Error("Failed pattern match at Workshop.Sweep (line 91, column 13 - line 107, column 31): " + [v.constructor.name]);
   };
   var shapeOf = function(s) {
     return find2(function(x) {
@@ -10154,11 +10179,85 @@
           })(range2(0)(n - 1 | 0));
         }
         ;
-        throw new Error("Failed pattern match at Workshop.Sweep (line 250, column 17 - line 258, column 36): " + [v.constructor.name]);
+        throw new Error("Failed pattern match at Workshop.Sweep (line 253, column 17 - line 261, column 36): " + [v.constructor.name]);
       }
       ;
-      throw new Error("Failed pattern match at Workshop.Sweep (line 246, column 1 - line 246, column 48): " + [n.constructor.name, xs.constructor.name]);
+      throw new Error("Failed pattern match at Workshop.Sweep (line 249, column 1 - line 249, column 48): " + [n.constructor.name, xs.constructor.name]);
     };
+  };
+  var unflatten = function(p2) {
+    var some = function(n) {
+      var $65 = n < 0;
+      if ($65) {
+        return Nothing.value;
+      }
+      ;
+      return new Just(n);
+    };
+    var one2 = function(q2) {
+      return {
+        name: q2.name,
+        cv: some(q2.cv),
+        cvLo: clamp2(-1)(1)(q2.cvLo),
+        cvHi: clamp2(-1)(1)(q2.cvHi),
+        cc: some(q2.cc),
+        ccLo: clamp1(0)(127)(q2.ccLo),
+        ccHi: clamp1(0)(127)(q2.ccHi),
+        channel: clamp1(1)(16)(q2.channel),
+        values: resample(clamp1(2)(24)(p2.positions))(map111(clamp2(0)(1))(q2.values)),
+        seed: fromMaybe(Linear.value)(shapeOf(q2.seed))
+      };
+    };
+    return {
+      positions: clamp1(2)(24)(p2.positions),
+      params: map111(one2)(p2.params),
+      trigger: {
+        gate: some(p2.gate),
+        gateLevel: clamp2(-1)(1)(p2.gateLevel),
+        note: some(p2.note),
+        channel: clamp1(1)(16)(p2.trigChannel),
+        velocity: clamp1(1)(127)(p2.velocity),
+        ms: clamp1(1)(5e3)(p2.holdMs)
+      },
+      port: p2.port,
+      settleMs: clamp1(0)(5e3)(p2.settleMs),
+      spacingMs: clamp1(50)(2e4)(p2.spacingMs)
+    };
+  };
+  var flatten = function(p2) {
+    var one2 = function(q2) {
+      return {
+        name: q2.name,
+        cv: fromMaybe(-1 | 0)(q2.cv),
+        cvLo: q2.cvLo,
+        cvHi: q2.cvHi,
+        cc: fromMaybe(-1 | 0)(q2.cc),
+        ccLo: q2.ccLo,
+        ccHi: q2.ccHi,
+        channel: q2.channel,
+        values: q2.values,
+        seed: shapeName(q2.seed)
+      };
+    };
+    return {
+      positions: p2.positions,
+      params: map111(one2)(p2.params),
+      gate: fromMaybe(-1 | 0)(p2.trigger.gate),
+      gateLevel: p2.trigger.gateLevel,
+      note: fromMaybe(-1 | 0)(p2.trigger.note),
+      trigChannel: p2.trigger.channel,
+      velocity: p2.trigger.velocity,
+      holdMs: p2.trigger.ms,
+      port: p2.port,
+      settleMs: p2.settleMs,
+      spacingMs: p2.spacingMs
+    };
+  };
+  var remember = function($116) {
+    return savePlain(flatten($116));
+  };
+  var restore = function(d) {
+    return map210(unflatten)(loadPlain(flatten(d)));
   };
   var at2 = function(sh) {
     return function(t) {
@@ -10181,8 +10280,8 @@
         ;
         if (v instanceof QuadInOut) {
           return function(u2) {
-            var $62 = u2 < 0.5;
-            if ($62) {
+            var $67 = u2 < 0.5;
+            if ($67) {
               return 2 * u2 * u2;
             }
             ;
@@ -10205,8 +10304,8 @@
         ;
         if (v instanceof CubicInOut) {
           return function(u2) {
-            var $63 = u2 < 0.5;
-            if ($63) {
+            var $68 = u2 < 0.5;
+            if ($68) {
               return 4 * u2 * u2 * u2;
             }
             ;
@@ -10234,8 +10333,8 @@
         ;
         if (v instanceof ExpIn) {
           return function(u2) {
-            var $64 = u2 === 0;
-            if ($64) {
+            var $69 = u2 === 0;
+            if ($69) {
               return 0;
             }
             ;
@@ -10245,8 +10344,8 @@
         ;
         if (v instanceof ExpOut) {
           return function(u2) {
-            var $65 = u2 === 1;
-            if ($65) {
+            var $70 = u2 === 1;
+            if ($70) {
               return 1;
             }
             ;
@@ -10256,18 +10355,18 @@
         ;
         if (v instanceof ExpInOut) {
           return function(u2) {
-            var $66 = u2 === 0;
-            if ($66) {
+            var $71 = u2 === 0;
+            if ($71) {
               return 0;
             }
             ;
-            var $67 = u2 === 1;
-            if ($67) {
+            var $72 = u2 === 1;
+            if ($72) {
               return 1;
             }
             ;
-            var $68 = u2 < 0.5;
-            if ($68) {
+            var $73 = u2 < 0.5;
+            if ($73) {
               return pow(2)(20 * u2 - 10) / 2;
             }
             ;
@@ -10289,8 +10388,8 @@
         ;
         if (v instanceof CircleInOut) {
           return function(u2) {
-            var $69 = u2 < 0.5;
-            if ($69) {
+            var $74 = u2 < 0.5;
+            if ($74) {
               return (1 - sqrt(1 - pow(2 * u2)(2))) / 2;
             }
             ;
@@ -10298,7 +10397,7 @@
           };
         }
         ;
-        throw new Error("Failed pattern match at Workshop.Sweep (line 114, column 9 - line 138, column 77): " + [v.constructor.name]);
+        throw new Error("Failed pattern match at Workshop.Sweep (line 117, column 9 - line 141, column 77): " + [v.constructor.name]);
       };
       return clamp2(0)(1)(raw(sh)(clamp2(0)(1)(t)));
     };
@@ -10315,7 +10414,7 @@
         })(range2(0)(n - 1 | 0));
       }
       ;
-      throw new Error("Failed pattern match at Workshop.Sweep (line 234, column 1 - line 234, column 42): " + [sh.constructor.name, n.constructor.name]);
+      throw new Error("Failed pattern match at Workshop.Sweep (line 237, column 1 - line 237, column 42): " + [sh.constructor.name, n.constructor.name]);
     };
   };
   var rampOf = function(n) {
@@ -10382,8 +10481,8 @@
       };
     };
     var noteOf = function(v) {
-      var $72 = v === "";
-      if ($72) {
+      var $77 = v === "";
+      if ($77) {
         return Nothing.value;
       }
       ;
@@ -10405,16 +10504,16 @@
       };
     };
     var ccOf = function(v) {
-      var $73 = v === "";
-      if ($73) {
+      var $78 = v === "";
+      if ($78) {
         return Nothing.value;
       }
       ;
       return map29(clamp1(0)(127))(fromString2(v));
     };
     var busOf = function(v) {
-      var $74 = v === "";
-      if ($74) {
+      var $79 = v === "";
+      if ($79) {
         return Nothing.value;
       }
       ;
@@ -10450,8 +10549,8 @@
       ;
       if (v instanceof AddParam) {
         return function(p2) {
-          var $77 = length3(p2.params) >= 7;
-          if ($77) {
+          var $82 = length3(p2.params) >= 7;
+          if ($82) {
             return p2;
           }
           ;
@@ -10816,7 +10915,7 @@
         };
       }
       ;
-      throw new Error("Failed pattern match at Workshop.Sweep (line 297, column 10 - line 333, column 77): " + [v.constructor.name]);
+      throw new Error("Failed pattern match at Workshop.Sweep (line 300, column 10 - line 336, column 77): " + [v.constructor.name]);
     };
   })();
 
@@ -11409,7 +11508,7 @@
         })(st.cardView.value0.rows);
       }
       ;
-      throw new Error("Failed pattern match at Workshop.Main (line 673, column 17 - line 678, column 18): " + [st.cardView.constructor.name]);
+      throw new Error("Failed pattern match at Workshop.Main (line 680, column 17 - line 685, column 18): " + [st.cardView.constructor.name]);
     };
     var fits = function(v) {
       return !taken(v) && (!wide || !taken(v + 1 | 0));
@@ -11481,7 +11580,7 @@
         })())]);
       }
       ;
-      throw new Error("Failed pattern match at Workshop.Main (line 1127, column 3 - line 1149, column 77): ");
+      throw new Error("Failed pattern match at Workshop.Main (line 1134, column 3 - line 1156, column 77): ");
     })();
     var small2 = function(lbl) {
       return function(v) {
@@ -11519,7 +11618,7 @@
         })(st.looper)), span3([class_("ws-muted")])([text5("pressing an input arms the take and starts the run, the same gesture as recording by hand. The take closes itself when the last position has sounded.")])];
       }
       ;
-      throw new Error("Failed pattern match at Workshop.Main (line 827, column 3 - line 847, column 10): ");
+      throw new Error("Failed pattern match at Workshop.Main (line 834, column 3 - line 854, column 10): ");
     })();
     var sweepModal = (function() {
       if (!st.sweepOpen) {
@@ -11538,7 +11637,7 @@
         })())])])(runOrStop))])]);
       }
       ;
-      throw new Error("Failed pattern match at Workshop.Main (line 798, column 3 - line 825, column 12): ");
+      throw new Error("Failed pattern match at Workshop.Main (line 805, column 3 - line 832, column 12): ");
     })();
     var row = function(r) {
       return tr_([td_([text5(r.bank)]), td_([text5(r.kit)]), td_([text5(show13(r.voice) + (function() {
@@ -11629,7 +11728,7 @@
             })])([text5("replace")])]);
           }
           ;
-          throw new Error("Failed pattern match at Workshop.Main (line 1034, column 13 - line 1058, column 20): " + [occupant.constructor.name]);
+          throw new Error("Failed pattern match at Workshop.Main (line 1041, column 13 - line 1065, column 20): " + [occupant.constructor.name]);
         })(), (function() {
           if (occupant instanceof Just && length3(occupant.value0.sets) >= 1) {
             return label4([class_("ws-field is-tight")])([span_([text5("picked by")]), select3([onValueChange(SetLayerMode.create)])(map31(function(m) {
@@ -11661,11 +11760,11 @@
             })() + " \u2014 add stands beside them, replace puts this in their place")))))]);
           }
           ;
-          throw new Error("Failed pattern match at Workshop.Main (line 1084, column 13 - line 1091, column 90): " + [occupant.constructor.name]);
+          throw new Error("Failed pattern match at Workshop.Main (line 1091, column 13 - line 1098, column 90): " + [occupant.constructor.name]);
         })()]);
       }
       ;
-      throw new Error("Failed pattern match at Workshop.Main (line 1010, column 3 - line 1092, column 12): ");
+      throw new Error("Failed pattern match at Workshop.Main (line 1017, column 3 - line 1099, column 12): ");
     })();
     var lp = loop2(st);
     var srcNow = maybe(0)(function(v) {
@@ -11740,7 +11839,7 @@
         })(), span3([class_("ws-muted")])([text5(blurb2(st.divider))])]);
       }
       ;
-      throw new Error("Failed pattern match at Workshop.Main (line 980, column 3 - line 998, column 12): ");
+      throw new Error("Failed pattern match at Workshop.Main (line 987, column 3 - line 1005, column 12): ");
     })();
     var declaredVsFound = (function() {
       if (!st.swept) {
@@ -11759,7 +11858,7 @@
         return span3([class_("ws-warn")])([text5("you swept " + (show13(st.sweep.positions) + (" positions and this divided into " + (show13(length3(st.regions)) + " \u2014 try another divider, or a wider gap, before sending it"))))]);
       }
       ;
-      throw new Error("Failed pattern match at Workshop.Main (line 1154, column 3 - line 1162, column 80): ");
+      throw new Error("Failed pattern match at Workshop.Main (line 1161, column 3 - line 1169, column 80): ");
     })();
     var connection = (function() {
       if (st.looper instanceof Nothing) {
@@ -11770,7 +11869,7 @@
         return span3([class_("ws-ok")])([text5("daemon")]);
       }
       ;
-      throw new Error("Failed pattern match at Workshop.Main (line 744, column 16 - line 746, column 80): " + [st.looper.constructor.name]);
+      throw new Error("Failed pattern match at Workshop.Main (line 751, column 16 - line 753, column 80): " + [st.looper.constructor.name]);
     })();
     var chip = function(n) {
       return function(s) {
@@ -11829,7 +11928,7 @@
         ;
       }
       ;
-      throw new Error("Failed pattern match at Workshop.Main (line 1235, column 9 - line 1254, column 20): " + [st.cardView.constructor.name]);
+      throw new Error("Failed pattern match at Workshop.Main (line 1242, column 9 - line 1261, column 20): " + [st.cardView.constructor.name]);
     })()]);
     var brightest = fromMaybe(0)(last2(sort2(map31(function(v) {
       return v.zcr;
@@ -11942,7 +12041,7 @@
         })])([text5("Keep none")]), label4([class_("ws-quiet")])([span_([text5("more")]), input2([type_20(InputRange.value), min5(25), max6(1200), step3(new Step(25)), value14(show9(st.minGap)), onValueChange(SetGap.create), title2("how close two sounds can be and still be two, in milliseconds")]), span_([text5("fewer")]), span3([class_("ws-gapval")])([text5(show13(round2(st.minGap)) + " ms")])]), label4([class_("ws-hover")])([input2([type_20(InputCheckbox.value), checked2(st.hoverPlays), onChecked(SetHoverPlays.create)]), span_([text5("hover plays")])])]), dividerRow, div2([class_("ws-grid")])(mapWithIndex2(tile)(st.regions)), sendRow]);
       }
       ;
-      throw new Error("Failed pattern match at Workshop.Main (line 918, column 3 - line 972, column 12): ");
+      throw new Error("Failed pattern match at Workshop.Main (line 925, column 3 - line 979, column 12): ");
     })();
     var armRow = div2([class_("ws-arm")])([span3([class_("ws-arm-label")])([text5("Arm on")]), div2([class_("ws-chips")])(maybe([text5("no daemon")])(function(top3) {
       return mapWithIndex2(chip)(top3.sources);
@@ -12016,7 +12115,7 @@
       return v.value0.kind === name15(st.kind) && (v.value0.stereo === notEq1(foldsTo(st.kind))(ToMono.value) && (v.value0.slicer > 0 === (joins(st.kind) || isEqual(st.divider)) && length3(v.value0.sets) < 12));
     }
     ;
-    throw new Error("Failed pattern match at Workshop.Main (line 646, column 17 - line 652, column 34): " + [v.constructor.name]);
+    throw new Error("Failed pattern match at Workshop.Main (line 653, column 17 - line 659, column 34): " + [v.constructor.name]);
   };
   var armOn = function(dictMonadAff) {
     var send1 = send2(dictMonadAff);
@@ -12039,7 +12138,7 @@
                         return pure10(unit);
                       }
                       ;
-                      throw new Error("Failed pattern match at Workshop.Main (line 494, column 3 - line 496, column 24): " + [v.constructor.name]);
+                      throw new Error("Failed pattern match at Workshop.Main (line 501, column 3 - line 503, column 24): " + [v.constructor.name]);
                     })())(function() {
                       return discard12(send1(new LevelArm(levelArmed)))(function() {
                         return discard12(send1(Record.value))(function() {
@@ -12344,7 +12443,7 @@
                         };
                       }
                       ;
-                      throw new Error("Failed pattern match at Workshop.Main (line 627, column 22 - line 631, column 61): " + [v.constructor.name]);
+                      throw new Error("Failed pattern match at Workshop.Main (line 634, column 22 - line 638, column 61): " + [v.constructor.name]);
                     }))(function() {
                       return modify_3(note(show13(n) + ((function() {
                         var $275 = n === 1;
@@ -12366,7 +12465,7 @@
                 ;
               }
               ;
-              throw new Error("Failed pattern match at Workshop.Main (line 598, column 7 - line 635, column 80): " + [r.constructor.name]);
+              throw new Error("Failed pattern match at Workshop.Main (line 605, column 7 - line 642, column 80): " + [r.constructor.name]);
             });
           });
         });
@@ -12496,28 +12595,31 @@
     return function(v) {
       if (v instanceof Init) {
         return bind6(liftEffect12(slugFor(DrumHits.value)))(function(n) {
-          return discard12(modify_3(function(v1) {
-            var $284 = {};
-            for (var $285 in v1) {
-              if ({}.hasOwnProperty.call(v1, $285)) {
-                $284[$285] = v1[$285];
+          return bind6(liftEffect12(restore(emptyPlan)))(function(pl) {
+            return discard12(modify_3(function(v1) {
+              var $284 = {};
+              for (var $285 in v1) {
+                if ({}.hasOwnProperty.call(v1, $285)) {
+                  $284[$285] = v1[$285];
+                }
+                ;
               }
               ;
-            }
-            ;
-            $284.name = n;
-            return $284;
-          }))(function() {
-            return discard12(handleAction(dictMonadAff)(RefreshCard.value))(function() {
-              return discard12(liftEffect12(connect2(defaultUrl)))(function() {
-                return $$void8(subscribe2(makeEmitter(function(emit) {
-                  return function __do2() {
-                    var fiber = launchAff(forever2(discard23(delay(100))(function() {
-                      return liftEffect8(emit(Poll.value));
-                    })))();
-                    return launchAff_(killFiber(error("stopped"))(fiber));
-                  };
-                })));
+              $284.name = n;
+              $284.sweep = pl;
+              return $284;
+            }))(function() {
+              return discard12(handleAction(dictMonadAff)(RefreshCard.value))(function() {
+                return discard12(liftEffect12(connect2(defaultUrl)))(function() {
+                  return $$void8(subscribe2(makeEmitter(function(emit) {
+                    return function __do2() {
+                      var fiber = launchAff(forever2(discard23(delay(100))(function() {
+                        return liftEffect8(emit(Poll.value));
+                      })))();
+                      return launchAff_(killFiber(error("stopped"))(fiber));
+                    };
+                  })));
+                });
               });
             });
           });
@@ -12732,7 +12834,7 @@
             });
           }
           ;
-          throw new Error("Failed pattern match at Workshop.Main (line 284, column 5 - line 286, column 51): " + [r.constructor.name]);
+          throw new Error("Failed pattern match at Workshop.Main (line 288, column 5 - line 290, column 51): " + [r.constructor.name]);
         });
       }
       ;
@@ -12883,7 +12985,7 @@
                 })());
               }
               ;
-              throw new Error("Failed pattern match at Workshop.Main (line 293, column 5 - line 295, column 81): " + [r.constructor.name]);
+              throw new Error("Failed pattern match at Workshop.Main (line 297, column 5 - line 299, column 81): " + [r.constructor.name]);
             })())(function() {
               return handleAction(dictMonadAff)(RefreshCard.value);
             });
@@ -13053,7 +13155,7 @@
                   });
                 }
                 ;
-                throw new Error("Failed pattern match at Workshop.Main (line 335, column 9 - line 351, column 16): " + [r.constructor.name]);
+                throw new Error("Failed pattern match at Workshop.Main (line 339, column 9 - line 355, column 16): " + [r.constructor.name]);
               })())(function() {
                 return handleAction(dictMonadAff)(RefreshCard.value);
               });
@@ -13261,13 +13363,13 @@
               });
             }
             ;
-            throw new Error("Failed pattern match at Workshop.Main (line 399, column 7 - line 407, column 85): " + [r.constructor.name]);
+            throw new Error("Failed pattern match at Workshop.Main (line 403, column 7 - line 411, column 85): " + [r.constructor.name]);
           }));
         });
       }
       ;
       if (v instanceof SweepMsg) {
-        return modify_3(function(s) {
+        return discard12(modify_3(function(s) {
           var $398 = {};
           for (var $399 in s) {
             if ({}.hasOwnProperty.call(s, $399)) {
@@ -13278,6 +13380,10 @@
           ;
           $398.sweep = update(v.value0)(s.sweep);
           return $398;
+        }))(function() {
+          return bind6(get2)(function(st) {
+            return liftEffect12(remember(st.sweep));
+          });
         });
       }
       ;
@@ -13320,7 +13426,7 @@
             });
           }
           ;
-          throw new Error("Failed pattern match at Workshop.Main (line 415, column 5 - line 423, column 45): " + [st.sweepFork.constructor.name]);
+          throw new Error("Failed pattern match at Workshop.Main (line 422, column 5 - line 430, column 45): " + [st.sweepFork.constructor.name]);
         });
       }
       ;
@@ -13408,7 +13514,7 @@
         });
       }
       ;
-      throw new Error("Failed pattern match at Workshop.Main (line 212, column 16 - line 442, column 56): " + [v.constructor.name]);
+      throw new Error("Failed pattern match at Workshop.Main (line 212, column 16 - line 449, column 56): " + [v.constructor.name]);
     };
   };
   var component = function(dictMonadAff) {

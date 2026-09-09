@@ -212,7 +212,11 @@ handleAction :: forall o m. MonadAff m => Action -> H.HalogenM State Action () o
 handleAction = case _ of
   Init -> do
     n <- liftEffect (slugFor Kind.DrumHits)
-    H.modify_ _ { name = n }
+    -- The sweep plan as it was left. See `Workshop.Sweep.restore` — a run,
+    -- listen, bend, run again loop cannot survive a page that forgets between
+    -- runs, and reloading to pick up a fix is exactly when it forgets.
+    pl <- liftEffect (Sweep.restore Sweep.emptyPlan)
+    H.modify_ _ { name = n, sweep = pl }
     handleAction RefreshCard
     liftEffect $ Socket.connect Socket.defaultUrl
     void $ H.subscribe $ HS.makeEmitter \emit -> do
@@ -405,7 +409,10 @@ handleAction = case _ of
           -- answered, so this says "not yet" rather than "not at all".
           when (Array.null ports) $ H.modify_
             (note "no MIDI ports yet — allow MIDI if Chrome asks; CV is unaffected")
-  SweepMsg m -> H.modify_ \s -> s { sweep = Sweep.update m s.sweep }
+  SweepMsg m -> do
+    H.modify_ \s -> s { sweep = Sweep.update m s.sweep }
+    st <- H.get
+    liftEffect (Sweep.remember st.sweep)
   -- | **Arming and running are one gesture**, for the same reason arming and
   -- | choosing the input are: the run has to land inside a take, and a Run
   -- | button that assumed something was already recording would fail silently
