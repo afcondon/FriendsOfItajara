@@ -299,7 +299,21 @@ handleAction = case _ of
               , regions: keptRegions })))
         case r of
           Left e -> H.modify_ (note (Aff.message e) <<< _ { cardBusy = false })
-          Right w -> H.modify_ (note (lastLine w.output) <<< _ { cardBusy = false })
+          -- **A send establishes the kit, and later takes join it.**
+          --
+          -- The kit name used to follow the take name, so every take proposed
+          -- a fresh kit and four takes meant for one voice became four kits on
+          -- four voices. Adopting the name that was just used makes the kit a
+          -- place you are working, which is what a kit is; the free-voice
+          -- search and the add-as-layer verb are what keep that from
+          -- destroying anything, and they did not exist when the name was
+          -- first made to follow.
+          Right w -> H.modify_ \s ->
+            (note (lastLine w.output) s)
+              { cardBusy = false
+              , kit = if s.kit == "" then setName else s.kit
+              , kitMine = true
+              }
         handleAction RefreshCard
   Analyse -> analyse true
   Divide -> analyse false
@@ -441,16 +455,52 @@ analyse write = do
               -- warning made that visible, which is not the same as making it
               -- right: the default should be a place the take can go, and only
               -- then a warning for when you deliberately aim elsewhere.
-              H.modify_ \s -> case freeVoice s of
-                Just v -> s { voice = v }
-                -- All four spoken for. Then the kit is full rather than the
-                -- voice taken, and the answer is a new kit, so let the name
-                -- take it over again.
-                Nothing -> s { kit = "", kitMine = false }
+              -- **Stay where this take could be a layer; move where it could not.**
+              --
+              -- Two different intentions wear the same gesture. Filling a kit
+              -- wants the next free voice; stacking layers wants to stay put
+              -- so `add as layer` is on offer. The difference is whether what
+              -- is already there is the same *shape* — same material, same
+              -- channels, same division — because that is exactly the
+              -- condition under which it could be a layer at all.
+              H.modify_ \s ->
+                if couldLayer s then s
+                else case freeVoice s of
+                  Just v -> s { voice = v }
+                  -- All four spoken for, so the kit is full rather than the
+                  -- voice taken, and the answer is a new kit.
+                  Nothing -> s { kit = "", kitMine = false }
               H.modify_ (note
                 (show n <> (if n == 1 then " division" else " divisions")
                   <> " over " <> fmt d.secs <> " s"
                   <> (if d.divides then "" else " (this kind is kept whole)")))
+
+-- | **Could this take stand beside what is on the chosen voice?**
+-- |
+-- | Only if it is the same shape. SLICER divides whatever is playing, so every
+-- | layer on a voice is cut by the same division and two layers wanting
+-- | different ones cannot both be right; and stereo claims the voice after it,
+-- | so it cannot sit beside mono. Where all that matches, staying put is
+-- | almost certainly what was meant — nobody records a second twelve-note
+-- | chromatic run to put it somewhere else.
+couldLayer :: State -> Boolean
+couldLayer st = case occupantOf st of
+  Nothing -> false
+  Just r ->
+    r.kind == Kind.name st.kind
+      && r.stereo == (Kind.foldsTo st.kind /= ToMono)
+      && (r.slicer > 0) == (Kind.joins st.kind || isEqual st.divider)
+      && Array.length r.sets < 12
+
+-- | What sits on the voice this send is aimed at, whatever it is.
+occupantOf :: State -> Maybe Http.CardRow
+occupantOf st =
+  let kitName = if st.kit == "" then st.name else st.kit
+  in do
+    v <- st.cardView
+    Array.find
+      (\r -> r.bank == st.bank && r.kit == kitName && r.voice == st.voice)
+      v.rows
 
 -- | **The lowest voice this take could go on without displacing anything.**
 -- |
