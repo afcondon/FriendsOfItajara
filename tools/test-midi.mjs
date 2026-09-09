@@ -115,10 +115,18 @@ const startCC = (voice) => voice * 10 + 4;
 
 // ------------------------------------------------------------------ the tests
 
-const write = (name, t, why) => {
+// **The setting the file needs goes in its name.**
+//
+// SLICER is global, so moving from a bank cut into 16 to one cut into 12 needs
+// a hand on the module, and forgetting it produces a convincing fault: the
+// start points land on boundaries computed for a division the module is not
+// using, and each trigger runs into the next slice. That cost three listening
+// sessions before the instruction moved from a document to where it is needed.
+const write = (name, t, why, slicer) => {
+  const full = slicer ? name.replace(/\.mid$/, `-SLICER${slicer}.mid`) : name;
   fs.mkdirSync(OUT, { recursive: true });
-  fs.writeFileSync(path.join(OUT, name), t.bytes());
-  console.log(`  ${name.padEnd(34)} ${why}`);
+  fs.writeFileSync(path.join(OUT, full), t.bytes());
+  console.log(`  ${full.padEnd(42)} ${why}`);
 };
 
 const card = JSON.parse(fs.readFileSync(CARD, "utf8"));
@@ -188,7 +196,8 @@ card.banks.forEach((bank, bi) => {
       }
       const barsA = inOrder.padToBars(4 + slots * step);
       write(`${slot}-slices-in-order.mid`, inOrder,
-        `${slots} slices, ${step} beat${step === 1 ? "" : "s"} each at 88.7bpm, ${barsA} bars`);
+        `${slots} slices, ${step} beat${step === 1 ? "" : "s"} each at 88.7bpm, ${barsA} bars`,
+        slots);
 
       // Reversed, which is the case the grid phase was fixed for: in order a
       // slice's head can carry its neighbour's tail unnoticed, and out of
@@ -203,7 +212,8 @@ card.banks.forEach((bank, bi) => {
       }
       const barsB = shuffled.padToBars(4 + slots * step);
       write(`${slot}-slices-reversed.mid`, shuffled,
-        `the same ${slots} backwards, ${barsB} bars — a flam is the grid phase`);
+        `the same ${slots} backwards, ${barsB} bars — a flam is the grid phase`,
+        slots);
     }
 
     // --- both axes at once ------------------------------------------------
@@ -235,7 +245,8 @@ card.banks.forEach((bank, bi) => {
       const bars = t.padToBars(at);
       write(`${slot}-two-axes.mid`, t,
         `${nLayers} velocities x ${slots} slices, ${step} beat${step === 1 ? "" : "s"} `
-        + `each (slot is ${(stack.slotSecs || 0).toFixed(2)}s), ${bars} bars`);
+        + `each (slot is ${(stack.slotSecs || 0).toFixed(2)}s), ${bars} bars`,
+        slots);
     }
 
     // --- which trigger notes answer --------------------------------------
