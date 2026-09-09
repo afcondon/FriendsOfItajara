@@ -278,7 +278,15 @@ handleAction = case _ of
               , voice: st.voice
               , kind: Kind.name st.kind
               , stereo: Kind.foldsTo st.kind /= ToMono
-              , join: Kind.joins st.kind
+              -- **Equal slices are always one file, whatever the material.**
+              --
+              -- The kind says what a take usually becomes, but the divider
+              -- says what its pieces actually are — and pieces of the same
+              -- length exist to be indexed by the start point, which only
+              -- works inside one file. Without this a four-minute drone cut
+              -- into 32 would have tried to be 32 layers, and the module
+              -- plays twelve.
+              , join: Kind.joins st.kind || isEqual st.divider
               , regions: keptRegions })))
         case r of
           Left e -> H.modify_ (note (Aff.message e) <<< _ { cardBusy = false })
@@ -421,6 +429,12 @@ analyse write = do
                 (show n <> (if n == 1 then " division" else " divisions")
                   <> " over " <> fmt d.secs <> " s"
                   <> (if d.divides then "" else " (this kind is kept whole)")))
+
+-- | Uniform slots, which is the case the start point was made for.
+isEqual :: Divider -> Boolean
+isEqual = case _ of
+  Divider.Equal _ -> true
+  _ -> false
 
 -- | **Should this take be given a name of its own?**
 -- |
