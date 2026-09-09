@@ -128,3 +128,16 @@ body {
   font: 11px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted);
   white-space: pre-wrap; max-height: 260px; overflow: auto; }
 .ws-plan.is-bad { border-color: var(--hot); color: var(--ink); }
+
+/* The dividing algorithms: a row of named questions, with the chosen one's
+   explanation beside them. Deliberately quiet — you read it once, then you
+   read the tiles. */
+.ws-dividers {
+  display: flex; align-items: center; flex-wrap: wrap;
+  gap: 10px; margin: 2px 0 14px;
+}
+.ws-dividers .ws-chips { margin-bottom: 0; }
+.ws-dividers .ws-chip { min-width: 0; padding: 5px 11px; font-size: 13px; }
+.ws-dividers .ws-muted { flex: 1 1 220px; font-size: 12px; line-height: 1.45; }
+.ws-dividers .ws-field { margin: 0; }
+.ws-dividers .ws-field input { width: 62px; }

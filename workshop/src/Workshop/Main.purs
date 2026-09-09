@@ -52,6 +52,9 @@ import Workshop.Http as Http
 import Workshop.Wave as Wave
 import Workshop.Kind (Close(..), Fold(..), Kind)
 import Workshop.Kind as Kind
+import Workshop.Slug (slugFor)
+import Workshop.Divider (Divider)
+import Workshop.Divider as Divider
 
 main :: Effect Unit
 main = HA.runHalogenAff do
@@ -106,6 +109,8 @@ type State =
   -- | 600 ms it kept all eleven hits including the softest, where the level
   -- | knob had dropped that one and merged its neighbour into the tile before.
   , minGap :: Number
+  , divider :: Divider
+  , equalN :: Int
   -- | The virtual card, as the server flattens it, plus what `kit build` says
   -- | about it. Refreshed after anything that could change it.
   , cardView :: Maybe Http.CardView
@@ -129,6 +134,8 @@ data Action
   | Analyse
   | Divide
   | SetGap String
+  | PickDivider Divider
+  | SetEqualN String
   | RefreshCard
   | SetBank String
   | SetKit String
@@ -143,10 +150,10 @@ component :: forall q i o m. MonadAff m => H.Component q i o m
 component = H.mkComponent
   { initialState: \_ ->
       { looper: Nothing, kind: Kind.DrumHits, bars: 1
-      , armed: false, name: "kick", log: []
+      , armed: false, name: "", log: []
       , peaks: Nothing, regions: [], keep: Set.empty, busy: false
       , hoverPlays: false, playing: Nothing, showing: "", waiting: false
-      , minGap: 300.0
+      , minGap: 300.0, divider: Divider.Attacks, equalN: 16
       , cardView: Nothing, bank: "WORKSHOP", kit: "", voice: 1, cardBusy: false }
   , render
   , eval: H.mkEval H.defaultEval { handleAction = handleAction, initialize = Just Init }
@@ -174,6 +181,8 @@ loop st = st.looper >>= \top -> Array.index top.loops scratch
 handleAction :: forall o m. MonadAff m => Action -> H.HalogenM State Action () o m Unit
 handleAction = case _ of
   Init -> do
+    n <- liftEffect (slugFor Kind.DrumHits)
+    H.modify_ _ { name = n }
     handleAction RefreshCard
     liftEffect $ Socket.connect Socket.defaultUrl
     void $ H.subscribe $ HS.makeEmitter \emit -> do
@@ -208,7 +217,15 @@ handleAction = case _ of
       when (st2.waiting && lp.layers > 0 && not Socket.isWriting lp && not lp.armed) do
         H.modify_ _ { waiting = false }
         handleAction Analyse
-  PickKind k -> H.modify_ _ { kind = k }
+  PickKind k -> do
+    H.modify_ _ { kind = k, divider = Divider.defaultFor k }
+    st <- H.get
+    -- The name says what the take holds, so changing what you are about to
+    -- record renames it — unless you have typed one of your own, which the
+    -- generated shape lets us recognise.
+    when (spent st) do
+      n <- liftEffect (slugFor k)
+      H.modify_ _ { name = n }
   SetBars v -> H.modify_ \s ->
     let n = clamp 1 64 (fromMaybe s.bars (Int.fromString v))
     in s { bars = n, kind = case s.kind of
@@ -270,6 +287,21 @@ handleAction = case _ of
     H.modify_ \s -> s { minGap = fromMaybe s.minGap (Number.fromString v) }
     st <- H.get
     when (st.showing /= "") (analyse false)
+  -- Choosing an algorithm re-divides at once. It costs one pass over a take
+  -- already on disk, and the whole value of naming them is being able to see
+  -- both answers next to each other.
+  PickDivider dv -> do
+    H.modify_ _ { divider = dv }
+    st <- H.get
+    when (st.showing /= "") (analyse false)
+  SetEqualN v -> do
+    H.modify_ \s ->
+      let n = clamp 2 128 (fromMaybe s.equalN (Int.fromString v))
+      in s { equalN = n, divider = case s.divider of
+                                     Divider.Equal _ -> Divider.Equal n
+                                     other -> other }
+    st <- H.get
+    when (st.showing /= "" && Divider.needsCount st.divider) (analyse false)
   SetHoverPlays b -> do
     unless b (liftEffect Audio.stop)
     H.modify_ _ { hoverPlays = b }
@@ -320,6 +352,12 @@ handleAction = case _ of
     -- attack that triggered it is inside the take.
     send (LevelArm true)
     send Record
+    -- A fresh name unless you gave it one that has not been used yet. This is
+    -- the whole of the overwrite fix: the export is `exl <name>`, so a name
+    -- that already belongs to a take on disk is a name that destroys it.
+    when (spent st) do
+      n <- liftEffect (slugFor st.kind)
+      H.modify_ _ { name = n }
     H.modify_ (note (Kind.prompt st.kind) <<< _ { armed = true })
   Close -> do
     st <- H.get
@@ -359,7 +397,11 @@ analyse write = do
         -- the folder is there a moment later.
         H.liftAff (delay (Milliseconds 900.0))
       let takeName = if write then st.name else st.showing
-      r <- H.liftAff (attempt (toAffE (Http.divisions takeName (Kind.material st.kind) st.minGap)))
+      r <- H.liftAff (attempt (toAffE (Http.divisions
+            { take: takeName
+            , as: Kind.material st.kind
+            , by: Divider.name st.divider
+            , minGap: st.minGap })))
       case r of
         Left e -> H.modify_ (note ("could not analyse: " <> Aff.message e) <<< _ { busy = false })
         Right d
@@ -376,6 +418,14 @@ analyse write = do
                 (show n <> (if n == 1 then " division" else " divisions")
                   <> " over " <> fmt d.secs <> " s"
                   <> (if d.divides then "" else " (this kind is kept whole)")))
+
+-- | **Is this name free to be taken?**
+-- |
+-- | Empty, or already worn by the take now on screen — which is to say, a name
+-- | that `exl` would write straight over. A name you typed and have not yet
+-- | spent is yours and is left alone.
+spent :: State -> Boolean
+spent st = st.name == "" || st.name == st.showing
 
 -- | The last thing a command said, which is its summary. The rest is a list of
 -- | files and belongs in the log it already went to.
@@ -556,10 +606,46 @@ render st =
                   , HH.span_ [ HH.text "hover plays" ]
                   ]
               ]
+          , dividerRow
           , HH.div [ HP.class_ (HH.ClassName "ws-grid") ]
               (Array.mapWithIndex tile st.regions)
           , sendRow
           ]
+
+  -- | **The algorithms, by name.**
+  -- |
+  -- | Not settings of one detector — different questions, and one of them is
+  -- | right for material the others cannot see at all. Naming them is the
+  -- | whole interface: press one, and the tiles underneath say within a second
+  -- | whether it was the right question.
+  dividerRow
+    | not hasTake = HH.text ""
+    | otherwise =
+        HH.div [ HP.class_ (HH.ClassName "ws-dividers") ]
+          [ HH.span [ HP.class_ (HH.ClassName "ws-arm-label") ] [ HH.text "Divide" ]
+          , HH.div [ HP.class_ (HH.ClassName "ws-chips") ]
+              (map dividerBtn (Divider.all st.equalN))
+          , if Divider.needsCount st.divider
+              then HH.label [ HP.class_ (HH.ClassName "ws-field is-tight") ]
+                     [ HH.span_ [ HH.text "pieces" ]
+                     , HH.input
+                         [ HP.type_ HP.InputNumber, HP.value (show st.equalN)
+                         , HP.min 2.0, HP.max 128.0
+                         , HE.onValueInput SetEqualN ]
+                     ]
+              else HH.text ""
+          , HH.span [ HP.class_ (HH.ClassName "ws-muted") ]
+              [ HH.text (Divider.blurb st.divider) ]
+          ]
+
+  dividerBtn dv =
+    HH.button
+      [ HP.class_ (HH.ClassName ("ws-chip" <> if dv == st.divider then " on" else ""))
+      , HP.disabled st.busy
+      , HP.title (Divider.blurb dv)
+      , HE.onClick \_ -> PickDivider dv
+      ]
+      [ HH.text (Divider.label dv) ]
 
   -- | Where the kept tiles go. Beside them, because it acts on them.
   sendRow

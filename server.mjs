@@ -276,6 +276,17 @@ function onsets(body) {
   if (body.minGap != null && isFinite(Number(body.minGap))) {
     args.push("--min-gap", String(Math.min(2000, Math.max(5, Number(body.minGap)))));
   }
+  // **Which question to ask of the audio.**
+  //
+  // Not a refinement of one algorithm — a different one. Attacks finds where
+  // the signal changes fastest, which is exactly right for anything struck and
+  // meaningless for a pad that swells over two seconds. Gaps finds where the
+  // envelope comes back down, which is how six pad chords separate. The page
+  // offers both by name because no setting of either becomes the other.
+  if (body.by) args.push("--by", String(body.by).replace(/[^a-z0-9:]/g, ""));
+  if (body.gapDepth != null && isFinite(Number(body.gapDepth))) {
+    args.push("--gap-depth", String(Math.min(40, Math.max(4, Number(body.gapDepth)))));
+  }
   return new Promise((resolve) => {
     let out = "", err = "";
     let child;

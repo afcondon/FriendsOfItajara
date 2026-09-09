@@ -1,11 +1,11 @@
 // One call. The JS owns the wire shape so the PureScript can hold a record
 // with no `Maybe` in it: a failure comes back as `ok: false` with a sentence
 // in `output`, which is what the page shows either way.
-export const divisions = (take) => (as) => (minGap) => () =>
+export const divisions = (req) => () =>
   fetch("/api/onsets", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ take, as, minGap }),
+    body: JSON.stringify(req),
   })
     .then((r) => r.json())
     .then((d) => ({

@@ -31,7 +31,11 @@ type Divisions =
 
 -- | `POST /api/onsets` — a take's name, what it is, and how close two sounds
 -- | may be and still be two; back with where the detector thinks things begin.
-foreign import divisions :: String -> String -> Number -> Effect (Promise Divisions)
+-- | A record rather than four positional arguments, because `take` and `as`
+-- | and `by` are all strings and nothing would have caught them being swapped.
+foreign import divisions
+  :: { take :: String, as :: String, by :: String, minGap :: Number }
+  -> Effect (Promise Divisions)
 
 -- | **The virtual card, flattened for showing.**
 -- |
