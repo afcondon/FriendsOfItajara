@@ -22,7 +22,7 @@ import Data.Array as Array
 import Data.Foldable (for_)
 import Data.Int as Int
 import Data.Either (Either(..))
-import Data.Maybe (Maybe(..), fromMaybe, maybe)
+import Data.Maybe (Maybe(..), fromMaybe, isJust, maybe)
 import Data.Number as Number
 import Data.String as String
 -- `Bars` names a thing in both vocabularies — a length in the daemon's verbs
@@ -111,6 +111,7 @@ type State =
   , minGap :: Number
   , divider :: Divider
   , mine :: Boolean
+  , kitMine :: Boolean
   , equalN :: Int
   -- | The virtual card, as the server flattens it, plus what `kit build` says
   -- | about it. Refreshed after anything that could change it.
@@ -154,7 +155,7 @@ component = H.mkComponent
       , armed: false, name: "", log: []
       , peaks: Nothing, regions: [], keep: Set.empty, busy: false
       , hoverPlays: false, playing: Nothing, showing: "", waiting: false
-      , minGap: 300.0, divider: Divider.Attacks, equalN: 16, mine: false
+      , minGap: 300.0, divider: Divider.Attacks, equalN: 16, mine: false, kitMine: false
       , cardView: Nothing, bank: "WORKSHOP", kit: "", voice: 1, cardBusy: false }
   , render
   , eval: H.mkEval H.defaultEval { handleAction = handleAction, initialize = Just Init }
@@ -246,7 +247,7 @@ handleAction = case _ of
       Left e -> H.modify_ (note ("could not read the card: " <> Aff.message e))
       Right v -> H.modify_ _ { cardView = Just v }
   SetBank v -> H.modify_ _ { bank = v }
-  SetKit v -> H.modify_ _ { kit = v }
+  SetKit v -> H.modify_ _ { kit = v, kitMine = v /= "" }
   SetVoice v -> H.modify_ \s -> s { voice = clamp 1 4 (fromMaybe s.voice (Int.fromString v)) }
   WriteCard dest -> do
     H.modify_ _ { cardBusy = true }
@@ -358,7 +359,7 @@ handleAction = case _ of
     -- that already belongs to a take on disk is a name that destroys it.
     when (wantsAName st) do
       n <- liftEffect (slugFor st.kind)
-      H.modify_ _ { name = n }
+      H.modify_ _ { name = n, kit = if st.kitMine then st.kit else "" }
     H.modify_ (note (Kind.prompt st.kind) <<< _ { armed = true })
   Close -> do
     st <- H.get
@@ -675,12 +676,43 @@ render st =
                       [ 1, 2, 3, 4 ])
               ]
           , HH.button
-              [ HP.class_ (HH.ClassName "ws-plain is-go")
+              [ HP.class_ (HH.ClassName ("ws-plain is-go"
+                  <> if isJust occupant then " is-replacing" else ""))
               , HP.disabled (st.cardBusy || Set.isEmpty st.keep)
               , HE.onClick \_ -> SendToCard
               ]
-              [ HH.text (show (Set.size st.keep) <> " to the kit") ]
+              [ HH.text (case occupant of
+                  Nothing -> show (Set.size st.keep) <> " to the kit"
+                  Just _ -> "replace with " <> show (Set.size st.keep)) ]
+          -- **Say what is about to be destroyed, before it is.**
+          --
+          -- A kit's voice is an address, and sending to one that is taken
+          -- replaces what is there. That happened four times in a row without
+          -- a word being said, because the kit name stuck to the first take
+          -- and every later send addressed the same slot. The samples all
+          -- reached the disk; only the card's record of them collided. Naming
+          -- the occupant costs one line and makes the whole class of mistake
+          -- visible at the moment it can still be avoided.
+          , case occupant of
+              Nothing -> HH.text ""
+              Just r ->
+                HH.span [ HP.class_ (HH.ClassName "ws-warn") ]
+                  [ HH.text ("voice " <> show st.voice <> " of this kit already \
+                             \holds " <> r.set <> " — sending puts this in its place") ]
           ]
+
+  -- | What already sits at the address this send would write to — and only
+  -- | when it is something else, since re-sending the same set is a refresh
+  -- | rather than a loss.
+  occupant =
+    let kitName = if st.kit == "" then st.name else st.kit
+        setName = if st.name == "" then "set" else st.name
+    in do
+      v <- st.cardView
+      Array.find
+        (\r -> r.bank == st.bank && r.kit == kitName
+                 && r.voice == st.voice && r.set /= setName)
+        v.rows
 
   small lbl v act =
     HH.label [ HP.class_ (HH.ClassName "ws-field is-tight") ]

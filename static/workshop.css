@@ -141,3 +141,8 @@ body {
 .ws-dividers .ws-muted { flex: 1 1 220px; font-size: 12px; line-height: 1.45; }
 .ws-dividers .ws-field { margin: 0; }
 .ws-dividers .ws-field input { width: 62px; }
+
+/* About to overwrite something. Stated, not blocked — the address is yours to
+   reuse, but never by accident. */
+.ws-warn { flex: 1 1 240px; font-size: 12px; line-height: 1.45; color: #a8442a; }
+.ws-plain.is-go.is-replacing { border-color: #a8442a; color: #a8442a; }
