@@ -93,10 +93,17 @@ class Track {
   }
 }
 
-// Select a bank and kit: CC00 is the bank letter, Program Change is the kit.
+// **Program Change is the BANK; CC00 is the kit.**
+//
+// Measured on the module 2026-09-09, and the other way round from what
+// `docs/DESIGN-rample.md` said. Sending CC0=7 (meaning H) with PC=3 (meaning
+// kit 3) landed on **D7** — D being letter index 3, the Program Change, and 7
+// being the kit, the CC. Conventional MIDI would have CC0 as bank select, so
+// this is worth knowing rather than guessing; the module is not conventional
+// here and nothing in the file format hints at it.
 const select = (t, letter, kit) => {
-  t.cc(0, 0, letter.charCodeAt(0) - 65);
-  t.pc(0.02, kit);
+  t.pc(0, letter.charCodeAt(0) - 65);
+  t.cc(0.02, 0, kit);
 };
 
 // The CC value that lands in the MIDDLE of slice k of n, so a rounding error

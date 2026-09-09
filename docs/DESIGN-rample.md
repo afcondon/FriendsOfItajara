@@ -76,7 +76,7 @@ twelve semitones are not a coincidence you have to exploit by hand.
 
 Everything is reachable over MIDI, which matters later:
 
-- kit select — `PC` = kit `0`–`99`, `CC00` = bank `0`–`25` (`A`–`Z`), `CC100`/`CC101` = prev/next
+- kit select — **`PC` = bank `0`–`25` (`A`–`Z`), `CC00` = kit `0`–`99`**, `CC100`/`CC101` = prev/next. Measured on the module 2026-09-09: this document had it the other way round, which is the conventional way and not what the Rample does. `CC0=7, PC=3` lands on **D7**, not H3.
 - voice parameters — `CC(voice × 10 + p)`, so `CC10` is SP1 pitch and `CC38` is SP3 level:
 
 | p | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 |
