@@ -170,7 +170,14 @@ card.banks.forEach((bank, bi) => {
 
     // --- the slices, in order and then not -------------------------------
     if (slots > 1) {
-      const step = 0.25;                      // a sixteenth, in beats
+      // A break's slices are a sixteenth long and want playing at tempo; a
+      // chromatic set's are most of a second and want room to sound. Take the
+      // spacing from the slot, and only fall back to sixteenths when the slot
+      // is short enough to be a rhythm.
+      const sixteenth = 60 / 88.7 / 4;
+      const step = (stack.slotSecs || 0) <= sixteenth * 1.2
+        ? 0.25
+        : Math.ceil((stack.slotSecs / (60 / 88.7)) * 4) / 4;
       const settleBeats = SETTLE * (88.7 / 60);
       const inOrder = new Track(88.7);
       select(inOrder, letter, ki);
@@ -181,7 +188,7 @@ card.banks.forEach((bank, bi) => {
       }
       const barsA = inOrder.padToBars(4 + slots * step);
       write(`${slot}-slices-in-order.mid`, inOrder,
-        `${slots} slices, sixteenths at 88.7bpm, ${barsA} bars`);
+        `${slots} slices, ${step} beat${step === 1 ? "" : "s"} each at 88.7bpm, ${barsA} bars`);
 
       // Reversed, which is the case the grid phase was fixed for: in order a
       // slice's head can carry its neighbour's tail unnoticed, and out of
@@ -201,22 +208,34 @@ card.banks.forEach((bank, bi) => {
 
     // --- both axes at once ------------------------------------------------
     if (slots > 1 && nLayers > 1 && mode === "velocity") {
-      const t = new Track(100);
+      // **Space the notes by at least a slot.**
+      //
+      // The first version played eighths at 100 bpm — one every 0.3 s — into
+      // slices holding half a second of sound, so every note was cut off by
+      // the next trigger and only the last of each group rang out. The
+      // waveform of that is a row of notes at alternating widths, and it looks
+      // like a fault in the card. The card knows how long a slot is; use it.
+      const bpm = 100;
+      const beat = 60 / bpm;
+      const step = Math.max(1, Math.ceil((stack.slotSecs || beat) / beat));
+      const t = new Track(bpm);
       select(t, letter, ki);
-      const settle8 = SETTLE * (100 / 60);
+      const settle8 = SETTLE / beat;
       let at = 4;
       for (let L = 0; L < nLayers; L++) {
         const vel = Math.max(1, Math.round(((L + 0.5) / nLayers) * 127));
         for (let k = 0; k < slots; k++) {
           t.cc(at - settle8, startCC(1), slicePoint(k, slots));
-          t.note(at, SP[0], vel, 0.45);
-          at += 0.5;                          // eighths
+          // Held almost to the next trigger, so a slice is allowed to finish.
+          t.note(at, SP[0], vel, step * 0.95);
+          at += step;
         }
         at = Math.ceil(at / 4) * 4 + 4;       // rest to the next bar, then one
       }
       const bars = t.padToBars(at);
       write(`${slot}-two-axes.mid`, t,
-        `${nLayers} velocities x ${slots} slices, a bar between each, ${bars} bars`);
+        `${nLayers} velocities x ${slots} slices, ${step} beat${step === 1 ? "" : "s"} `
+        + `each (slot is ${(stack.slotSecs || 0).toFixed(2)}s), ${bars} bars`);
     }
 
     // --- which trigger notes answer --------------------------------------
