@@ -8697,7 +8697,7 @@
       return "listening \u2014 starts on your first sound, stop when you are done";
     }
     ;
-    throw new Error("Failed pattern match at Workshop.Kind (line 181, column 10 - line 187, column 79): " + [v.constructor.name]);
+    throw new Error("Failed pattern match at Workshop.Kind (line 191, column 10 - line 197, column 79): " + [v.constructor.name]);
   };
   var name15 = function(v) {
     if (v instanceof DrumHits) {
@@ -8787,14 +8787,14 @@
     }
     ;
     if (v instanceof Chromatic) {
-      return false;
+      return true;
     }
     ;
     if (v instanceof Longform) {
       return false;
     }
     ;
-    throw new Error("Failed pattern match at Workshop.Kind (line 170, column 9 - line 177, column 20): " + [v.constructor.name]);
+    throw new Error("Failed pattern match at Workshop.Kind (line 170, column 9 - line 187, column 20): " + [v.constructor.name]);
   };
   var foldsTo = function(v) {
     if (v instanceof DrumHits) {

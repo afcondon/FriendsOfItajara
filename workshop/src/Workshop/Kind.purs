@@ -171,7 +171,17 @@ joins = case _ of
   DrumHits -> false
   ChordHits -> false
   Bars _ -> true
-  Chromatic -> false
+  -- **A chromatic set is slices, because the start point is the pitch.**
+  --
+  -- Twelve notes would fit as twelve layers — exactly the ceiling, with no
+  -- room for a thirteenth — but layers are the wrong axis for pitch. The rig
+  -- already settled this: `DRamplePoly` sends the start point
+  -- `CC(voice x 10 + 4)` ahead of the trigger note to choose a pitch, so an
+  -- instrument's notes have to be slices of one file for anything already
+  -- built to play it. Twelve is a division SLICER offers, which is a pleasant
+  -- accident rather than a coincidence — twelve is the number the module's
+  -- designers had in mind too.
+  Chromatic -> true
   -- One take, kept whole — which the joiner would also do, but by a longer
   -- road and with a division nobody asked for.
   Longform -> false
