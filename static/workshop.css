@@ -104,3 +104,27 @@ body {
 .ws-chip.is-arm:hover { background: var(--ink); color: #fff; }
 .ws-chip.is-arm:hover .ws-chip-db { color: #b9b9c2; }
 .ws-chip.is-arm.off:hover { background: #fff; color: inherit; }
+
+/* Where the kept tiles go, and where the card goes. Both are rows of small
+   fields ending in one button, because both are one decision with a couple of
+   names attached. */
+.ws-send { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--rule); }
+.ws-field.is-tight { margin: 0; gap: 6px; }
+.ws-field.is-tight span { min-width: 0; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; }
+.ws-field.is-tight input { width: 130px; }
+.ws-field.is-tight select { padding: 6px 8px; border: 1px solid var(--rule); border-radius: 3px; font: inherit; }
+.ws-plain.is-go { border-color: var(--ink); font-weight: 500; }
+.ws-plain.is-go:hover:enabled { background: var(--ink); color: #fff; }
+.ws-plain:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.ws-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.ws-table th { text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); padding: 0 12px 6px 0; font-weight: 600; }
+.ws-table td { padding: 6px 12px 6px 0; border-top: 1px solid var(--rule); font-variant-numeric: tabular-nums; }
+
+/* The compiler's own account of the card, verbatim. Not a summary of it — the
+   rules it enforces are the ones the module fails silently on, and a paraphrase
+   is one more place for them to drift. */
+.ws-plan { margin-top: 16px; padding: 12px 14px; background: #fff; border: 1px solid var(--rule); border-radius: 3px;
+  font: 11px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted);
+  white-space: pre-wrap; max-height: 260px; overflow: auto; }
+.ws-plan.is-bad { border-color: var(--hot); color: var(--ink); }

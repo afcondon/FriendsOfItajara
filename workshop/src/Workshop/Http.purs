@@ -7,6 +7,12 @@ module Workshop.Http
   ( Region
   , Divisions
   , divisions
+  , CardRow
+  , CardView
+  , Wrote
+  , card
+  , addToCard
+  , writeToCard
   ) where
 
 import Control.Promise (Promise)
@@ -26,3 +32,42 @@ type Divisions =
 -- | `POST /api/onsets` — a take's name, what it is, and how close two sounds
 -- | may be and still be two; back with where the detector thinks things begin.
 foreign import divisions :: String -> String -> Number -> Effect (Promise Divisions)
+
+-- | **The virtual card, flattened for showing.**
+-- |
+-- | The card is banks holding kits holding voices; a row here is one voice,
+-- | which is the unit a person points at. The nesting is the manifest's
+-- | business and the JS bridge does the flattening, so this side holds what a
+-- | table holds.
+type CardRow =
+  { bank :: String
+  , kit :: String
+  , voice :: Int
+  , set :: String
+  , count :: Int
+  , stereo :: Boolean
+  , kind :: String
+  }
+
+type CardView =
+  { rows :: Array CardRow
+  -- | Mounted Rample cards, by mount point. Empty is the ordinary case.
+  , cards :: Array String
+  -- | **What `kit build` says about it**, run without writing anything. The
+  -- | compiler's own objections rather than a second opinion formed here.
+  , plan :: String
+  , ok :: Boolean
+  }
+
+type Wrote = { ok :: Boolean, output :: String }
+
+foreign import card :: Effect (Promise CardView)
+
+-- | Cut the kept regions into a named set and put that set on a voice.
+foreign import addToCard
+  :: { take :: String, set :: String, bank :: String, kit :: String
+     , voice :: Int, kind :: String, stereo :: Boolean, regions :: Array Region }
+  -> Effect (Promise Wrote)
+
+-- | Compile the manifest onto a mounted card.
+foreign import writeToCard :: String -> Effect (Promise Wrote)

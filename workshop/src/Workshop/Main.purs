@@ -24,6 +24,7 @@ import Data.Int as Int
 import Data.Either (Either(..))
 import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Data.Number as Number
+import Data.String as String
 -- `Bars` names a thing in both vocabularies — a length in the daemon's verbs
 -- and a kind of material here — so the verbs come in by name and the kinds
 -- through `Kind.`.
@@ -105,6 +106,14 @@ type State =
   -- | 600 ms it kept all eleven hits including the softest, where the level
   -- | knob had dropped that one and merged its neighbour into the tile before.
   , minGap :: Number
+  -- | The virtual card, as the server flattens it, plus what `kit build` says
+  -- | about it. Refreshed after anything that could change it.
+  , cardView :: Maybe Http.CardView
+  -- | Where a kept set is going: the bank, the kit, and which voice.
+  , bank :: String
+  , kit :: String
+  , voice :: Int
+  , cardBusy :: Boolean
   }
 
 data Action
@@ -121,6 +130,12 @@ data Action
   | Analyse
   | Divide
   | SetGap String
+  | RefreshCard
+  | SetBank String
+  | SetKit String
+  | SetVoice String
+  | SendToCard
+  | WriteCard String
   | Play Int
   | HoverPlay Int
   | SetHoverPlays Boolean
@@ -132,7 +147,8 @@ component = H.mkComponent
       , armed: false, name: "kick", log: []
       , peaks: Nothing, regions: [], keep: Set.empty, busy: false
       , hoverPlays: false, playing: Nothing, showing: "", waiting: false
-      , minGap: 300.0 }
+      , minGap: 300.0
+      , cardView: Nothing, bank: "WORKSHOP", kit: "", voice: 1, cardBusy: false }
   , render
   , eval: H.mkEval H.defaultEval { handleAction = handleAction, initialize = Just Init }
   }
@@ -159,6 +175,7 @@ loop st = st.looper >>= \top -> Array.index top.loops scratch
 handleAction :: forall o m. MonadAff m => Action -> H.HalogenM State Action () o m Unit
 handleAction = case _ of
   Init -> do
+    handleAction RefreshCard
     liftEffect $ Socket.connect Socket.defaultUrl
     void $ H.subscribe $ HS.makeEmitter \emit -> do
       fiber <- Aff.launchAff $ forever do
@@ -206,6 +223,48 @@ handleAction = case _ of
   -- you click it, read back from the snapshot, and never re-asserted. The
   -- daemon is the one that knows.
   SetName v -> H.modify_ _ { name = v }
+  RefreshCard -> do
+    r <- H.liftAff (attempt (toAffE Http.card))
+    case r of
+      Left e -> H.modify_ (note ("could not read the card: " <> Aff.message e))
+      Right v -> H.modify_ _ { cardView = Just v }
+  SetBank v -> H.modify_ _ { bank = v }
+  SetKit v -> H.modify_ _ { kit = v }
+  SetVoice v -> H.modify_ \s -> s { voice = clamp 1 4 (fromMaybe s.voice (Int.fromString v)) }
+  WriteCard dest -> do
+    H.modify_ _ { cardBusy = true }
+    r <- H.liftAff (attempt (toAffE (Http.writeToCard dest)))
+    case r of
+      Left e -> H.modify_ (note (Aff.message e) <<< _ { cardBusy = false })
+      Right w -> H.modify_ (note (lastLine w.output) <<< _ { cardBusy = false })
+    handleAction RefreshCard
+  SendToCard -> do
+    st <- H.get
+    -- Only what you kept, in the order they were played. `msm cut` numbers
+    -- them zero-padded from that order, and the module reads a voice's stack
+    -- in byte order — so this is the step where "softest first" stops being a
+    -- thing you remember and becomes a fact about filenames.
+    let keptRegions = Array.catMaybes
+          (Array.mapWithIndex
+            (\i r -> if Set.member i st.keep then Just r else Nothing)
+            st.regions)
+    if Array.null keptRegions
+      then H.modify_ (note "nothing kept, so there is nothing to send")
+      else do
+        H.modify_ _ { cardBusy = true }
+        let setName = if st.name == "" then "set" else st.name
+        r <- H.liftAff (attempt (toAffE (Http.addToCard
+              { take: st.showing, set: setName
+              , bank: st.bank
+              , kit: if st.kit == "" then setName else st.kit
+              , voice: st.voice
+              , kind: Kind.name st.kind
+              , stereo: Kind.foldsTo st.kind /= ToMono
+              , regions: keptRegions })))
+        case r of
+          Left e -> H.modify_ (note (Aff.message e) <<< _ { cardBusy = false })
+          Right w -> H.modify_ (note (lastLine w.output) <<< _ { cardBusy = false })
+        handleAction RefreshCard
   Analyse -> analyse true
   Divide -> analyse false
   SetGap v -> do
@@ -316,6 +375,11 @@ analyse write = do
                   <> " over " <> fmt d.secs <> " s"
                   <> (if d.divides then "" else " (this kind is kept whole)")))
 
+-- | The last thing a command said, which is its summary. The rest is a list of
+-- | files and belongs in the log it already went to.
+lastLine :: String -> String
+lastLine s = fromMaybe s (Array.last (Array.filter (_ /= "") (String.split (String.Pattern "\n") s)))
+
 fmt :: Number -> String
 fmt n = show (Int.round (n * 100.0) # \k -> Int.toNumber k / 100.0)
 
@@ -330,15 +394,7 @@ render st =
         ]
     , recordBox
     , caught
-    , HH.section [ HP.class_ (HH.ClassName "ws-card") ]
-        [ HH.h2_ [ HH.text "The card" ]
-        , HH.p [ HP.class_ (HH.ClassName "ws-muted") ]
-            [ HH.text
-                "A virtual card lives here — banks, kits, voices — and stays a \
-                \manifest until you ask for it. Writing it to a real card is a \
-                \compile, never an edit in place, so what is on the card is \
-                \always something you could read first. Next." ]
-        ]
+    , cardView
     , HH.section [ HP.class_ (HH.ClassName "ws-log") ]
         (map (\l -> HH.div_ [ HH.text l ]) st.log)
     ]
@@ -505,7 +561,40 @@ render st =
               ]
           , HH.div [ HP.class_ (HH.ClassName "ws-grid") ]
               (Array.mapWithIndex tile st.regions)
+          , sendRow
           ]
+
+  -- | Where the kept tiles go. Beside them, because it acts on them.
+  sendRow
+    | Array.null st.regions = HH.text ""
+    | otherwise =
+        HH.div [ HP.class_ (HH.ClassName "ws-send") ]
+          [ HH.span [ HP.class_ (HH.ClassName "ws-arm-label") ] [ HH.text "Send to" ]
+          , small "bank" st.bank SetBank
+          , small "kit" (if st.kit == "" then st.name else st.kit) SetKit
+          , HH.label [ HP.class_ (HH.ClassName "ws-field is-tight") ]
+              [ HH.span_ [ HH.text "voice" ]
+              , HH.select [ HE.onValueChange SetVoice ]
+                  (map (\n -> HH.option
+                          [ HP.value (show n), HP.selected (n == st.voice) ]
+                          [ HH.text (show n
+                              <> (if Kind.foldsTo st.kind /= ToMono
+                                    then " + " <> show (n + 1) else "")) ])
+                      [ 1, 2, 3, 4 ])
+              ]
+          , HH.button
+              [ HP.class_ (HH.ClassName "ws-plain is-go")
+              , HP.disabled (st.cardBusy || Set.isEmpty st.keep)
+              , HE.onClick \_ -> SendToCard
+              ]
+              [ HH.text (show (Set.size st.keep) <> " to the card") ]
+          ]
+
+  small lbl v act =
+    HH.label [ HP.class_ (HH.ClassName "ws-field is-tight") ]
+      [ HH.span_ [ HH.text lbl ]
+      , HH.input [ HP.type_ HP.InputText, HP.value v, HE.onValueInput act ]
+      ]
 
   -- One sub-sample. Its picture is a SLICE of the take's own envelope, so
   -- forty tiles cost one snapshot rather than forty requests.
@@ -544,6 +633,63 @@ render st =
                 [ HH.text (if kept then "✓" else "·") ]
             ]
         ]
+
+  -- | **The card, which is a description until you ask for it.**
+  -- |
+  -- | Writing it is a compile and never an edit in place, so what lands on the
+  -- | SD card is always something you could have read first — and the three
+  -- | rules the module fails silently on stay enforced in one place, by the
+  -- | compiler, whose objections are shown here rather than restated.
+  cardView =
+    HH.section [ HP.class_ (HH.ClassName "ws-card") ]
+      [ HH.h2_ [ HH.text "The card" ]
+      , case st.cardView of
+          Nothing -> HH.p [ HP.class_ (HH.ClassName "ws-muted") ] [ HH.text "…" ]
+          Just v
+            | Array.null v.rows ->
+                HH.p [ HP.class_ (HH.ClassName "ws-muted") ]
+                  [ HH.text "Nothing on it yet. Record something, keep the ones you \
+                            \meant, and send them to a voice." ]
+            | otherwise ->
+                HH.div_
+                  [ HH.table [ HP.class_ (HH.ClassName "ws-table") ]
+                      [ HH.thead_ [ HH.tr_ (map (\h -> HH.th_ [ HH.text h ])
+                          [ "bank", "kit", "voice", "holds" ]) ]
+                      , HH.tbody_ (map row v.rows)
+                      ]
+                  , writeRow v
+                  , if v.plan == "" then HH.text ""
+                    else HH.pre [ HP.class_ (HH.ClassName ("ws-plan" <> if v.ok then "" else " is-bad")) ]
+                           [ HH.text v.plan ]
+                  ]
+      ]
+
+  row r =
+    HH.tr_
+      [ HH.td_ [ HH.text r.bank ]
+      , HH.td_ [ HH.text r.kit ]
+      , HH.td_ [ HH.text (show r.voice <> (if r.stereo then " + " <> show (r.voice + 1) else "")) ]
+      , HH.td_
+          [ HH.text (r.set <> " — " <> show r.count
+              <> (if r.count == 1 then " sample" else " samples")
+              <> (if r.stereo then ", stereo" else "")) ]
+      ]
+
+  writeRow v =
+    HH.div [ HP.class_ (HH.ClassName "ws-send") ]
+      [ HH.span [ HP.class_ (HH.ClassName "ws-arm-label") ] [ HH.text "Write to" ]
+      , if Array.null v.cards
+          then HH.span [ HP.class_ (HH.ClassName "ws-muted") ]
+                 [ HH.text "no Rample card is mounted — it needs one to write to" ]
+          else HH.div [ HP.class_ (HH.ClassName "ws-chips") ]
+                 (map (\c -> HH.button
+                         [ HP.class_ (HH.ClassName "ws-chip is-arm")
+                         , HP.disabled (st.cardBusy || not v.ok)
+                         , HP.title ("compile the manifest onto " <> c)
+                         , HE.onClick \_ -> WriteCard c
+                         ]
+                         [ HH.text c ]) v.cards)
+      ]
 
   kindBtn k =
     HH.button
