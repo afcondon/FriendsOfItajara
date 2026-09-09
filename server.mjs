@@ -363,8 +363,19 @@ async function addToCard(body) {
   if (body.layerMode) kit.layers = String(body.layerMode);
   else if (!kit.layers) kit.layers = body.kind === "drum-hits" ? "velocity" : "manual";
 
-  // SLICER is a global setting, so it belongs to the bank rather than the kit:
-  // "set this when you come here".
+  // **One bank, one division.**
+  //
+  // SLICER is a single global setting, so every sliced file in a bank is cut
+  // by the same number. A bank silently adopting whatever came last is how
+  // `WORKSHOP` ended up asking for /12 with sixteen-slice files in it — each
+  // file fine, and only their neighbours making them wrong. Refused here
+  // rather than left for the compiler, because by then the samples are cut and
+  // the card row written.
+  if (slots && bank.slicer && bank.slicer !== slots) {
+    return { ok: false, output:
+      `bank ${bankName} is cut into ${bank.slicer} and this is ${slots}. SLICER is one ` +
+      `global setting, so they cannot share a bank — put this in another one.` };
+  }
   if (slots) bank.slicer = slots;
   writeCard(card);
 
