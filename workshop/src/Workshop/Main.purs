@@ -124,7 +124,6 @@ data Action
   | SetName String
   | ArmOn Int
   | Close
-  | Discard
   | ToggleKeep Int
   | KeepAll Boolean
   | Analyse
@@ -286,9 +285,6 @@ handleAction = case _ of
     s { keep = if Set.member i s.keep then Set.delete i s.keep else Set.insert i s.keep }
   KeepAll on -> H.modify_ \s ->
     s { keep = if on then Set.fromFoldable (Array.range 0 (Array.length s.regions - 1)) else Set.empty }
-  Discard -> do
-    send Clear
-    H.modify_ (note "cleared" <<< _ { regions = [], keep = Set.empty, peaks = Nothing })
   ArmOn src -> do
     -- **Choosing the input is the act of arming.** Kept apart, the page had
     -- its own idea of which input to use and asserted it at Arm — so a reload
@@ -299,6 +295,12 @@ handleAction = case _ of
     -- Everything the take needs, set before it starts and nowhere else. The
     -- scratch loop is emptied first: it holds one take at a time, and a take
     -- that landed on top of another is the bug this page exists to avoid.
+    --
+    -- This is also why there is no Discard button. Arming clears, so discarding
+    -- was only ever a way of doing early what the next take does anyway — and a
+    -- second button that says "throw it away" next to one that says "keep it"
+    -- invites the reading that the kept set is somehow at stake. It is not:
+    -- what has been sent to a kit is on disk and nothing here can reach it.
     send Clear
     -- Not the source and not mono: those are the loop's own, set when you
     -- chose them and shown from the snapshot. Asserting them here is how the
@@ -493,11 +495,6 @@ render st =
                    else maybe "" (\l -> if l.layers > 0
                                           then "captured " <> fmt l.loopSecs <> " s"
                                           else "ready") lp) ]
-          , case lp of
-              Just l | l.layers > 0 && not writing && not listening ->
-                HH.button [ HP.class_ (HH.ClassName "ws-plain"), HE.onClick \_ -> Discard ]
-                  [ HH.text "Discard" ]
-              _ -> HH.text ""
           ]
       ]
 
@@ -587,7 +584,7 @@ render st =
               , HP.disabled (st.cardBusy || Set.isEmpty st.keep)
               , HE.onClick \_ -> SendToCard
               ]
-              [ HH.text (show (Set.size st.keep) <> " to the card") ]
+              [ HH.text (show (Set.size st.keep) <> " to the kit") ]
           ]
 
   small lbl v act =
@@ -642,14 +639,15 @@ render st =
   -- | compiler, whose objections are shown here rather than restated.
   cardView =
     HH.section [ HP.class_ (HH.ClassName "ws-card") ]
-      [ HH.h2_ [ HH.text "The card" ]
+      [ HH.h2_ [ HH.text "The card, so far" ]
       , case st.cardView of
           Nothing -> HH.p [ HP.class_ (HH.ClassName "ws-muted") ] [ HH.text "…" ]
           Just v
             | Array.null v.rows ->
                 HH.p [ HP.class_ (HH.ClassName "ws-muted") ]
                   [ HH.text "Nothing on it yet. Record something, keep the ones you \
-                            \meant, and send them to a voice." ]
+                            \meant, and send them to a voice. It is kept on disk as \
+                            \you build it; no card need be mounted until you write." ]
             | otherwise ->
                 HH.div_
                   [ HH.table [ HP.class_ (HH.ClassName "ws-table") ]
@@ -680,7 +678,8 @@ render st =
       [ HH.span [ HP.class_ (HH.ClassName "ws-arm-label") ] [ HH.text "Write to" ]
       , if Array.null v.cards
           then HH.span [ HP.class_ (HH.ClassName "ws-muted") ]
-                 [ HH.text "no Rample card is mounted — it needs one to write to" ]
+                 [ HH.text "no Rample card is mounted — everything above is safe on \
+                           \disk; mount one when you want it written" ]
           else HH.div [ HP.class_ (HH.ClassName "ws-chips") ]
                  (map (\c -> HH.button
                          [ HP.class_ (HH.ClassName "ws-chip is-arm")
