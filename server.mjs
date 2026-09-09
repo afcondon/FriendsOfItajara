@@ -218,6 +218,15 @@ async function addToCard(body) {
   const args = ["cut", wav, "--regions", rjson, "--out", path.join(SAMPLES, set),
                 "--name", set, "--module", "rample", "--overwrite"];
   if (joins) args.push("--join");
+  // **A bars take is a loop, and only the recording knows it.**
+  //
+  // It was armed on a bar count and the daemon closed it itself at exactly
+  // that length, so the file is one cycle — which means the tail its last
+  // slice is missing is the same material as the head it started with. Said
+  // here rather than guessed in `cut`, because for every other kind the head
+  // is a pre-roll and joining it to the end would splice two unrelated
+  // moments together.
+  if (joins && body.kind === "bars") args.push("--cyclic");
   args.push(body.stereo ? "--stereo" : "--mono");
   const cut = await run(args);
   if (!cut.ok) return cut;
