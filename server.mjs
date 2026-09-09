@@ -80,6 +80,70 @@ function sticks() {
     .filter((p) => { try { return fs.statSync(path.join(p, "_arbhar_library")).isDirectory(); } catch { return false; } });
 }
 
+// **Where the detector thinks things begin, over a take the daemon just wrote.**
+//
+// The Workshop records one take with as many hits in it as you felt like
+// playing, and then has to show you what it caught — because a capture you
+// cannot see is a capture you have to trust, and the first two attempts at
+// this proved how badly that goes. `msm onset --json` proposes the divisions;
+// the page draws them over the waveform and a person keeps the ones they meant.
+// **A take has had two shapes**, and both are on disk. `exl` writes
+// `loop-<n>/layer-<nn>.wav`; the older `w` wrote the layers straight into the
+// take. Looking only in the subdirectories found nothing in a flat take and
+// said "holds no audio", which is true of the place it looked and false of
+// the take. Search both, subdirectories first, and take the first file in
+// order — for the Workshop that is the only file.
+function firstWav(dir) {
+  const inSubdirs = fs.readdirSync(dir, { withFileTypes: true })
+    .filter((e) => e.isDirectory() && /^loop-\d+$/.test(e.name))
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .flatMap((e) =>
+      fs.readdirSync(path.join(dir, e.name))
+        .filter((f) => f.toLowerCase().endsWith(".wav"))
+        .sort()
+        .map((f) => path.join(dir, e.name, f)));
+  if (inSubdirs.length) return inSubdirs[0];
+  const flat = fs.readdirSync(dir)
+    .filter((f) => f.toLowerCase().endsWith(".wav"))
+    .sort();
+  return flat.length ? path.join(dir, flat[0]) : null;
+}
+
+function onsets(body) {
+  const take = safe(body.take || "");
+  const dir = path.join(TAKES, take);
+  if (!take || !fs.existsSync(dir)) {
+    return Promise.resolve({ ok: false, output: `no take called ${take || "(none)"}` });
+  }
+  // The take the Workshop writes has one loop with one layer in it. Find the
+  // first audio file rather than assuming a name: the daemon numbers loops by
+  // which one recorded, and the scratch loop is the last one.
+  const wav = firstWav(dir);
+  if (!wav) return Promise.resolve({ ok: false, output: `${take} holds no audio` });
+
+  const args = ["onset", wav, "--as", String(body.as || "hits").replace(/[^a-z]/g, ""), "--json"];
+  return new Promise((resolve) => {
+    let out = "", err = "";
+    let child;
+    try {
+      child = spawn(MSM, args);
+    } catch (e) {
+      return resolve({ ok: false, output: `could not start ${MSM}: ${e.message}` });
+    }
+    child.stdout.on("data", (c) => (out += c));
+    child.stderr.on("data", (c) => (err += c));
+    child.on("error", (e) => resolve({ ok: false, output: e.message }));
+    child.on("close", (code) => {
+      if (code !== 0) return resolve({ ok: false, output: err || out || `msm exited ${code}` });
+      try {
+        resolve({ ok: true, ...JSON.parse(out) });
+      } catch (e) {
+        resolve({ ok: false, output: `msm said something that is not JSON: ${out.slice(0, 200)}` });
+      }
+    });
+  });
+}
+
 function harvest(body) {
   const args = ["harvest", safe(body.take), "--module", body.module || "arbhar"];
   if (body.stick) args.push("--stick", String(body.stick));
@@ -294,6 +358,10 @@ const server = http.createServer(async (req, res) => {
       fs.writeFileSync(path.join(dir, "notes.json"), JSON.stringify(body, null, 2) + "\n");
       return json(res, 200, { ok: true, path: path.join(dir, "notes.json") });
     }
+    if (url.pathname === "/api/onsets" && req.method === "POST") {
+      const body = await readBody(req);
+      return json(res, 200, await onsets(body));
+    }
     if (url.pathname === "/api/harvest" && req.method === "POST") {
       const body = await readBody(req);
       return json(res, 200, await harvest(body));
@@ -303,6 +371,18 @@ const server = http.createServer(async (req, res) => {
       const dir = resolveIn(url.searchParams.get("lib"), url.searchParams.get("path"));
       if (!dir) return json(res, 404, { error: "no such library" });
       return json(res, 200, sceneInfo(dir));
+    }
+    // The take the Workshop just recorded, as audio the page can scrub.
+    // Previewing a sub-sample is a range of ONE file rather than a file each:
+    // cutting them on the server would mean writing dozens of wavs to answer a
+    // hover, and the browser can already start and stop inside a file.
+    if (url.pathname === "/api/take-audio" && req.method === "GET") {
+      const take = safe(url.searchParams.get("take") || "");
+      const dir = path.join(TAKES, take);
+      if (!take || !fs.existsSync(dir)) return json(res, 404, { error: "no such take" });
+      const wav = firstWav(dir);
+      if (!wav) return json(res, 404, { error: "no audio in that take" });
+      return sendAudio(req, res, wav);
     }
     if (url.pathname === "/api/audio" && req.method === "GET") {
       const file = resolveIn(url.searchParams.get("lib"), url.searchParams.get("path"));

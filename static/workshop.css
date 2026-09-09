@@ -58,3 +58,36 @@ body {
 .ws-card { border-top: 1px solid var(--rule); padding-top: 20px; }
 .ws-muted { color: var(--muted); font-size: 13px; max-width: 62ch; }
 .ws-log { font: 12px/1.7 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); }
+
+/* What was caught. The whole take across the top, and every sub-sample as its
+   own tile underneath — small multiples, because the question is comparative:
+   which of these forty is the one I meant, and are they the same sound? A list
+   of numbers cannot be read that way; a grid of shapes can. */
+.ws-caught { border-top: 1px solid var(--rule); padding-top: 20px; }
+.ws-whole { border: 1px solid var(--rule); border-radius: 3px; background: #fff; padding: 6px; margin-bottom: 14px; }
+.ws-whole-svg { display: block; width: 100%; height: 72px; }
+.ws-whole-svg polygon { fill: var(--ink); }
+
+.ws-gridhead { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; font-size: 13px; color: var(--muted); }
+.ws-gridhead > span:first-child { flex: 1; font-variant-numeric: tabular-nums; }
+.ws-hover { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+
+/* Auto-fill rather than a fixed count: ten hits and a hundred slices should
+   both look deliberate, and the tile is the unit that stays constant. */
+.ws-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
+.ws-tile { border: 1px solid var(--rule); border-radius: 3px; background: #fff; overflow: hidden; transition: border-color .12s; }
+.ws-tile:hover { border-color: var(--ink); }
+.ws-tile.is-playing { border-color: var(--hot); }
+/* Dropped, not gone. It stays in place and keeps its number, because the
+   order is the meaning and a grid that reflowed on every click would make
+   picking harder than it is. */
+.ws-tile.is-dropped { opacity: 0.34; }
+.ws-tile-face { display: block; width: 100%; border: 0; background: none; padding: 6px 6px 2px; cursor: pointer; }
+.ws-tile-svg { display: block; width: 100%; height: 46px; }
+.ws-tile-svg polygon { fill: var(--ink); }
+.ws-tile.is-playing .ws-tile-svg polygon { fill: var(--hot); }
+.ws-tile-foot { display: flex; align-items: center; gap: 6px; padding: 2px 8px 6px; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.ws-tile-n { font-weight: 600; color: var(--ink); }
+.ws-tile-len { flex: 1; }
+.ws-tile-keep { border: 0; background: none; cursor: pointer; font-size: 13px; color: var(--live); padding: 0 2px; line-height: 1; }
+.ws-tile.is-dropped .ws-tile-keep { color: var(--muted); }

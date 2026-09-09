@@ -21,14 +21,15 @@ import Control.Monad.Rec.Class (forever)
 import Data.Array as Array
 import Data.Foldable (for_)
 import Data.Int as Int
+import Data.Either (Either(..))
 import Data.Maybe (Maybe(..), fromMaybe, maybe)
 -- `Bars` names a thing in both vocabularies — a length in the daemon's verbs
 -- and a kind of material here — so the verbs come in by name and the kinds
 -- through `Kind.`.
-import Data.Looper.Verb (Verb(Alternates, Clear, LevelArm, Mono, OnGrid, Record, Sounding, Source))
+import Data.Looper.Verb (Verb(Alternates, AskPeaks, Clear, ExportLayers, LevelArm, Mono, OnGrid, Record, Sounding, Source))
 import Data.Looper.Verb as Verb
 import Effect (Effect)
-import Effect.Aff (Milliseconds(..), delay)
+import Effect.Aff (Milliseconds(..), attempt, delay)
 import Effect.Aff as Aff
 import Effect.Aff.Class (class MonadAff)
 import Effect.Class (liftEffect)
@@ -41,6 +42,12 @@ import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import Halogen.Subscription as HS
 import Halogen.VDom.Driver (runUI)
+import Data.Set (Set)
+import Data.Set as Set
+import Control.Promise (toAffE)
+import Workshop.Audio as Audio
+import Workshop.Http as Http
+import Workshop.Wave as Wave
 import Workshop.Kind (Close(..), Kind)
 import Workshop.Kind as Kind
 
@@ -66,6 +73,25 @@ type State =
   , armed :: Boolean
   , name :: String
   , log :: Array String
+  -- | The picture, from the daemon: it holds the audio, so it draws it.
+  , peaks :: Maybe Socket.Peaks
+  -- | Where `msm` thinks things begin, over the take just written. Empty until
+  -- | a take has been closed and analysed.
+  , regions :: Array Http.Region
+  -- | **Which of them you actually want.** The detector proposes and is often
+  -- | right and sometimes not: a stick tapped by accident is a division too.
+  -- | Indices into `regions`; everything starts kept.
+  , keep :: Set Int
+  , busy :: Boolean
+  -- | Sweeping across the grid to hear it, rather than clicking each one.
+  -- | Off by default: it is the right gesture for comparing forty hits and the
+  -- | wrong one for a page you are only reading.
+  , hoverPlays :: Boolean
+  , playing :: Maybe Int
+  -- | The take the grid is of. Held rather than read from `name`, so that
+  -- | typing a new name does not silently repoint the audio at a take that
+  -- | has not been recorded yet.
+  , showing :: String
   }
 
 data Action
@@ -79,12 +105,20 @@ data Action
   | Arm
   | Close
   | Discard
+  | ToggleKeep Int
+  | KeepAll Boolean
+  | Analyse
+  | Play Int
+  | HoverPlay Int
+  | SetHoverPlays Boolean
 
 component :: forall q i o m. MonadAff m => H.Component q i o m
 component = H.mkComponent
   { initialState: \_ ->
       { looper: Nothing, kind: Kind.DrumHits, bars: 1, src: 1, mono: true
-      , armed: false, name: "kick", log: [] }
+      , armed: false, name: "kick", log: []
+      , peaks: Nothing, regions: [], keep: Set.empty, busy: false
+      , hoverPlays: false, playing: Nothing, showing: "" }
   , render
   , eval: H.mkEval H.defaultEval { handleAction = handleAction, initialize = Just Init }
   }
@@ -94,6 +128,13 @@ send v = do
   let c = Verb.at scratch v
   ok <- liftEffect (Socket.send (c <> "@0"))
   unless ok $ H.modify_ (note ("no daemon — " <> c <> " went nowhere"))
+
+-- | A verb for the rig rather than for a loop. `exl` is one: it writes every
+-- | loop that has anything in it, so addressing it to one would be a lie.
+sendBare :: forall o m. MonadAff m => Verb -> H.HalogenM State Action () o m Unit
+sendBare v = do
+  ok <- liftEffect (Socket.send (Verb.render v <> "@0"))
+  unless ok $ H.modify_ (note "no daemon — the take was not written")
 
 note :: String -> State -> State
 note m s = s { log = Array.takeEnd 10 (Array.snoc s.log m) }
@@ -112,14 +153,16 @@ handleAction = case _ of
       pure (Aff.launchAff_ (Aff.killFiber (Aff.error "stopped") fiber))
   Poll -> do
     snap <- liftEffect Socket.latest
-    H.modify_ _ { looper = snap }
+    pk <- liftEffect Socket.latestPeaks
+    H.modify_ _ { looper = snap, peaks = pk }
     -- A take that closed itself — a bar count — leaves `armed` set here, so
     -- the page would go on saying "listening" over a finished recording.
     st <- H.get
     for_ (loop st) \lp ->
-      when (st.armed && not lp.armed && not Socket.isWriting lp && lp.layers > 0) $
+      when (st.armed && not lp.armed && not Socket.isWriting lp && lp.layers > 0) do
         H.modify_ (note ("closed itself: " <> fmt lp.loopSecs <> " s")
                      <<< _ { armed = false })
+        handleAction Analyse
   PickKind k -> H.modify_ _ { kind = k }
   SetBars v -> H.modify_ \s ->
     let n = clamp 1 64 (fromMaybe s.bars (Int.fromString v))
@@ -129,9 +172,25 @@ handleAction = case _ of
   PickSource n -> H.modify_ _ { src = n }
   SetMono b -> H.modify_ _ { mono = b }
   SetName v -> H.modify_ _ { name = v }
+  Analyse -> analyse
+  SetHoverPlays b -> do
+    unless b (liftEffect Audio.stop)
+    H.modify_ _ { hoverPlays = b }
+  HoverPlay i -> do
+    st <- H.get
+    when st.hoverPlays (handleAction (Play i))
+  Play i -> do
+    st <- H.get
+    for_ (Array.index st.regions i) \r -> do
+      liftEffect (Audio.playRange ("/api/take-audio?take=" <> st.showing) r.start r.end)
+      H.modify_ _ { playing = Just i }
+  ToggleKeep i -> H.modify_ \s ->
+    s { keep = if Set.member i s.keep then Set.delete i s.keep else Set.insert i s.keep }
+  KeepAll on -> H.modify_ \s ->
+    s { keep = if on then Set.fromFoldable (Array.range 0 (Array.length s.regions - 1)) else Set.empty }
   Discard -> do
     send Clear
-    H.modify_ (note "cleared")
+    H.modify_ (note "cleared" <<< _ { regions = [], keep = Set.empty, peaks = Nothing })
   Arm -> do
     st <- H.get
     -- Everything the take needs, set before it starts and nowhere else. The
@@ -167,6 +226,41 @@ handleAction = case _ of
     send (LevelArm false)
     send (Sounding true)
     H.modify_ \s -> s { armed = false }
+    handleAction Analyse
+
+-- | Write the take down and ask where the sounds are.
+-- |
+-- | Two hops, because they are two different kinds of knowledge: the daemon
+-- | holds the audio and writes it, `msm` reads the file and says where things
+-- | begin. Neither could do the other's half.
+analyse :: forall o m. MonadAff m => H.HalogenM State Action () o m Unit
+analyse = do
+  st <- H.get
+  for_ (loop st) \lp ->
+    when (lp.layers > 0) do
+      H.modify_ _ { busy = true, regions = [], keep = Set.empty }
+      send (AskPeaks 900)
+      sendBare (ExportLayers st.name)
+      -- The daemon writes on its own thread and the ack lands in a snapshot;
+      -- the folder is there a moment later.
+      H.liftAff (delay (Milliseconds 900.0))
+      r <- H.liftAff (attempt (toAffE (Http.divisions st.name (Kind.material st.kind))))
+      case r of
+        Left e -> H.modify_ (note ("could not analyse: " <> Aff.message e) <<< _ { busy = false })
+        Right d
+          | not d.ok -> H.modify_ (note d.output <<< _ { busy = false })
+          | otherwise -> do
+              let n = Array.length d.regions
+              H.modify_ _
+                { regions = d.regions
+                , keep = Set.fromFoldable (Array.range 0 (n - 1))
+                , busy = false
+                , showing = st.name
+                }
+              H.modify_ (note
+                (show n <> (if n == 1 then " division" else " divisions")
+                  <> " over " <> fmt d.secs <> " s"
+                  <> (if d.divides then "" else " (this kind is kept whole)")))
 
 fmt :: Number -> String
 fmt n = show (Int.round (n * 100.0) # \k -> Int.toNumber k / 100.0)
@@ -182,6 +276,7 @@ render st =
         ]
     , sourceBar
     , recordBox
+    , caught
     , HH.section [ HP.class_ (HH.ClassName "ws-card") ]
         [ HH.h2_ [ HH.text "The card" ]
         , HH.p [ HP.class_ (HH.ClassName "ws-muted") ]
@@ -292,6 +387,80 @@ render st =
               _ -> HH.text ""
           ]
       ]
+
+  -- | **What was caught, and what it was divided into.**
+  -- |
+  -- | The whole take across the top, and then every sub-sample as its own tile
+  -- | underneath. Small multiples because the question is comparative — which
+  -- | of these forty is the one I meant, and are they the same sound? — and a
+  -- | list of numbers cannot be read that way while a grid of shapes can.
+  caught
+    | Array.null st.regions && not st.busy = HH.text ""
+    | otherwise =
+        HH.section [ HP.class_ (HH.ClassName "ws-caught") ]
+          [ HH.h2_ [ HH.text "What was caught" ]
+          , case st.peaks of
+              Just pk | Array.length pk.hi > 0 ->
+                HH.div [ HP.class_ (HH.ClassName "ws-whole") ]
+                  [ Wave.svg pk.lo pk.hi [ HP.class_ (HH.ClassName "ws-whole-svg") ] ]
+              _ -> HH.text ""
+          , HH.div [ HP.class_ (HH.ClassName "ws-gridhead") ]
+              [ HH.span_
+                  [ HH.text (if st.busy then "dividing…"
+                             else show (Set.size st.keep) <> " of "
+                                    <> show (Array.length st.regions) <> " kept") ]
+              , HH.button [ HP.class_ (HH.ClassName "ws-plain"), HE.onClick \_ -> KeepAll true ]
+                  [ HH.text "Keep all" ]
+              , HH.button [ HP.class_ (HH.ClassName "ws-plain"), HE.onClick \_ -> KeepAll false ]
+                  [ HH.text "Keep none" ]
+              , HH.label [ HP.class_ (HH.ClassName "ws-hover") ]
+                  [ HH.input
+                      [ HP.type_ HP.InputCheckbox, HP.checked st.hoverPlays
+                      , HE.onChecked SetHoverPlays ]
+                  , HH.span_ [ HH.text "hover plays" ]
+                  ]
+              ]
+          , HH.div [ HP.class_ (HH.ClassName "ws-grid") ]
+              (Array.mapWithIndex tile st.regions)
+          ]
+
+  -- One sub-sample. Its picture is a SLICE of the take's own envelope, so
+  -- forty tiles cost one snapshot rather than forty requests.
+  tile i r =
+    let
+      total = maybe 1.0 (\l -> l.loopSecs) (loop st)
+      n = maybe 0 (Array.length <<< _.hi) st.peaks
+      b = Wave.bucketsFor n total r.start r.end
+      cut xs = Array.slice b.from b.to xs
+      kept = Set.member i st.keep
+    in
+      HH.div
+        [ HP.class_ (HH.ClassName ("ws-tile"
+            <> (if kept then "" else " is-dropped")
+            <> (if st.playing == Just i then " is-playing" else "")))
+        , HE.onMouseEnter \_ -> HoverPlay i
+        ]
+        [ HH.button
+            [ HP.class_ (HH.ClassName "ws-tile-face")
+            , HP.title (fmt (r.end - r.start) <> " s at " <> fmt r.start <> " s")
+            , HE.onClick \_ -> Play i
+            ]
+            [ Wave.svg (maybe [] (cut <<< _.lo) st.peaks)
+                       (maybe [] (cut <<< _.hi) st.peaks)
+                       [ HP.class_ (HH.ClassName "ws-tile-svg") ]
+            ]
+        , HH.div [ HP.class_ (HH.ClassName "ws-tile-foot") ]
+            [ HH.span [ HP.class_ (HH.ClassName "ws-tile-n") ] [ HH.text (show (i + 1)) ]
+            , HH.span [ HP.class_ (HH.ClassName "ws-tile-len") ]
+                [ HH.text (fmt (r.end - r.start)) ]
+            , HH.button
+                [ HP.class_ (HH.ClassName "ws-tile-keep")
+                , HP.title (if kept then "drop this one" else "keep this one")
+                , HE.onClick \_ -> ToggleKeep i
+                ]
+                [ HH.text (if kept then "✓" else "·") ]
+            ]
+        ]
 
   kindBtn k =
     HH.button
