@@ -18,8 +18,26 @@ module Workshop.Http
 import Control.Promise (Promise)
 import Effect (Effect)
 
--- | Seconds from the start of the take, both ends.
-type Region = { start :: Number, end :: Number }
+-- | Seconds from the start of the take, both ends — and what `msm` measured
+-- | inside them.
+-- |
+-- | The measurements ride along with the boundaries because they are one pass
+-- | over audio the detector had already read, and because the question they
+-- | answer is asked of the same objects: *is this division the sound I meant,
+-- | and are these twelve actually different from each other?*
+-- |
+-- | `zcr` is zero crossings per second, which is a coarse brightness. It is
+-- | here beside `peak` rather than instead of it because a sweep through a
+-- | timbre can hold its loudness perfectly still, and a run that never reached
+-- | the instrument looks identical to one that did if level is the only
+-- | witness.
+type Region =
+  { start :: Number
+  , end :: Number
+  , peak :: Number
+  , rms :: Number
+  , zcr :: Number
+  }
 
 type Divisions =
   { ok :: Boolean

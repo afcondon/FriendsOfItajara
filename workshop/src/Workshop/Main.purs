@@ -23,6 +23,7 @@ import Data.Foldable (for_)
 import Data.Int as Int
 import Data.Either (Either(..))
 import Data.Maybe (Maybe(..), fromMaybe, maybe)
+import Data.Maybe as Maybe
 import Data.Number as Number
 import Data.String as String
 import Data.String.Common (joinWith)
@@ -56,6 +57,9 @@ import Workshop.Kind as Kind
 import Workshop.Slug (slugFor)
 import Workshop.Divider (Divider)
 import Workshop.Divider as Divider
+import Workshop.Rig as Rig
+import Workshop.Sweep as Sweep
+import Workshop.SweepView as SweepView
 
 main :: Effect Unit
 main = HA.runHalogenAff do
@@ -123,6 +127,21 @@ type State =
   , kit :: String
   , voice :: Int
   , cardBusy :: Boolean
+  -- | **The sweep**: what to set, at how many points, and how to make a sound
+  -- | at each of them. See `Workshop.Sweep` for why it is a table of values
+  -- | rather than a set of curves.
+  , sweep :: Sweep.Plan
+  , sweepOpen :: Boolean
+  -- | Which position the run is on, while it is running.
+  , sweepAt :: Maybe Int
+  -- | Held so the run can be stopped. A forked action rather than a blocking
+  -- | one, because a loop that owns the handler for half a minute cannot be
+  -- | interrupted by pressing anything.
+  , sweepFork :: Maybe H.ForkId
+  , midiPorts :: Array String
+  -- | The take on show was made by a sweep, so the measurements are worth
+  -- | reading as a set rather than one at a time.
+  , swept :: Boolean
   }
 
 data Action
@@ -150,6 +169,10 @@ data Action
   | Play Int
   | HoverPlay Int
   | SetHoverPlays Boolean
+  | OpenSweep Boolean
+  | SweepMsg Sweep.Msg
+  | RunSweep Int
+  | StopSweep
 
 component :: forall q i o m. MonadAff m => H.Component q i o m
 component = H.mkComponent
@@ -159,7 +182,9 @@ component = H.mkComponent
       , peaks: Nothing, regions: [], keep: Set.empty, busy: false
       , hoverPlays: false, playing: Nothing, showing: "", waiting: false
       , minGap: 300.0, divider: Divider.Attacks, equalN: 16, mine: false, kitMine: false, layerMode: ""
-      , cardView: Nothing, bank: "WORKSHOP", kit: "", voice: 1, cardBusy: false }
+      , cardView: Nothing, bank: "WORKSHOP", kit: "", voice: 1, cardBusy: false
+      , sweep: Sweep.emptyPlan, sweepOpen: false, sweepAt: Nothing
+      , sweepFork: Nothing, midiPorts: [], swept: false }
   , render
   , eval: H.mkEval H.defaultEval { handleAction = handleAction, initialize = Just Init }
   }
@@ -222,6 +247,16 @@ handleAction = case _ of
       when (st2.waiting && lp.layers > 0 && not Socket.isWriting lp && not lp.armed) do
         H.modify_ _ { waiting = false }
         handleAction Analyse
+    -- The MIDI ports, while the sweep is open. Read rather than asked for: the
+    -- asking is a permission prompt that may sit unanswered for as long as it
+    -- likes, and this is how its answer arrives without anything waiting on it.
+    st3 <- H.get
+    when st3.sweepOpen do
+      ps <- liftEffect Rig.ports
+      when (ps /= st3.midiPorts) do
+        H.modify_ _ { midiPorts = ps }
+        unless (Array.null ps) $ H.modify_
+          (note (show (Array.length ps) <> " MIDI ports"))
   PickKind k -> do
     H.modify_ _ { kind = k, divider = Divider.defaultFor k }
     st <- H.get
@@ -392,7 +427,48 @@ handleAction = case _ of
     when (wantsAName st) do
       n <- liftEffect (slugFor st.kind)
       H.modify_ _ { name = n, kit = if st.kitMine then st.kit else "" }
-    H.modify_ (note (Kind.prompt st.kind) <<< _ { armed = true })
+    -- Not swept until something sweeps it. Left set, the declared-against-found
+    -- check would go on comparing every later take by hand against a position
+    -- count that has nothing to do with it.
+    H.modify_ (note (Kind.prompt st.kind) <<< _ { armed = true, swept = false })
+  -- | **The sweep modal**, and asking the browser for MIDI when it opens.
+  -- |
+  -- | Asked once, on opening, rather than at Run: `requestMIDIAccess` prompts
+  -- | the first time, and a permission dialog appearing in the middle of a run
+  -- | would cost the take.
+  OpenSweep b -> do
+    H.modify_ _ { sweepOpen = b }
+    when b do
+      r <- H.liftAff (attempt (toAffE Rig.openMidi))
+      case r of
+        Left e -> H.modify_ (note ("no MIDI: " <> Aff.message e))
+        Right ports -> do
+          H.modify_ _ { midiPorts = ports }
+          -- Empty here is the ORDINARY first answer, not a failure: the
+          -- permission prompt is still up. The poll fills the list when it is
+          -- answered, so this says "not yet" rather than "not at all".
+          when (Array.null ports) $ H.modify_
+            (note "no MIDI ports yet — allow MIDI if Chrome asks; CV is unaffected")
+  SweepMsg m -> H.modify_ \s -> s { sweep = Sweep.update m s.sweep }
+  -- | **Arming and running are one gesture**, for the same reason arming and
+  -- | choosing the input are: the run has to land inside a take, and a Run
+  -- | button that assumed something was already recording would fail silently
+  -- | by producing sound nobody caught.
+  RunSweep src -> do
+    st <- H.get
+    case st.sweepFork of
+      Just _ -> H.modify_ (note "a sweep is already running")
+      Nothing -> do
+        handleAction (ArmOn src)
+        H.modify_ _ { swept = false, sweepAt = Nothing }
+        fid <- H.fork runSweep
+        H.modify_ _ { sweepFork = Just fid }
+  StopSweep -> do
+    st <- H.get
+    for_ st.sweepFork H.kill
+    restCv
+    H.modify_ (note "sweep stopped" <<< _ { sweepFork = Nothing, sweepAt = Nothing })
+    handleAction Close
   Close -> do
     st <- H.get
     for_ (loop st) \lp ->
@@ -406,6 +482,58 @@ handleAction = case _ of
     -- Not `Analyse` here: the layer is not there yet. Ask for it, and let the
     -- poll that sees it arrive do the work.
     H.modify_ \s -> s { armed = false, waiting = true }
+
+-- | **The run.**
+-- |
+-- | Set, settle, strike, wait — twelve times, inside one take. Nothing here is
+-- | clever and nothing needs to be: the divider finds the real onsets
+-- | afterwards, so a few milliseconds of jitter between the schedule and the
+-- | audio costs nothing at all. The only interval that has to be right is
+-- | `settleMs`, and that is because a parameter still on its way when the
+-- | trigger lands makes position 7 a blend of 6 and 7 — an error the pictures
+-- | cannot show, since a blend looks exactly like a value.
+-- |
+-- | Forked, so Stop is a button rather than a wish.
+runSweep :: forall o m. MonadAff m => H.HalogenM State Action () o m Unit
+runSweep = do
+  st <- H.get
+  let p = st.sweep
+  -- The take is level-armed, so it begins on the first sound. This pause is
+  -- for the daemon to have finished clearing and arming before that sound.
+  H.liftAff (delay (Milliseconds 250.0))
+  for_ (Sweep.steps p) \s -> do
+    H.modify_ _ { sweepAt = Just s.index }
+    unless (Array.null s.cv) $ void $
+      H.liftAff (attempt (toAffE (Rig.setCv { set: s.cv })))
+    when (p.port /= "") $ liftEffect $ for_ s.cc \c ->
+      Rig.sendCc { port: p.port, channel: c.channel, cc: c.cc, value: c.value }
+    H.liftAff (delay (Milliseconds (Int.toNumber p.settleMs)))
+    for_ p.trigger.gate \b -> void $
+      H.liftAff (attempt (toAffE (Rig.pulse
+        { bus: b, level: p.trigger.gateLevel, ms: p.trigger.ms })))
+    when (p.port /= "") $ for_ p.trigger.note \n -> liftEffect $
+      Rig.sendNote { port: p.port, channel: p.trigger.channel, note: n
+                   , velocity: p.trigger.velocity, ms: p.trigger.ms }
+    H.liftAff (delay (Milliseconds (Int.toNumber p.spacingMs)))
+  restCv
+  H.modify_ (note ("swept " <> show p.positions <> " positions")
+    <<< _ { sweepAt = Nothing, sweepFork = Nothing, sweepOpen = false, swept = true })
+  handleAction Close
+
+-- | **Put every bus this sweep touched back to nothing.**
+-- |
+-- | A voltage is not a message; it stays where it was left. Ending a run at
+-- | position twelve and walking away leaves the instrument held at the top of
+-- | the sweep, which is a thing you then hear in every unrelated patch and
+-- | blame on something else.
+restCv :: forall o m. MonadAff m => H.HalogenM State Action () o m Unit
+restCv = do
+  st <- H.get
+  let buses = Array.nub
+        (Array.mapMaybe _.cv st.sweep.params
+           <> Array.catMaybes [ st.sweep.trigger.gate ])
+  unless (Array.null buses) $ void $ H.liftAff
+    (attempt (toAffE (Rig.setCv { set: map (\b -> { bus: b, level: 0.0 }) buses })))
 
 -- | Write the take down and ask where the sounds are.
 -- |
@@ -564,6 +692,7 @@ render st =
     , cardView
     , HH.section [ HP.class_ (HH.ClassName "ws-log") ]
         (map (\l -> HH.div_ [ HH.text l ]) st.log)
+    , sweepModal
     ]
   where
   lp = loop st
@@ -615,6 +744,77 @@ render st =
       , HH.span [ HP.class_ (HH.ClassName "ws-chip-db") ] [ HH.text (fmt s.db) ]
       ]
 
+  running = Maybe.isJust st.sweepFork
+
+  runChip n src =
+    HH.button
+      [ HP.class_ (HH.ClassName ("ws-chip is-arm" <> if src.available then "" else " off"))
+      , HP.disabled (not src.available)
+      , HP.title ("arm on " <> src.name <> " and start the run")
+      , HE.onClick \_ -> RunSweep (n + 1)
+      ]
+      [ HH.span [ HP.class_ (HH.ClassName "ws-chip-name") ] [ HH.text src.name ]
+      , HH.span [ HP.class_ (HH.ClassName "ws-chip-db") ] [ HH.text (fmt src.db) ]
+      ]
+
+  -- | **The sweep, as a modal.**
+  -- |
+  -- | A modal because it is a mode: while it is open you are describing a run
+  -- | rather than making a recording, and those want different verbs on the
+  -- | screen. Modelled on Triggerfish's routing modal, which answers the same
+  -- | shape of question — a table of things against the places they reach, too
+  -- | wide for a sidebar and too settled to deserve one.
+  sweepModal
+    | not st.sweepOpen = HH.text ""
+    | otherwise =
+        HH.div [ HP.class_ (HH.ClassName "ws-scrim") ]
+          [ HH.div
+              [ HP.class_ (HH.ClassName "ws-modal")
+              , HP.attr (HH.AttrName "role") "dialog"
+              ]
+              [ HH.header [ HP.class_ (HH.ClassName "ws-modhead") ]
+                  [ HH.h2_ [ HH.text "Sweep" ]
+                  , HH.span [ HP.class_ (HH.ClassName "ws-sub") ]
+                      [ HH.text "a row per parameter, a column per hit — and the \
+                                \columns are the tiles you will get back" ]
+                  , HH.button
+                      [ HP.class_ (HH.ClassName "ws-plain")
+                      , HP.disabled running
+                      , HE.onClick \_ -> OpenSweep false
+                      ]
+                      [ HH.text "close" ]
+                  ]
+              , map SweepMsg (SweepView.body st.midiPorts st.sweep)
+              , HH.div [ HP.class_ (HH.ClassName "ws-send") ]
+                  ( [ HH.span [ HP.class_ (HH.ClassName "ws-arm-label") ]
+                        [ HH.text (if running then "Running" else "Run on") ] ]
+                      <> runOrStop
+                  )
+              ]
+          ]
+
+  runOrStop
+    | running =
+        [ HH.span [ HP.class_ (HH.ClassName "ws-state") ]
+            [ HH.text ("position " <> show (maybe 0 (_ + 1) st.sweepAt)
+                <> " of " <> show st.sweep.positions) ]
+        , HH.button
+            [ HP.class_ (HH.ClassName "ws-plain is-replacing")
+            , HE.onClick \_ -> StopSweep
+            ]
+            [ HH.text "stop" ]
+        ]
+    | otherwise =
+        [ HH.div [ HP.class_ (HH.ClassName "ws-chips") ]
+            (maybe [ HH.text "no daemon" ]
+              (\top -> Array.mapWithIndex runChip top.sources)
+              st.looper)
+        , HH.span [ HP.class_ (HH.ClassName "ws-muted") ]
+            [ HH.text "pressing an input arms the take and starts the run, the \
+                      \same gesture as recording by hand. The take closes itself \
+                      \when the last position has sounded." ]
+        ]
+
   recordBox =
     HH.section [ HP.class_ (HH.ClassName "ws-rec") ]
       [ HH.h2_ [ HH.text "Record" ]
@@ -660,6 +860,17 @@ render st =
                    else maybe "" (\l -> if l.layers > 0
                                           then "captured " <> fmt l.loopSecs <> " s"
                                           else "ready") lp) ]
+          -- | **Playing it yourself is one way to fill a take.** This is the
+          -- | other: hand the schedule to the rig, and get a set that is even
+          -- | where a hand cannot be even.
+          , HH.button
+              [ HP.class_ (HH.ClassName "ws-plain")
+              , HP.disabled (st.armed || writing)
+              , HP.title "drive the instrument through a set of positions and \
+                         \record the result as one take"
+              , HE.onClick \_ -> OpenSweep true
+              ]
+              [ HH.text "Sweep\x2026" ]
           ]
       ]
 
@@ -690,6 +901,8 @@ render st =
                                then maybe "" (\l -> fmt l.loopSecs <> " s recorded, not divided yet") (loop st)
                                else show (Set.size st.keep) <> " of "
                                     <> show (Array.length st.regions) <> " kept") ]
+              , spread
+              , declaredVsFound
               , if Array.null st.regions && hasTake && not st.busy
                   then HH.button [ HP.class_ (HH.ClassName "ws-plain"), HE.onClick \_ -> Analyse ]
                          [ HH.text "Divide it" ]
@@ -866,6 +1079,80 @@ render st =
       , HH.input [ HP.type_ HP.InputText, HP.value v, HE.onValueInput act ]
       ]
 
+  -- | **Did anything actually change across these?**
+  -- |
+  -- | Two ratios, largest over smallest, on the two witnesses `msm` measures:
+  -- | level, and zero-crossing rate standing in for brightness. Both are
+  -- | needed. A sweep through a timbre holds its loudness still, so level alone
+  -- | reads a perfect run and a run that never reached the instrument as the
+  -- | same thing — and on Andrew's own hand-made BIA set, measured, level moved
+  -- | ×1.6 while brightness moved ×2.7. Brightness is the more sensitive
+  -- | witness for exactly the material this feature is for.
+  -- |
+  -- | Ratios rather than a verdict, except at the one end where a verdict is
+  -- | safe: if BOTH are flat then nothing moved, and that is worth saying
+  -- | loudly, because twelve identical tiles are what a run that never left
+  -- | this page looks like.
+  spread
+    | Array.length st.regions < 3 = HH.text ""
+    | otherwise =
+        let
+          rng f =
+            let
+              xs = Array.sort (map f st.regions)
+              lo = fromMaybe 0.0 (Array.head xs)
+              hi = fromMaybe 0.0 (Array.last xs)
+            in
+              if lo <= 0.0 then 0.0 else hi / lo
+          rp = rng _.peak
+          rz = rng _.zcr
+          flat = rp > 0.0 && rz > 0.0 && rp < 1.1 && rz < 1.1
+        in
+          HH.span [ HP.class_ (HH.ClassName (if flat then "ws-warn" else "ws-muted")) ]
+            [ HH.text
+                (if flat
+                   then "these " <> show (Array.length st.regions)
+                          <> " are within a few percent of each other on level AND \
+                             \brightness — whatever was meant to change did not reach \
+                             \the instrument"
+                   else "level ×" <> fmt rp <> ", brightness ×" <> fmt rz) ]
+
+  -- | You said how many positions; the detector found this many. Worth saying
+  -- | now, while the divider and the gap are one press away, rather than on the
+  -- | module.
+  declaredVsFound
+    | not st.swept = HH.text ""
+    | Array.null st.regions = HH.text ""
+    | Array.length st.regions == st.sweep.positions = HH.text ""
+    | otherwise =
+        HH.span [ HP.class_ (HH.ClassName "ws-warn") ]
+          [ HH.text ("you swept " <> show st.sweep.positions
+              <> " positions and this divided into " <> show (Array.length st.regions)
+              <> " — try another divider, or a wider gap, before sending it") ]
+
+  -- The loudest and the brightest in this take, so a tile is read against its
+  -- own neighbours rather than against an absolute nobody carries in their head.
+  loudest = fromMaybe 0.0 (Array.last (Array.sort (map _.peak st.regions)))
+  brightest = fromMaybe 0.0 (Array.last (Array.sort (map _.zcr st.regions)))
+
+  meter r =
+    HH.div [ HP.class_ (HH.ClassName "ws-meter") ]
+      [ bar "level" (r.peak / max 1.0e-9 loudest)
+          (fmt (r.peak * 100.0) <> "% of the loudest here")
+      , bar "bright" (r.zcr / max 1.0e-9 brightest)
+          (show (Int.round r.zcr) <> " zero crossings a second")
+      ]
+
+  bar k v title =
+    HH.div [ HP.class_ (HH.ClassName ("ws-bar is-" <> k)), HP.title (k <> " — " <> title) ]
+      [ HH.div
+          [ HP.class_ (HH.ClassName "ws-bar-fill")
+          , HP.attr (HH.AttrName "style")
+              ("width: " <> show (Int.round (100.0 * clamp 0.0 1.0 v)) <> "%")
+          ]
+          []
+      ]
+
   -- One sub-sample. Its picture is a SLICE of the take's own envelope, so
   -- forty tiles cost one snapshot rather than forty requests.
   tile i r =
@@ -902,6 +1189,7 @@ render st =
                 ]
                 [ HH.text (if kept then "✓" else "·") ]
             ]
+        , meter r
         ]
 
   -- | **The card, which is a description until you ask for it.**

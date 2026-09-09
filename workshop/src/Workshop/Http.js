@@ -13,7 +13,16 @@ export const divisions = (req) => () =>
       output: String(d.output ?? ""),
       secs: Number(d.secs ?? 0),
       divides: !!d.divides,
-      regions: (d.regions ?? []).map((r) => ({ start: Number(r.start), end: Number(r.end) })),
+      regions: (d.regions ?? []).map((r) => ({
+        start: Number(r.start),
+        end: Number(r.end),
+        // An older msm answers without these. Zero is honest for a missing
+        // measurement — the readout divides by the largest it can see, and a
+        // set of zeroes reads as "no measurement", not as "silence".
+        peak: Number(r.peak ?? 0),
+        rms: Number(r.rms ?? 0),
+        zcr: Number(r.zcr ?? 0),
+      })),
     }))
     .catch((e) => ({ ok: false, output: String(e.message ?? e), secs: 0, divides: false, regions: [] }));
 

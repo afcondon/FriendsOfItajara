@@ -19,11 +19,16 @@
 //                                    as, overwrite, allLayers, dryRun }
 //                                  → runs msm harvest,
 //                                    answers { ok, output }
+//   POST /api/cv                   { set: [{bus, level}] } | { pulse: {bus, level, ms} }
+//                                  → OSC to es9-daemon. See the note above it:
+//                                    this reports what was SENT, never what
+//                                    arrived.
 
 import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import dgram from "node:dgram";
 import { spawn } from "node:child_process";
 
 const PORT = Number(process.env.PORT || 3029);
@@ -395,6 +400,81 @@ async function addToCard(body) {
 // said "holds no audio", which is true of the place it looked and false of
 // the take. Search both, subdirectories first, and take the first file in
 // order — for the Workshop that is the only file.
+// ---------------------------------------------------------------------------
+// CV, for the sweep. OSC to es9-daemon, which holds the ES-9 open.
+//
+// The browser cannot open a UDP socket, so this is the seam — and it is the
+// only place the page can reach a voltage. Hand-rolled OSC because the whole
+// encoding is three rules (pad every string and blob to four bytes, big-endian
+// throughout, a comma-led type tag) and a dependency for that would be the
+// tail wagging the dog.
+//
+// **Nothing here can tell you the module moved.** UDP is fire-and-forget, and
+// es9-daemon does not answer. `ok` means the datagram left this process. The
+// confirmation of a sweep is the audio it produced: twelve tiles that differ.
+const ES9 = (process.env.ES9_DAEMON_ADDR || "127.0.0.1:57130").split(":");
+const ES9_HOST = ES9[0] || "127.0.0.1";
+const ES9_PORT = Number(ES9[1] || 57130);
+
+// N.B. `/cv` is the DIRECT bus path and, unlike `/tidal/cv`, es9-daemon does
+// NOT apply its SAFETY_SCALE to it — 1.0 is the ES-9's full output. Clamped to
+// ±1 here so a bad number is a quiet limit rather than a loud surprise, but the
+// range still belongs to whoever sets it.
+const oscStr = (s) => {
+  const b = Buffer.from(String(s) + "\0", "ascii");
+  return Buffer.concat([b, Buffer.alloc((4 - (b.length % 4)) % 4)]);
+};
+
+const oscMsg = (addr, args) => {
+  const parts = [oscStr(addr), oscStr("," + args.map((a) => a.t).join(""))];
+  for (const a of args) {
+    const b = Buffer.alloc(4);
+    if (a.t === "i") b.writeInt32BE(a.v | 0, 0);
+    else b.writeFloatBE(a.v, 0);
+    parts.push(b);
+  }
+  return Buffer.concat(parts);
+};
+
+const bus = (n) => Math.max(0, Math.min(15, Number(n) | 0));
+const level = (n) => Math.max(-1, Math.min(1, Number(n) || 0));
+
+let sock = null;
+function osc(msgs) {
+  if (!sock) {
+    sock = dgram.createSocket("udp4");
+    sock.on("error", () => {});
+    sock.unref();
+  }
+  for (const m of msgs) sock.send(m, ES9_PORT, ES9_HOST);
+}
+
+function cv(body) {
+  const msgs = [];
+  const said = [];
+  for (const s of body?.set ?? []) {
+    msgs.push(oscMsg("/cv", [{ t: "i", v: bus(s.bus) }, { t: "f", v: level(s.level) }]));
+    said.push(`${bus(s.bus)}=${level(s.level).toFixed(3)}`);
+  }
+  const p = body?.pulse;
+  if (p) {
+    const ms = Math.max(1, Math.min(10000, Number(p.ms) || 10));
+    msgs.push(oscMsg("/cv/trig", [
+      { t: "i", v: bus(p.bus) },
+      { t: "f", v: level(p.level) },
+      { t: "f", v: ms },
+    ]));
+    said.push(`trig ${bus(p.bus)}=${level(p.level).toFixed(3)} for ${ms}ms`);
+  }
+  if (!msgs.length) return { ok: false, output: "nothing to send" };
+  try {
+    osc(msgs);
+  } catch (e) {
+    return { ok: false, output: String(e.message ?? e) };
+  }
+  return { ok: true, output: `sent ${said.join(", ")} to ${ES9_HOST}:${ES9_PORT}` };
+}
+
 function firstWav(dir) {
   const inSubdirs = fs.readdirSync(dir, { withFileTypes: true })
     .filter((e) => e.isDirectory() && /^loop-\d+$/.test(e.name))
@@ -719,6 +799,10 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === "/api/onsets" && req.method === "POST") {
       const body = await readBody(req);
       return json(res, 200, await onsets(body));
+    }
+    if (url.pathname === "/api/cv" && req.method === "POST") {
+      const body = await readBody(req);
+      return json(res, 200, cv(body));
     }
     if (url.pathname === "/api/harvest" && req.method === "POST") {
       const body = await readBody(req);

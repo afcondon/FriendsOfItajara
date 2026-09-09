@@ -151,3 +151,75 @@ body {
    The additive one reads as ordinary, the destructive one as a warning. */
 .ws-twoverbs { display: flex; gap: 8px; align-items: center; }
 .ws-plain.is-replacing { border-color: #a8442a; color: #a8442a; }
+
+/* ---------------------------------------------------------------------------
+   The sweep.
+
+   A modal, because setting up a run is a mode and not a panel: while it is
+   open you are describing what the rig should do, and the page behind it is
+   about what you played. Wider than the page on purpose — the grid is the
+   whole idea and a grid that wraps is not one.
+   --------------------------------------------------------------------------- */
+.ws-scrim {
+  position: fixed; inset: 0; z-index: 40;
+  background: rgba(22, 22, 26, 0.32);
+  display: flex; align-items: flex-start; justify-content: center;
+  padding: 28px 20px; overflow: auto;
+}
+.ws-modal {
+  background: #fff; border: 1px solid var(--rule); border-radius: 5px;
+  box-shadow: 0 18px 60px rgba(22, 22, 26, 0.22);
+  width: min(1360px, 100%); padding: 22px 24px 20px;
+}
+.ws-modhead { display: flex; align-items: baseline; gap: 14px; border-bottom: 1px solid var(--rule); padding-bottom: 12px; margin-bottom: 16px; }
+.ws-modhead h2 { margin: 0; font-size: 19px; font-weight: 600; }
+.ws-modhead .ws-sub { flex: 1; }
+
+.ws-swrow { display: flex; align-items: center; flex-wrap: wrap; gap: 14px; margin-bottom: 14px; }
+.ws-swrow.is-trig { border-top: 1px solid var(--rule); padding-top: 14px; margin-top: 4px; }
+.ws-swrow .ws-field { margin: 0; }
+
+/* Parameters down, positions across. The first column carries where the
+   parameter GOES, which you set once; every column after it carries what it
+   does, which you come back to after every listen. */
+.ws-swgrid { display: grid; gap: 4px 3px; align-items: end; margin-bottom: 12px; }
+.ws-swcorner { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); font-weight: 600; padding-bottom: 4px; }
+.ws-swnum {
+  text-align: center; font-size: 11px; color: var(--muted);
+  font-variant-numeric: tabular-nums; padding-bottom: 4px;
+  border-bottom: 1px solid var(--rule);
+}
+.ws-swhead { display: flex; flex-direction: column; gap: 4px; padding: 6px 12px 6px 0; }
+.ws-swname { padding: 5px 8px; border: 1px solid var(--rule); border-radius: 3px; font: inherit; font-size: 13px; width: 100%; }
+.ws-swwhere { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.ws-swtiny { display: inline-flex; align-items: center; gap: 3px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.ws-swtiny input { padding: 3px 5px; border: 1px solid var(--rule); border-radius: 3px; font: inherit; font-size: 11px; font-variant-numeric: tabular-nums; }
+.ws-swseed { padding: 3px 4px; border: 1px solid var(--rule); border-radius: 3px; font: inherit; font-size: 11px; }
+.ws-swmini { border: 1px solid var(--rule); background: #fff; border-radius: 3px; cursor: pointer; font: inherit; font-size: 11px; padding: 3px 7px; }
+.ws-swmini:hover { border-color: var(--ink); }
+.ws-swmini.is-drop { color: #a8442a; }
+
+.ws-swcell { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+/* Vertical range inputs: `writing-mode` is the way Chrome does this now, and
+   `slider-vertical` is the way it used to. Both are set because a slider that
+   silently comes out horizontal turns the grid into nonsense. */
+.ws-swslider {
+  writing-mode: vertical-lr; direction: rtl;
+  -webkit-appearance: slider-vertical; appearance: slider-vertical;
+  width: 20px; height: 104px; margin: 0; padding: 0;
+  accent-color: var(--ink); cursor: ns-resize;
+}
+.ws-swval { font-size: 10px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.ws-swadd { display: flex; align-items: center; gap: 14px; margin-bottom: 6px; }
+.ws-swadd .ws-muted { flex: 1; font-size: 12px; }
+
+/* What came out, under what it looks like. Two bars because two witnesses:
+   a sweep through a timbre holds its level perfectly still, so level alone
+   cannot tell a good run from one that never reached the instrument. */
+.ws-meter { display: flex; flex-direction: column; gap: 2px; padding: 0 8px 7px; }
+.ws-bar { height: 3px; background: var(--rule); border-radius: 2px; overflow: hidden; }
+.ws-bar-fill { height: 100%; background: var(--ink); }
+.ws-bar.is-bright .ws-bar-fill { background: #7a7a85; }
+.ws-tile.is-dropped .ws-bar-fill { background: var(--muted); }
+.ws-swarrow { color: var(--rule); font-size: 11px; line-height: 1; }
