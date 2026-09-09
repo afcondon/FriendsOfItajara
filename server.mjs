@@ -122,11 +122,14 @@ function onsets(body) {
   if (!wav) return Promise.resolve({ ok: false, output: `${take} holds no audio` });
 
   const args = ["onset", wav, "--as", String(body.as || "hits").replace(/[^a-z]/g, ""), "--json"];
-  // The one knob that matters inside a long decay, where the adaptive
-  // threshold has nothing to hold on to. Bounded here so a slider cannot ask
-  // for something meaningless.
-  if (body.quiet != null && isFinite(Number(body.quiet))) {
-    args.push("--quiet", String(Math.min(0.5, Math.max(0.0005, Number(body.quiet)))));
+  // **How close two sounds can be and still be two.**
+  //
+  // The knob that does not discriminate by loudness, which matters because a
+  // velocity stack is played softest first: culling by level takes the quiet
+  // end, and the quiet end is the reason the stack exists. Bounded here so a
+  // slider cannot ask for something meaningless.
+  if (body.minGap != null && isFinite(Number(body.minGap))) {
+    args.push("--min-gap", String(Math.min(2000, Math.max(5, Number(body.minGap)))));
   }
   return new Promise((resolve) => {
     let out = "", err = "";

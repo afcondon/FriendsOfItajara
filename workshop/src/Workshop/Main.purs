@@ -100,12 +100,14 @@ type State =
   -- | `layers == 0`, took the "nothing to do" branch and said nothing at all,
   -- | which is why two recordings in a row appeared to do nothing.
   , waiting :: Boolean
-  -- | **How fussy the divider is**, as the fraction of the take's own loudest
-  -- | moment an onset must still reach. The detector cannot know the material
-  -- | — its defaults were chosen against drum hits and a break, and a patch
-  -- | with two-second tails is a different animal — and the only person who
-  -- | knows how many hits were played is the one who played them.
-  , quiet :: Number
+  -- | **How close two sounds can be and still be two**, in milliseconds.
+  -- |
+  -- | The knob that does not discriminate by loudness — which matters, because
+  -- | a velocity stack is played softest first and a threshold on level culls
+  -- | exactly the quiet end the stack exists for. Measured on a real take: at
+  -- | 600 ms it kept all eleven hits including the softest, where the level
+  -- | knob had dropped that one and merged its neighbour into the tile before.
+  , minGap :: Number
   }
 
 data Action
@@ -123,7 +125,7 @@ data Action
   | KeepAll Boolean
   | Analyse
   | Divide
-  | SetQuiet String
+  | SetGap String
   | Play Int
   | HoverPlay Int
   | SetHoverPlays Boolean
@@ -135,7 +137,7 @@ component = H.mkComponent
       , armed: false, name: "kick", log: []
       , peaks: Nothing, regions: [], keep: Set.empty, busy: false
       , hoverPlays: false, playing: Nothing, showing: "", waiting: false
-      , quiet: 0.02 }
+      , minGap: 300.0 }
   , render
   , eval: H.mkEval H.defaultEval { handleAction = handleAction, initialize = Just Init }
   }
@@ -206,8 +208,8 @@ handleAction = case _ of
   SetName v -> H.modify_ _ { name = v }
   Analyse -> analyse true
   Divide -> analyse false
-  SetQuiet v -> do
-    H.modify_ \s -> s { quiet = fromMaybe s.quiet (Number.fromString v) }
+  SetGap v -> do
+    H.modify_ \s -> s { minGap = fromMaybe s.minGap (Number.fromString v) }
     st <- H.get
     when (st.showing /= "") (analyse false)
   SetHoverPlays b -> do
@@ -290,7 +292,7 @@ analyse write = do
         -- the folder is there a moment later.
         H.liftAff (delay (Milliseconds 900.0))
       let takeName = if write then st.name else st.showing
-      r <- H.liftAff (attempt (toAffE (Http.divisions takeName (Kind.material st.kind) st.quiet)))
+      r <- H.liftAff (attempt (toAffE (Http.divisions takeName (Kind.material st.kind) st.minGap)))
       case r of
         Left e -> H.modify_ (note ("could not analyse: " <> Aff.message e) <<< _ { busy = false })
         Right d
@@ -471,18 +473,20 @@ render st =
               , HH.button [ HP.class_ (HH.ClassName "ws-plain"), HE.onClick \_ -> KeepAll false ]
                   [ HH.text "Keep none" ]
               , HH.label [ HP.class_ (HH.ClassName "ws-quiet") ]
-                  -- Higher means a division has to be louder to count, so the
-                  -- right-hand end is FEWER of them. Measured on a real take:
-                  -- 0.003 gave 70 and 0.15 gave 7.
+                  -- A wider gap means fewer divisions, so FEWER is the
+                  -- right-hand end — the same direction the old level knob
+                  -- ran, and the one people expect.
                   [ HH.span_ [ HH.text "more" ]
                   , HH.input
                       [ HP.type_ HP.InputRange
-                      , HP.min 0.002, HP.max 0.30, HP.step (HP.Step 0.002)
-                      , HP.value (show st.quiet)
-                      , HE.onValueChange SetQuiet
-                      , HP.title "how far below the loudest moment an onset may still be"
+                      , HP.min 25.0, HP.max 1200.0, HP.step (HP.Step 25.0)
+                      , HP.value (show st.minGap)
+                      , HE.onValueChange SetGap
+                      , HP.title "how close two sounds can be and still be two, in milliseconds"
                       ]
                   , HH.span_ [ HH.text "fewer" ]
+                  , HH.span [ HP.class_ (HH.ClassName "ws-gapval") ]
+                      [ HH.text (show (Int.round st.minGap) <> " ms") ]
                   ]
               , HH.label [ HP.class_ (HH.ClassName "ws-hover") ]
                   [ HH.input

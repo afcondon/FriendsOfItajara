@@ -8554,10 +8554,10 @@
   var playRange = /* @__PURE__ */ runEffectFn3(playRangeImpl);
 
   // output/Workshop.Http/foreign.js
-  var divisions = (take3) => (as) => (quiet) => () => fetch("/api/onsets", {
+  var divisions = (take3) => (as) => (minGap) => () => fetch("/api/onsets", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ take: take3, as, quiet })
+    body: JSON.stringify({ take: take3, as, minGap })
   }).then((r) => r.json()).then((d) => ({
     ok: !!d.ok,
     output: String(d.output ?? ""),
@@ -9314,15 +9314,15 @@
     Divide2.value = new Divide2();
     return Divide2;
   })();
-  var SetQuiet = /* @__PURE__ */ (function() {
-    function SetQuiet2(value0) {
+  var SetGap = /* @__PURE__ */ (function() {
+    function SetGap2(value0) {
       this.value0 = value0;
     }
     ;
-    SetQuiet2.create = function(value0) {
-      return new SetQuiet2(value0);
+    SetGap2.create = function(value0) {
+      return new SetGap2(value0);
     };
-    return SetQuiet2;
+    return SetGap2;
   })();
   var Play = /* @__PURE__ */ (function() {
     function Play2(value0) {
@@ -9373,7 +9373,7 @@
         playing: s.playing,
         showing: s.showing,
         waiting: s.waiting,
-        quiet: s.quiet,
+        minGap: s.minGap,
         log: takeEnd(10)(snoc2(s.log)(m))
       };
     };
@@ -9570,7 +9570,7 @@
         return span3([class_("ws-ok")])([text5("daemon")]);
       }
       ;
-      throw new Error("Failed pattern match at Workshop.Main (line 350, column 16 - line 352, column 80): " + [st.looper.constructor.name]);
+      throw new Error("Failed pattern match at Workshop.Main (line 352, column 16 - line 354, column 80): " + [st.looper.constructor.name]);
     })();
     var chip = function(n) {
       return function(s) {
@@ -9639,10 +9639,10 @@
           return new KeepAll(true);
         })])([text5("Keep all")]), button([class_("ws-plain"), onClick(function(v) {
           return new KeepAll(false);
-        })])([text5("Keep none")]), label4([class_("ws-quiet")])([span_([text5("more")]), input2([type_19(InputRange.value), min5(2e-3), max6(0.3), step3(new Step(2e-3)), value13(show6(st.quiet)), onValueChange(SetQuiet.create), title2("how far below the loudest moment an onset may still be")]), span_([text5("fewer")])]), label4([class_("ws-hover")])([input2([type_19(InputCheckbox.value), checked2(st.hoverPlays), onChecked(SetHoverPlays.create)]), span_([text5("hover plays")])])]), div2([class_("ws-grid")])(mapWithIndex2(tile)(st.regions))]);
+        })])([text5("Keep none")]), label4([class_("ws-quiet")])([span_([text5("more")]), input2([type_19(InputRange.value), min5(25), max6(1200), step3(new Step(25)), value13(show6(st.minGap)), onValueChange(SetGap.create), title2("how close two sounds can be and still be two, in milliseconds")]), span_([text5("fewer")]), span3([class_("ws-gapval")])([text5(show12(round2(st.minGap)) + " ms")])]), label4([class_("ws-hover")])([input2([type_19(InputCheckbox.value), checked2(st.hoverPlays), onChecked(SetHoverPlays.create)]), span_([text5("hover plays")])])]), div2([class_("ws-grid")])(mapWithIndex2(tile)(st.regions))]);
       }
       ;
-      throw new Error("Failed pattern match at Workshop.Main (line 448, column 3 - line 496, column 12): ");
+      throw new Error("Failed pattern match at Workshop.Main (line 450, column 3 - line 500, column 12): ");
     })();
     return div2([class_("ws")])([header([class_("ws-head")])([h1_([text5("Workshop")]), span3([class_("ws-sub")])([text5("record material, divide it, put it on a card")]), connection]), sourceBar, recordBox, caught, section([class_("ws-card")])([h2_([text5("The card")]), p([class_("ws-muted")])([text5("A virtual card lives here \u2014 banks, kits, voices \u2014 and stays a manifest until you ask for it. Writing it to a real card is a compile, never an edit in place, so what is on the card is always something you could read first. Next.")])]), section([class_("ws-log")])(map21(function(l) {
       return div_([text5(l)]);
@@ -9680,7 +9680,7 @@
               ;
               return st.showing;
             })();
-            return bind6(liftAff2(attempt(toAffE(divisions(takeName)(material(st.kind))(st.quiet)))))(function(r) {
+            return bind6(liftAff2(attempt(toAffE(divisions(takeName)(material(st.kind))(st.minGap)))))(function(r) {
               if (r instanceof Left) {
                 return modify_3((function() {
                   var $627 = note("could not analyse: " + message(r.value0));
@@ -9702,7 +9702,7 @@
                         playing: v.playing,
                         showing: v.showing,
                         waiting: v.waiting,
-                        quiet: v.quiet,
+                        minGap: v.minGap,
                         busy: false
                       };
                     })($628));
@@ -9732,7 +9732,7 @@
                           playing: v.playing,
                           showing: v.showing,
                           waiting: v.waiting,
-                          quiet: v.quiet,
+                          minGap: v.minGap,
                           busy: false
                         };
                       })($630));
@@ -9776,7 +9776,7 @@
                 ;
               }
               ;
-              throw new Error("Failed pattern match at Workshop.Main (line 294, column 7 - line 309, column 80): " + [r.constructor.name]);
+              throw new Error("Failed pattern match at Workshop.Main (line 296, column 7 - line 311, column 80): " + [r.constructor.name]);
             });
           });
         });
@@ -9855,7 +9855,7 @@
                                 hoverPlays: v1.hoverPlays,
                                 playing: v1.playing,
                                 showing: v1.showing,
-                                quiet: v1.quiet,
+                                minGap: v1.minGap,
                                 armed: false,
                                 waiting: true
                               };
@@ -9982,7 +9982,7 @@
         return analyse1(false);
       }
       ;
-      if (v instanceof SetQuiet) {
+      if (v instanceof SetGap) {
         return discard12(modify_3(function(s) {
           var $595 = {};
           for (var $596 in s) {
@@ -9992,7 +9992,7 @@
             ;
           }
           ;
-          $595.quiet = fromMaybe(s.quiet)(fromString(v.value0));
+          $595.minGap = fromMaybe(s.minGap)(fromString(v.value0));
           return $595;
         }))(function() {
           return bind6(get2)(function(st) {
@@ -10108,7 +10108,7 @@
                   playing: v1.playing,
                   showing: v1.showing,
                   waiting: v1.waiting,
-                  quiet: v1.quiet,
+                  minGap: v1.minGap,
                   regions: [],
                   keep: empty3,
                   peaks: Nothing.value
@@ -10137,7 +10137,7 @@
                           return pure13(unit);
                         }
                         ;
-                        throw new Error("Failed pattern match at Workshop.Main (line 246, column 5 - line 248, column 26): " + [v1.constructor.name]);
+                        throw new Error("Failed pattern match at Workshop.Main (line 248, column 5 - line 250, column 26): " + [v1.constructor.name]);
                       })())(function() {
                         return discard12(send1(new LevelArm(true)))(function() {
                           return discard12(send1(Record.value))(function() {
@@ -10161,7 +10161,7 @@
                                     playing: v1.playing,
                                     showing: v1.showing,
                                     waiting: v1.waiting,
-                                    quiet: v1.quiet,
+                                    minGap: v1.minGap,
                                     armed: true
                                   };
                                 })($636));
@@ -10212,7 +10212,7 @@
         });
       }
       ;
-      throw new Error("Failed pattern match at Workshop.Main (line 163, column 16 - line 267, column 56): " + [v.constructor.name]);
+      throw new Error("Failed pattern match at Workshop.Main (line 165, column 16 - line 269, column 56): " + [v.constructor.name]);
     };
   };
   var component = function(dictMonadAff) {
@@ -10235,7 +10235,7 @@
           playing: Nothing.value,
           showing: "",
           waiting: false,
-          quiet: 0.02
+          minGap: 300
         };
       },
       render: render2,

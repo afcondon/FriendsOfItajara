@@ -93,3 +93,4 @@ body {
 .ws-tile.is-dropped .ws-tile-keep { color: var(--muted); }
 .ws-quiet { display: inline-flex; align-items: center; gap: 7px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; }
 .ws-quiet input { width: 110px; }
+.ws-gapval { font-variant-numeric: tabular-nums; min-width: 52px; text-transform: none; letter-spacing: 0; }
