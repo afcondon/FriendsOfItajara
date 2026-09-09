@@ -425,10 +425,41 @@ analyse write = do
                 , busy = false
                 , showing = takeName
                 }
+              -- **Propose somewhere free to put it.**
+              --
+              -- A kit name you typed used to stick to voice 1 for ever, so
+              -- every later take aimed at the slot holding the last one. The
+              -- warning made that visible, which is not the same as making it
+              -- right: the default should be a place the take can go, and only
+              -- then a warning for when you deliberately aim elsewhere.
+              H.modify_ \s -> case freeVoice s of
+                Just v -> s { voice = v }
+                -- All four spoken for. Then the kit is full rather than the
+                -- voice taken, and the answer is a new kit, so let the name
+                -- take it over again.
+                Nothing -> s { kit = "", kitMine = false }
               H.modify_ (note
                 (show n <> (if n == 1 then " division" else " divisions")
                   <> " over " <> fmt d.secs <> " s"
                   <> (if d.divides then "" else " (this kind is kept whole)")))
+
+-- | **The lowest voice this take could go on without displacing anything.**
+-- |
+-- | A stereo sample occupies the voice after it too, so it needs a pair — and
+-- | a stereo take on voice 4 has nowhere to put its right channel, which is
+-- | why the search stops at 3 for those. Nothing means the kit is full.
+freeVoice :: State -> Maybe Int
+freeVoice st =
+  let kitName = if st.kit == "" then st.name else st.kit
+      wide = Kind.foldsTo st.kind /= ToMono
+      taken v = case st.cardView of
+        Nothing -> false
+        Just cv -> Array.any
+          (\r -> r.bank == st.bank && r.kit == kitName
+                   && (r.voice == v || (r.stereo && r.voice + 1 == v)))
+          cv.rows
+      fits v = not (taken v) && (not wide || not (taken (v + 1)))
+  in Array.find fits (if wide then [ 1, 3 ] else [ 1, 2, 3, 4 ])
 
 -- | Uniform slots, which is the case the start point was made for.
 isEqual :: Divider -> Boolean
