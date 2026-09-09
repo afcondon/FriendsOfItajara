@@ -112,10 +112,9 @@ data Action
   | Poll
   | PickKind Kind
   | SetBars String
-  | PickSource Int
   | SetMono Boolean
   | SetName String
-  | Arm
+  | ArmOn Int
   | Close
   | Discard
   | ToggleKeep Int
@@ -207,7 +206,6 @@ handleAction = case _ of
   -- said nothing, and armed on an input with no drums on it. So: sent when
   -- you click it, read back from the snapshot, and never re-asserted. The
   -- daemon is the one that knows.
-  PickSource n -> send (Source n)
   SetMono b -> send (Mono b)
   SetName v -> H.modify_ _ { name = v }
   Analyse -> analyse true
@@ -234,7 +232,12 @@ handleAction = case _ of
   Discard -> do
     send Clear
     H.modify_ (note "cleared" <<< _ { regions = [], keep = Set.empty, peaks = Nothing })
-  Arm -> do
+  ArmOn src -> do
+    -- **Choosing the input is the act of arming.** Kept apart, the page had
+    -- its own idea of which input to use and asserted it at Arm — so a reload
+    -- silently armed on the wrong one. Together, the thing you press says what
+    -- it is going to listen to, and there is no second copy to disagree.
+    send (Source src)
     st <- H.get
     -- Everything the take needs, set before it starts and nowhere else. The
     -- scratch loop is emptied first: it holds one take at a time, and a take
@@ -327,7 +330,6 @@ render st =
             [ HH.text "record material, divide it, put it on a card" ]
         , connection
         ]
-    , sourceBar
     , recordBox
     , caught
     , HH.section [ HP.class_ (HH.ClassName "ws-card") ]
@@ -363,11 +365,17 @@ render st =
     Nothing -> HH.span [ HP.class_ (HH.ClassName "ws-warn") ] [ HH.text "no daemon" ]
     Just _ -> HH.span [ HP.class_ (HH.ClassName "ws-ok") ] [ HH.text "daemon" ]
 
-  sourceBar =
-    HH.section [ HP.class_ (HH.ClassName "ws-source") ]
-      [ HH.h2_ [ HH.text "Input" ]
+  -- | **The inputs, and pressing one is what arms.**
+  -- |
+  -- | Andrew's simplification, and it removes a whole class of mistake: the
+  -- | page cannot arm on an input you did not just choose, because choosing is
+  -- | the gesture. Each chip shows what the daemon says that input is doing
+  -- | right now, so a dead one is visible before you play into it.
+  armRow =
+    HH.div [ HP.class_ (HH.ClassName "ws-arm") ]
+      [ HH.span [ HP.class_ (HH.ClassName "ws-arm-label") ] [ HH.text "Arm on" ]
       , HH.div [ HP.class_ (HH.ClassName "ws-chips") ]
-          (maybe [ HH.text "—" ]
+          (maybe [ HH.text "no daemon" ]
             (\top -> Array.mapWithIndex chip top.sources)
             st.looper)
       , HH.div [ HP.class_ (HH.ClassName "ws-toggle") ]
@@ -378,14 +386,14 @@ render st =
 
   chip n s =
     HH.button
-      [ HP.class_ (HH.ClassName ("ws-chip"
+      [ HP.class_ (HH.ClassName ("ws-chip is-arm"
           <> (if srcNow == n + 1 then " on" else "")
           <> (if s.available then "" else " off")))
-      , HP.disabled (not s.available || st.armed || writing)
+      , HP.disabled (not s.available)
       , HP.title (if s.available
-                    then s.name <> " — " <> fmt s.db <> " dBFS"
+                    then "arm on " <> s.name <> " — it reads " <> fmt s.db <> " dBFS right now"
                     else s.name <> " is on an interface that is not switched on")
-      , HE.onClick \_ -> PickSource (n + 1)
+      , HE.onClick \_ -> ArmOn (n + 1)
       ]
       [ HH.span [ HP.class_ (HH.ClassName "ws-chip-name") ] [ HH.text s.name ]
       , HH.span [ HP.class_ (HH.ClassName "ws-chip-db") ] [ HH.text (fmt s.db) ]
@@ -430,11 +438,7 @@ render st =
               then HH.button
                      [ HP.class_ (HH.ClassName "ws-big is-stop"), HE.onClick \_ -> Close ]
                      [ HH.text (if writing then "Stop" else "Cancel") ]
-              else HH.button
-                     [ HP.class_ (HH.ClassName "ws-big")
-                     , HP.disabled (st.looper == Nothing)
-                     , HE.onClick \_ -> Arm ]
-                     [ HH.text "Arm" ]
+              else armRow
           , HH.span [ HP.class_ (HH.ClassName "ws-state") ]
               [ HH.text
                   (if writing then "recording — " <> elapsed <> " s"
