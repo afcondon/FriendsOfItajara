@@ -37,19 +37,35 @@ const vlq = (n) => {
   return out;
 };
 
+// **Everything is placed in BEATS, on the grid.**
+//
+// The first version placed events in seconds, which put notes at 0.83, 2.33,
+// 3.83 beats and left clips a fractional number of bars long. A DAW importing
+// that has to decide where the clip ends and where its loop brace goes, and
+// what you hear is then a decision the DAW made rather than the file. Notes on
+// beats and a whole number of bars leaves nothing to decide.
 class Track {
   constructor(bpm) {
     this.bpm = bpm;
     this.ev = [];                   // { tick, bytes }
+    this.bars = 0;
   }
-  at(sec, bytes) {
-    this.ev.push({ tick: Math.round(sec * (this.bpm / 60) * PPQ), bytes });
+  at(beat, bytes) {
+    this.ev.push({ tick: Math.round(beat * PPQ), bytes });
   }
-  cc(sec, num, val) { this.at(sec, [0xb0 | CH, num & 0x7f, val & 0x7f]); }
-  pc(sec, prog) { this.at(sec, [0xc0 | CH, prog & 0x7f]); }
-  note(sec, pitch, vel, len) {
-    this.at(sec, [0x90 | CH, pitch, Math.max(1, Math.min(127, vel))]);
-    this.at(sec + len, [0x80 | CH, pitch, 0]);
+  cc(beat, num, val) { this.at(beat, [0xb0 | CH, num & 0x7f, val & 0x7f]); }
+  pc(beat, prog) { this.at(beat, [0xc0 | CH, prog & 0x7f]); }
+  note(beat, pitch, vel, len) {
+    this.at(beat, [0x90 | CH, pitch, Math.max(1, Math.min(127, vel))]);
+    this.at(beat + len, [0x80 | CH, pitch, 0]);
+  }
+  // Round the clip up to whole bars, so the loop brace lands where the music
+  // does and every note is inside it.
+  padToBars(beat) {
+    const bars = Math.max(1, Math.ceil((beat + 0.5) / 4));
+    this.bars = bars;
+    this.at(bars * 4, [0xb0 | CH, 123, 0]);   // all notes off, on the barline
+    return bars;
   }
   bytes() {
     // A tempo meta first, so the file plays at the tempo it was written for.
@@ -80,7 +96,7 @@ class Track {
 // Select a bank and kit: CC00 is the bank letter, Program Change is the kit.
 const select = (t, letter, kit) => {
   t.cc(0, 0, letter.charCodeAt(0) - 65);
-  t.pc(0.01, kit);
+  t.pc(0.02, kit);
 };
 
 // The CC value that lands in the MIDDLE of slice k of n, so a rounding error
@@ -134,26 +150,31 @@ card.banks.forEach((bank, bi) => {
       const t = new Track(100);
       select(t, letter, ki);
       const n = nLayers + 2;
+      // One per beat, so you can count them against the metronome and know at
+      // once whether you are hearing all of them.
       for (let i = 0; i < n; i++) {
         const vel = Math.max(1, Math.round(((i + 0.5) / n) * 127));
-        t.note(0.5 + i * 0.9, SP[0], vel, 0.4);
+        t.note(4 + i, SP[0], vel, 0.9);
       }
+      const bars = t.padToBars(4 + n);
       write(`${slot}-velocity.mid`, t,
-        `${n} notes, velocity 1..127, across ${nLayers} layers on SP1`);
+        `${n} notes on the beat, vel 1..127, ${nLayers} layers, ${bars} bars`);
     }
 
     // --- the slices, in order and then not -------------------------------
     if (slots > 1) {
+      const step = 0.25;                      // a sixteenth, in beats
+      const settleBeats = SETTLE * (88.7 / 60);
       const inOrder = new Track(88.7);
       select(inOrder, letter, ki);
-      const step = 60 / 88.7 / 4;             // a sixteenth
       for (let k = 0; k < slots; k++) {
-        const at = 1.0 + k * step;
-        inOrder.cc(at - SETTLE, startCC(1), slicePoint(k, slots));
+        const at = 4 + k * step;
+        inOrder.cc(at - settleBeats, startCC(1), slicePoint(k, slots));
         inOrder.note(at, SP[0], 100, step * 0.9);
       }
+      const barsA = inOrder.padToBars(4 + slots * step);
       write(`${slot}-slices-in-order.mid`, inOrder,
-        `${slots} slices at 88.7bpm sixteenths — do they land on the beat?`);
+        `${slots} slices, sixteenths at 88.7bpm, ${barsA} bars`);
 
       // Reversed, which is the case the grid phase was fixed for: in order a
       // slice's head can carry its neighbour's tail unnoticed, and out of
@@ -162,30 +183,33 @@ card.banks.forEach((bank, bi) => {
       select(shuffled, letter, ki);
       for (let i = 0; i < slots; i++) {
         const k = slots - 1 - i;
-        const at = 1.0 + i * step;
-        shuffled.cc(at - SETTLE, startCC(1), slicePoint(k, slots));
+        const at = 4 + i * step;
+        shuffled.cc(at - settleBeats, startCC(1), slicePoint(k, slots));
         shuffled.note(at, SP[0], 100, step * 0.9);
       }
+      const barsB = shuffled.padToBars(4 + slots * step);
       write(`${slot}-slices-reversed.mid`, shuffled,
-        `the same ${slots} backwards — any flam is the grid phase`);
+        `the same ${slots} backwards, ${barsB} bars — a flam is the grid phase`);
     }
 
     // --- both axes at once ------------------------------------------------
     if (slots > 1 && nLayers > 1 && mode === "velocity") {
       const t = new Track(100);
       select(t, letter, ki);
-      let at = 0.5;
+      const settle8 = SETTLE * (100 / 60);
+      let at = 4;
       for (let L = 0; L < nLayers; L++) {
         const vel = Math.max(1, Math.round(((L + 0.5) / nLayers) * 127));
         for (let k = 0; k < slots; k++) {
-          t.cc(at - SETTLE, startCC(1), slicePoint(k, slots));
-          t.note(at, SP[0], vel, 0.28);
-          at += 0.32;
+          t.cc(at - settle8, startCC(1), slicePoint(k, slots));
+          t.note(at, SP[0], vel, 0.45);
+          at += 0.5;                          // eighths
         }
-        at += 0.5;                            // a breath between layers
+        at = Math.ceil(at / 4) * 4 + 4;       // rest to the next bar, then one
       }
+      const bars = t.padToBars(at);
       write(`${slot}-two-axes.mid`, t,
-        `${nLayers} velocities x ${slots} slices — layer and start point together`);
+        `${nLayers} velocities x ${slots} slices, a bar between each, ${bars} bars`);
     }
 
     // --- which trigger notes answer --------------------------------------
@@ -195,7 +219,8 @@ card.banks.forEach((bank, bi) => {
     {
       const t = new Track(100);
       select(t, letter, ki);
-      SP.forEach((n, i) => t.note(0.5 + i * 1.2, n, 100, 0.9));
+      SP.forEach((n, i) => t.note(4 + i * 2, n, 100, 1.8));
+      t.padToBars(4 + SP.length * 2);
       write(`${slot}-triggers.mid`, t,
         stack.stereo
           ? "SP1..SP4 in turn — stereo should answer on 1 and 3 only"
