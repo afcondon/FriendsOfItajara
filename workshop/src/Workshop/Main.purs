@@ -110,6 +110,7 @@ type State =
   -- | knob had dropped that one and merged its neighbour into the tile before.
   , minGap :: Number
   , divider :: Divider
+  , mine :: Boolean
   , equalN :: Int
   -- | The virtual card, as the server flattens it, plus what `kit build` says
   -- | about it. Refreshed after anything that could change it.
@@ -153,7 +154,7 @@ component = H.mkComponent
       , armed: false, name: "", log: []
       , peaks: Nothing, regions: [], keep: Set.empty, busy: false
       , hoverPlays: false, playing: Nothing, showing: "", waiting: false
-      , minGap: 300.0, divider: Divider.Attacks, equalN: 16
+      , minGap: 300.0, divider: Divider.Attacks, equalN: 16, mine: false
       , cardView: Nothing, bank: "WORKSHOP", kit: "", voice: 1, cardBusy: false }
   , render
   , eval: H.mkEval H.defaultEval { handleAction = handleAction, initialize = Just Init }
@@ -223,7 +224,7 @@ handleAction = case _ of
     -- The name says what the take holds, so changing what you are about to
     -- record renames it — unless you have typed one of your own, which the
     -- generated shape lets us recognise.
-    when (spent st) do
+    when (wantsAName st) do
       n <- liftEffect (slugFor k)
       H.modify_ _ { name = n }
   SetBars v -> H.modify_ \s ->
@@ -238,7 +239,7 @@ handleAction = case _ of
   -- said nothing, and armed on an input with no drums on it. So: sent when
   -- you click it, read back from the snapshot, and never re-asserted. The
   -- daemon is the one that knows.
-  SetName v -> H.modify_ _ { name = v }
+  SetName v -> H.modify_ _ { name = v, mine = v /= "" }
   RefreshCard -> do
     r <- H.liftAff (attempt (toAffE Http.card))
     case r of
@@ -355,7 +356,7 @@ handleAction = case _ of
     -- A fresh name unless you gave it one that has not been used yet. This is
     -- the whole of the overwrite fix: the export is `exl <name>`, so a name
     -- that already belongs to a take on disk is a name that destroys it.
-    when (spent st) do
+    when (wantsAName st) do
       n <- liftEffect (slugFor st.kind)
       H.modify_ _ { name = n }
     H.modify_ (note (Kind.prompt st.kind) <<< _ { armed = true })
@@ -419,13 +420,21 @@ analyse write = do
                   <> " over " <> fmt d.secs <> " s"
                   <> (if d.divides then "" else " (this kind is kept whole)")))
 
--- | **Is this name free to be taken?**
+-- | **Should this take be given a name of its own?**
 -- |
--- | Empty, or already worn by the take now on screen — which is to say, a name
--- | that `exl` would write straight over. A name you typed and have not yet
--- | spent is yours and is left alone.
-spent :: State -> Boolean
-spent st = st.name == "" || st.name == st.showing
+-- | The first version of this asked whether the *current* name had been used
+-- | yet, which sounds equivalent and is not: on a fresh page nothing has been
+-- | used, so choosing a kind never renamed anything and four takes of chords
+-- | all came out called `drum-hits-…`. They were distinct files and none was
+-- | lost, but a name that lies about what it holds is barely better than a
+-- | name that collides.
+-- |
+-- | So ask the honest question instead — did you type this yourself? A
+-- | generated name is ours to replace whenever the kind or the take changes; a
+-- | name you typed is yours, and is only replaced once a take has actually
+-- | claimed it, because at that point keeping it would overwrite.
+wantsAName :: State -> Boolean
+wantsAName st = not st.mine || st.name == "" || st.name == st.showing
 
 -- | The last thing a command said, which is its summary. The rest is a list of
 -- | files and belongs in the log it already went to.

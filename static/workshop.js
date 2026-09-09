@@ -9334,8 +9334,8 @@
     };
     return SetHoverPlays2;
   })();
-  var spent = function(st) {
-    return st.name === "" || st.name === st.showing;
+  var wantsAName = function(st) {
+    return !st.mine || (st.name === "" || st.name === st.showing);
   };
   var scratch = 7;
   var note = function(m) {
@@ -9356,6 +9356,7 @@
         waiting: s.waiting,
         minGap: s.minGap,
         divider: s.divider,
+        mine: s.mine,
         equalN: s.equalN,
         cardView: s.cardView,
         bank: s.bank,
@@ -9504,7 +9505,7 @@
         })])([text5(show12(size2(st.keep)) + " to the kit")])]);
       }
       ;
-      throw new Error("Failed pattern match at Workshop.Main (line 651, column 3 - line 674, column 12): ");
+      throw new Error("Failed pattern match at Workshop.Main (line 660, column 3 - line 683, column 12): ");
     })();
     var row = function(r) {
       return tr_([td_([text5(r.bank)]), td_([text5(r.kit)]), td_([text5(show12(r.voice) + (function() {
@@ -9598,7 +9599,7 @@
         })(), span3([class_("ws-muted")])([text5(blurb2(st.divider))])]);
       }
       ;
-      throw new Error("Failed pattern match at Workshop.Main (line 621, column 3 - line 639, column 12): ");
+      throw new Error("Failed pattern match at Workshop.Main (line 630, column 3 - line 648, column 12): ");
     })();
     var connection = (function() {
       if (st.looper instanceof Nothing) {
@@ -9609,7 +9610,7 @@
         return span3([class_("ws-ok")])([text5("daemon")]);
       }
       ;
-      throw new Error("Failed pattern match at Workshop.Main (line 469, column 16 - line 471, column 80): " + [st.looper.constructor.name]);
+      throw new Error("Failed pattern match at Workshop.Main (line 478, column 16 - line 480, column 80): " + [st.looper.constructor.name]);
     })();
     var chip = function(n) {
       return function(s) {
@@ -9678,7 +9679,7 @@
         })])([text5("Keep none")]), label4([class_("ws-quiet")])([span_([text5("more")]), input2([type_19(InputRange.value), min5(25), max6(1200), step3(new Step(25)), value13(show7(st.minGap)), onValueChange(SetGap.create), title2("how close two sounds can be and still be two, in milliseconds")]), span_([text5("fewer")]), span3([class_("ws-gapval")])([text5(show12(round2(st.minGap)) + " ms")])]), label4([class_("ws-hover")])([input2([type_19(InputCheckbox.value), checked2(st.hoverPlays), onChecked(SetHoverPlays.create)]), span_([text5("hover plays")])])]), dividerRow, div2([class_("ws-grid")])(mapWithIndex2(tile)(st.regions)), sendRow]);
       }
       ;
-      throw new Error("Failed pattern match at Workshop.Main (line 561, column 3 - line 613, column 12): ");
+      throw new Error("Failed pattern match at Workshop.Main (line 570, column 3 - line 622, column 12): ");
     })();
     var cardView = section([class_("ws-card")])([h2_([text5("The card, so far")]), (function() {
       if (st.cardView instanceof Nothing) {
@@ -9711,7 +9712,7 @@
         ;
       }
       ;
-      throw new Error("Failed pattern match at Workshop.Main (line 729, column 9 - line 748, column 20): " + [st.cardView.constructor.name]);
+      throw new Error("Failed pattern match at Workshop.Main (line 738, column 9 - line 757, column 20): " + [st.cardView.constructor.name]);
     })()]);
     var armRow = div2([class_("ws-arm")])([span3([class_("ws-arm-label")])([text5("Arm on")]), div2([class_("ws-chips")])(maybe([text5("no daemon")])(function(top3) {
       return mapWithIndex2(chip)(top3.sources);
@@ -9832,6 +9833,7 @@
                         waiting: v.waiting,
                         minGap: v.minGap,
                         divider: v.divider,
+                        mine: v.mine,
                         equalN: v.equalN,
                         cardView: v.cardView,
                         bank: v.bank,
@@ -9867,6 +9869,7 @@
                           waiting: v.waiting,
                           minGap: v.minGap,
                           divider: v.divider,
+                          mine: v.mine,
                           equalN: v.equalN,
                           cardView: v.cardView,
                           bank: v.bank,
@@ -9916,7 +9919,7 @@
                 ;
               }
               ;
-              throw new Error("Failed pattern match at Workshop.Main (line 405, column 7 - line 420, column 80): " + [r.constructor.name]);
+              throw new Error("Failed pattern match at Workshop.Main (line 406, column 7 - line 421, column 80): " + [r.constructor.name]);
             });
           });
         });
@@ -10013,6 +10016,7 @@
                                 showing: v1.showing,
                                 minGap: v1.minGap,
                                 divider: v1.divider,
+                                mine: v1.mine,
                                 equalN: v1.equalN,
                                 cardView: v1.cardView,
                                 bank: v1.bank,
@@ -10069,7 +10073,7 @@
           return $194;
         }))(function() {
           return bind6(get2)(function(st) {
-            return when4(spent(st))(bind6(liftEffect12(slugFor(v.value0)))(function(n) {
+            return when4(wantsAName(st))(bind6(liftEffect12(slugFor(v.value0)))(function(n) {
               return modify_3(function(v1) {
                 var $197 = {};
                 for (var $198 in v1) {
@@ -10121,6 +10125,7 @@
           }
           ;
           $207.name = v.value0;
+          $207.mine = v.value0 !== "";
           return $207;
         });
       }
@@ -10146,7 +10151,7 @@
             });
           }
           ;
-          throw new Error("Failed pattern match at Workshop.Main (line 244, column 5 - line 246, column 51): " + [r.constructor.name]);
+          throw new Error("Failed pattern match at Workshop.Main (line 245, column 5 - line 247, column 51): " + [r.constructor.name]);
         });
       }
       ;
@@ -10232,6 +10237,7 @@
                         waiting: v1.waiting,
                         minGap: v1.minGap,
                         divider: v1.divider,
+                        mine: v1.mine,
                         equalN: v1.equalN,
                         cardView: v1.cardView,
                         bank: v1.bank,
@@ -10266,6 +10272,7 @@
                         waiting: v1.waiting,
                         minGap: v1.minGap,
                         divider: v1.divider,
+                        mine: v1.mine,
                         equalN: v1.equalN,
                         cardView: v1.cardView,
                         bank: v1.bank,
@@ -10278,7 +10285,7 @@
                 })());
               }
               ;
-              throw new Error("Failed pattern match at Workshop.Main (line 253, column 5 - line 255, column 81): " + [r.constructor.name]);
+              throw new Error("Failed pattern match at Workshop.Main (line 254, column 5 - line 256, column 81): " + [r.constructor.name]);
             })())(function() {
               return handleAction(dictMonadAff)(RefreshCard.value);
             });
@@ -10363,6 +10370,7 @@
                           waiting: v1.waiting,
                           minGap: v1.minGap,
                           divider: v1.divider,
+                          mine: v1.mine,
                           equalN: v1.equalN,
                           cardView: v1.cardView,
                           bank: v1.bank,
@@ -10397,6 +10405,7 @@
                           waiting: v1.waiting,
                           minGap: v1.minGap,
                           divider: v1.divider,
+                          mine: v1.mine,
                           equalN: v1.equalN,
                           cardView: v1.cardView,
                           bank: v1.bank,
@@ -10409,7 +10418,7 @@
                   })());
                 }
                 ;
-                throw new Error("Failed pattern match at Workshop.Main (line 280, column 9 - line 282, column 85): " + [r.constructor.name]);
+                throw new Error("Failed pattern match at Workshop.Main (line 281, column 9 - line 283, column 85): " + [r.constructor.name]);
               })())(function() {
                 return handleAction(dictMonadAff)(RefreshCard.value);
               });
@@ -10595,11 +10604,11 @@
                         return pure13(unit);
                       }
                       ;
-                      throw new Error("Failed pattern match at Workshop.Main (line 347, column 5 - line 349, column 26): " + [v1.constructor.name]);
+                      throw new Error("Failed pattern match at Workshop.Main (line 348, column 5 - line 350, column 26): " + [v1.constructor.name]);
                     })())(function() {
                       return discard12(send1(new LevelArm(true)))(function() {
                         return discard12(send1(Record.value))(function() {
-                          return discard12(when4(spent(st))(bind6(liftEffect12(slugFor(st.kind)))(function(n) {
+                          return discard12(when4(wantsAName(st))(bind6(liftEffect12(slugFor(st.kind)))(function(n) {
                             return modify_3(function(v1) {
                               var $281 = {};
                               for (var $282 in v1) {
@@ -10633,6 +10642,7 @@
                                     waiting: v1.waiting,
                                     minGap: v1.minGap,
                                     divider: v1.divider,
+                                    mine: v1.mine,
                                     equalN: v1.equalN,
                                     cardView: v1.cardView,
                                     bank: v1.bank,
@@ -10689,7 +10699,7 @@
         });
       }
       ;
-      throw new Error("Failed pattern match at Workshop.Main (line 182, column 16 - line 374, column 56): " + [v.constructor.name]);
+      throw new Error("Failed pattern match at Workshop.Main (line 183, column 16 - line 375, column 56): " + [v.constructor.name]);
     };
   };
   var component = function(dictMonadAff) {
@@ -10713,6 +10723,7 @@
           minGap: 300,
           divider: Attacks.value,
           equalN: 16,
+          mine: false,
           cardView: Nothing.value,
           bank: "WORKSHOP",
           kit: "",
