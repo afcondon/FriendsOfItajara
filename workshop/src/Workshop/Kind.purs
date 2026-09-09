@@ -19,6 +19,7 @@ module Workshop.Kind
   , prompt
   , Fold(..)
   , foldsTo
+  , joins
   , voicesOn
   ) where
 
@@ -153,6 +154,27 @@ voicesOn :: Kind -> Int
 voicesOn k = case foldsTo k of
   ToMono -> 1
   ToStereo -> 2
+
+-- | **Does this material become ONE file with slices, or a stack of layers?**
+-- |
+-- | A phrase joins. The module plays twelve layers and silently drops the
+-- | rest, so a bar cut into sixteen cannot be sixteen layers — and layers are
+-- | chosen by the layer selector, which cannot be sequenced per note. Joined,
+-- | every piece sits under the start point and can be triggered in any order,
+-- | which is the whole reason to slice a phrase rather than keep it whole.
+-- |
+-- | Hits and chords stay as layers: their pieces are alternatives to each
+-- | other, not a sequence, and the layer selector is exactly the right way to
+-- | choose between them.
+joins :: Kind -> Boolean
+joins = case _ of
+  DrumHits -> false
+  ChordHits -> false
+  Bars _ -> true
+  Chromatic -> false
+  -- One take, kept whole — which the joiner would also do, but by a longer
+  -- road and with a division nobody asked for.
+  Longform -> false
 
 -- | What to say while it is listening.
 prompt :: Kind -> String

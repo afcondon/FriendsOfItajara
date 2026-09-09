@@ -51,6 +51,10 @@ type CardRow =
   , count :: Int
   , stereo :: Boolean
   , kind :: String
+  -- | Non-zero when this voice is ONE file holding that many equal slices,
+  -- | rather than a stack of layers. `SETTINGS > SLICER` has to be set to it
+  -- | by hand: the module keeps it globally and a card cannot carry it.
+  , slicer :: Int
   }
 
 type CardView =
@@ -70,7 +74,8 @@ foreign import card :: Effect (Promise CardView)
 -- | Cut the kept regions into a named set and put that set on a voice.
 foreign import addToCard
   :: { take :: String, set :: String, bank :: String, kit :: String
-     , voice :: Int, kind :: String, stereo :: Boolean, regions :: Array Region }
+     , voice :: Int, kind :: String, stereo :: Boolean, join :: Boolean
+     , regions :: Array Region }
   -> Effect (Promise Wrote)
 
 -- | Compile the manifest onto a mounted card.

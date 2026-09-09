@@ -278,6 +278,7 @@ handleAction = case _ of
               , voice: st.voice
               , kind: Kind.name st.kind
               , stereo: Kind.foldsTo st.kind /= ToMono
+              , join: Kind.joins st.kind
               , regions: keptRegions })))
         case r of
           Left e -> H.modify_ (note (Aff.message e) <<< _ { cardBusy = false })
@@ -795,8 +796,11 @@ render st =
       , HH.td_ [ HH.text r.kit ]
       , HH.td_ [ HH.text (show r.voice <> (if r.stereo then " + " <> show (r.voice + 1) else "")) ]
       , HH.td_
-          [ HH.text (r.set <> " — " <> show r.count
-              <> (if r.count == 1 then " sample" else " samples")
+          [ HH.text (r.set <> " — "
+              <> (if r.slicer > 0
+                    then "one file, SLICER " <> show r.slicer
+                    else show r.count
+                           <> (if r.count == 1 then " sample" else " samples"))
               <> (if r.stereo then ", stereo" else "")) ]
       ]
 

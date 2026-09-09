@@ -129,15 +129,20 @@ function cardToml(card) {
     if (b.letter) t += `letter = ${q(b.letter)}\n`;
     t += `name = ${q(b.name)}\n`;
     if (b.kind) t += `kind = ${q(b.kind)}\n`;
+    if (b.slicer) t += `slicer = ${b.slicer}\n`;
     t += "\n";
     for (const k of b.kits || []) {
       t += "[[bank.kit]]\n";
       t += `name = ${q(k.name)}\n`;
       if (k.layers) t += `layers = ${q(k.layers)}\n`;
       for (const [v, val] of Object.entries(k.voices || {})) {
-        // A glob, so one layer per file — and the module reads a stack in byte
-        // order, which is why `msm cut` numbers them in playing order.
-        t += `voice${v} = ${q("samples/" + val.set + "/*.wav")}\n`;
+        // One file when it was joined — the slices live inside it and the
+        // start point indexes them. Otherwise a glob, so one layer per file,
+        // read by the module in byte order, which is why `msm cut` numbers
+        // them in playing order.
+        t += val.joined
+          ? `voice${v} = ${q("samples/" + val.set + "/" + val.set + ".wav")}\n`
+          : `voice${v} = ${q("samples/" + val.set + "/*.wav")}\n`;
       }
       t += "\n";
     }
@@ -202,11 +207,26 @@ async function addToCard(body) {
   const rjson = path.join(SHOP, ".regions.json");
   fs.writeFileSync(rjson, JSON.stringify(regions));
 
+  // **A phrase is one file with slices, never a stack of layers.**
+  //
+  // The module plays twelve layers and silently drops the rest, so a bar cut
+  // into sixteen cannot be sixteen layers — and layers are picked by the layer
+  // selector, which cannot be sequenced per note. Joined, every piece sits
+  // under the start point `CC(voice x 10 + 4)` and can be triggered in any
+  // order, which is the whole reason to slice a phrase.
+  const joins = !!body.join;
   const args = ["cut", wav, "--regions", rjson, "--out", path.join(SAMPLES, set),
                 "--name", set, "--module", "rample", "--overwrite"];
+  if (joins) args.push("--join");
   args.push(body.stereo ? "--stereo" : "--mono");
   const cut = await run(args);
   if (!cut.ok) return cut;
+  // The division `cut` settled on, straight from its own report rather than
+  // recomputed here — SLICER is global on the module and the card cannot carry
+  // it, so it has to reach the datasheet as a written instruction.
+  const slicer = joins
+    ? Number((cut.output.match(/SLICER (\d+)/) || [])[1]) || null
+    : null;
 
   const card = readCard();
   const bankName = String(body.bank || "WORKSHOP").toUpperCase().replace(/[^A-Z0-9 ]/g, "").trim() || "WORKSHOP";
@@ -219,7 +239,11 @@ async function addToCard(body) {
   if (!kit) { kit = { name: kitName, voices: {} }; bank.kits.push(kit); }
   // Velocity for a stack of hits, manual for anything chosen deliberately.
   kit.layers = body.kind === "drum-hits" ? "velocity" : "manual";
-  kit.voices[String(voice)] = { set, kind: body.kind || "", stereo: !!body.stereo };
+  kit.voices[String(voice)] =
+    { set, kind: body.kind || "", stereo: !!body.stereo, joined: joins, slicer };
+  // SLICER is a global setting, so it belongs to the bank rather than the kit:
+  // "set this when you come here".
+  if (slicer) bank.slicer = slicer;
   writeCard(card);
 
   return { ok: true, output: cut.output, card, sets: sets() };

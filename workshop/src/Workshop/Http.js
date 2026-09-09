@@ -31,6 +31,7 @@ export const card = () =>
           count: Number(d.sets?.[val.set] ?? 0),
           stereo: !!val.stereo,
           kind: String(val.kind ?? ""),
+          slicer: Number(val.slicer ?? 0),
         })))),
     cards: d.cards ?? [],
     plan: String(d.plan ?? ""),
