@@ -386,51 +386,7 @@ handleAction = case _ of
     s { keep = if Set.member i s.keep then Set.delete i s.keep else Set.insert i s.keep }
   KeepAll on -> H.modify_ \s ->
     s { keep = if on then Set.fromFoldable (Array.range 0 (Array.length s.regions - 1)) else Set.empty }
-  ArmOn src -> do
-    -- **Choosing the input is the act of arming.** Kept apart, the page had
-    -- its own idea of which input to use and asserted it at Arm — so a reload
-    -- silently armed on the wrong one. Together, the thing you press says what
-    -- it is going to listen to, and there is no second copy to disagree.
-    send (Source src)
-    st <- H.get
-    -- Everything the take needs, set before it starts and nowhere else. The
-    -- scratch loop is emptied first: it holds one take at a time, and a take
-    -- that landed on top of another is the bug this page exists to avoid.
-    --
-    -- This is also why there is no Discard button. Arming clears, so discarding
-    -- was only ever a way of doing early what the next take does anyway — and a
-    -- second button that says "throw it away" next to one that says "keep it"
-    -- invites the reading that the kept set is somehow at stake. It is not:
-    -- what has been sent to a kit is on disk and nothing here can reach it.
-    send Clear
-    -- Not the source and not mono: those are the loop's own, set when you
-    -- chose them and shown from the snapshot. Asserting them here is how the
-    -- page came to overrule a choice it had forgotten making.
-    -- Never alternates. Alternates sums a further pass into the layer that
-    -- sounds, which is right for takes of one scene and wrong for everything
-    -- here — and it is what put ten kicks in one layer on the looper page.
-    send (Alternates false)
-    -- Silent while it fills. You are playing into it, not along to it.
-    send (Sounding false)
-    send (OnGrid false)
-    case Kind.closes st.kind of
-      AtCount n -> send (Verb.Bars n)
-      ByHand -> pure unit
-    -- The whole of the arming: `r` now waits for a sound instead of starting
-    -- on the press, and the daemon reaches back past the crossing so the
-    -- attack that triggered it is inside the take.
-    send (LevelArm true)
-    send Record
-    -- A fresh name unless you gave it one that has not been used yet. This is
-    -- the whole of the overwrite fix: the export is `exl <name>`, so a name
-    -- that already belongs to a take on disk is a name that destroys it.
-    when (wantsAName st) do
-      n <- liftEffect (slugFor st.kind)
-      H.modify_ _ { name = n, kit = if st.kitMine then st.kit else "" }
-    -- Not swept until something sweeps it. Left set, the declared-against-found
-    -- check would go on comparing every later take by hand against a position
-    -- count that has nothing to do with it.
-    H.modify_ (note (Kind.prompt st.kind) <<< _ { armed = true, swept = false })
+  ArmOn src -> armOn true src
   -- | **The sweep modal**, and asking the browser for MIDI when it opens.
   -- |
   -- | Asked once, on opening, rather than at Run: `requestMIDIAccess` prompts
@@ -459,7 +415,9 @@ handleAction = case _ of
     case st.sweepFork of
       Just _ -> H.modify_ (note "a sweep is already running")
       Nothing -> do
-        handleAction (ArmOn src)
+        -- Open, not level-armed: see `armOn`. The schedule knows when the
+        -- first hit happens, so nothing needs to detect it.
+        armOn false src
         H.modify_ _ { swept = false, sweepAt = Nothing }
         fid <- H.fork runSweep
         H.modify_ _ { sweepFork = Just fid }
@@ -483,6 +441,73 @@ handleAction = case _ of
     -- poll that sees it arrive do the work.
     H.modify_ \s -> s { armed = false, waiting = true }
 
+-- | **Arm the scratch loop on an input, and start recording into it.**
+-- |
+-- | `levelArmed` is the whole of the difference between a take you play and a
+-- | take the rig plays.
+-- |
+-- | Playing it yourself, `r` has to wait for a sound: you cannot press Record
+-- | and pick up a stick in the same instant, and the daemon reaches back past
+-- | the crossing so the attack that triggered it is inside the take.
+-- |
+-- | **A sweep must not wait for a sound**, and this cost a run to learn. The
+-- | first swept take held five hits out of twelve: position 1 is the bottom of
+-- | the range, the BIA at Morph 0 is barely audible, and the level arm did not
+-- | trip until the sweep had climbed loud enough — around position eight. The
+-- | measurements say so plainly, peak 0.16 rising to 0.70 and brightness 19 to
+-- | 108 across what survived.
+-- |
+-- | And the fix is the rule this whole project keeps rediscovering: **declared
+-- | beats inferred.** The take's start is not something to detect, because the
+-- | page is the thing about to make the sound and already knows when. Inferring
+-- | it from level throws away information we hold, and throws it away in the
+-- | one direction that is silent — a sweep whose quiet end is the interesting
+-- | end loses exactly the part it was made for.
+armOn :: forall o m. MonadAff m => Boolean -> Int -> H.HalogenM State Action () o m Unit
+armOn levelArmed src = do
+  -- **Choosing the input is the act of arming.** Kept apart, the page had
+  -- its own idea of which input to use and asserted it at Arm — so a reload
+  -- silently armed on the wrong one. Together, the thing you press says what
+  -- it is going to listen to, and there is no second copy to disagree.
+  send (Source src)
+  st <- H.get
+  -- Everything the take needs, set before it starts and nowhere else. The
+  -- scratch loop is emptied first: it holds one take at a time, and a take
+  -- that landed on top of another is the bug this page exists to avoid.
+  --
+  -- This is also why there is no Discard button. Arming clears, so discarding
+  -- was only ever a way of doing early what the next take does anyway — and a
+  -- second button that says "throw it away" next to one that says "keep it"
+  -- invites the reading that the kept set is somehow at stake. It is not:
+  -- what has been sent to a kit is on disk and nothing here can reach it.
+  send Clear
+  -- Not the source and not mono: those are the loop's own, set when you
+  -- chose them and shown from the snapshot. Asserting them here is how the
+  -- page came to overrule a choice it had forgotten making.
+  -- Never alternates. Alternates sums a further pass into the layer that
+  -- sounds, which is right for takes of one scene and wrong for everything
+  -- here — and it is what put ten kicks in one layer on the looper page.
+  send (Alternates false)
+  -- Silent while it fills. You are playing into it, not along to it.
+  send (Sounding false)
+  send (OnGrid false)
+  case Kind.closes st.kind of
+    AtCount n -> send (Verb.Bars n)
+    ByHand -> pure unit
+  send (LevelArm levelArmed)
+  send Record
+  -- A fresh name unless you gave it one that has not been used yet. This is
+  -- the whole of the overwrite fix: the export is `exl <name>`, so a name
+  -- that already belongs to a take on disk is a name that destroys it.
+  when (wantsAName st) do
+    n <- liftEffect (slugFor st.kind)
+    H.modify_ _ { name = n, kit = if st.kitMine then st.kit else "" }
+  -- Not swept until something sweeps it. Left set, the declared-against-found
+  -- check would go on comparing every later take by hand against a position
+  -- count that has nothing to do with it.
+  H.modify_ (note (if levelArmed then Kind.prompt st.kind else "recording — the run starts in a moment")
+    <<< _ { armed = true, swept = false })
+
 -- | **The run.**
 -- |
 -- | Set, settle, strike, wait — twelve times, inside one take. Nothing here is
@@ -498,9 +523,10 @@ runSweep :: forall o m. MonadAff m => H.HalogenM State Action () o m Unit
 runSweep = do
   st <- H.get
   let p = st.sweep
-  -- The take is level-armed, so it begins on the first sound. This pause is
-  -- for the daemon to have finished clearing and arming before that sound.
-  H.liftAff (delay (Milliseconds 250.0))
+  -- The recording is already open, so this is real silence at the head of the
+  -- take rather than a wait for something to start it — which is what `by
+  -- attack` wants in front of the first onset anyway.
+  H.liftAff (delay (Milliseconds 400.0))
   for_ (Sweep.steps p) \s -> do
     H.modify_ _ { sweepAt = Just s.index }
     unless (Array.null s.cv) $ void $
@@ -515,6 +541,11 @@ runSweep = do
       Rig.sendNote { port: p.port, channel: p.trigger.channel, note: n
                    , velocity: p.trigger.velocity, ms: p.trigger.ms }
     H.liftAff (delay (Milliseconds (Int.toNumber p.spacingMs)))
+  -- The last hit gets the same gap as the others and then a little more, so
+  -- that closing the take is never the thing that ends its decay. A final
+  -- sample that is short because the recording stopped is indistinguishable
+  -- from one that is short because the sound was.
+  H.liftAff (delay (Milliseconds 300.0))
   restCv
   H.modify_ (note ("swept " <> show p.positions <> " positions")
     <<< _ { sweepAt = Nothing, sweepFork = Nothing, sweepOpen = false, swept = true })

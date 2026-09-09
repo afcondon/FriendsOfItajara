@@ -206,8 +206,13 @@ type Plan =
 emptyPlan :: Plan
 emptyPlan =
   { positions: 12
-  , params: [ param "morph" 0 ]
-  , trigger: { gate: Just 8, gateLevel: 0.5, note: Nothing, channel: 1, velocity: 100, ms: 10 }
+  , params: [ param "morph" 8 ]
+  -- **Bus 8 is ES-9 panel jack 1 and bus 15 is jack 8.** Not 0 and 7: the
+  -- daemon addresses sixteen cpal channels and the panel is the upper eight
+  -- (`main.rs`: "bus 8-15 → ES-9 panel jacks 1-8"). Buses 0-7 reach expanders
+  -- and non-panel outputs, so a sweep aimed at bus 0 goes somewhere real and
+  -- silent, which is the worst kind of wrong.
+  , trigger: { gate: Just 15, gateLevel: 0.5, note: Nothing, channel: 1, velocity: 100, ms: 10 }
   , port: ""
   , settleMs: 120
   , spacingMs: 700
@@ -300,7 +305,7 @@ update = case _ of
     if Array.length p.params >= 7 then p
     else p { params = Array.snoc p.params
                (param ("param " <> show (Array.length p.params + 1))
-                      (Array.length p.params))
+                      (8 + Array.length p.params))
                  { values = rampOf p.positions } }
   DropParam i -> \p -> p { params = fromMaybe p.params (Array.deleteAt i p.params) }
   SetName i v -> onParam i \q -> q { name = v }
