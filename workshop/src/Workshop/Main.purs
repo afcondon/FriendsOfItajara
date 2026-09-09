@@ -68,9 +68,6 @@ type State =
   { looper :: Maybe LooperState
   , kind :: Kind
   , bars :: Int
-  -- | Which input, one-based into the daemon's `sources`.
-  , src :: Int
-  , mono :: Boolean
   , armed :: Boolean
   , name :: String
   , log :: Array String
@@ -133,7 +130,7 @@ data Action
 component :: forall q i o m. MonadAff m => H.Component q i o m
 component = H.mkComponent
   { initialState: \_ ->
-      { looper: Nothing, kind: Kind.DrumHits, bars: 1, src: 1, mono: true
+      { looper: Nothing, kind: Kind.DrumHits, bars: 1
       , armed: false, name: "kick", log: []
       , peaks: Nothing, regions: [], keep: Set.empty, busy: false
       , hoverPlays: false, playing: Nothing, showing: "", waiting: false
@@ -203,8 +200,15 @@ handleAction = case _ of
     in s { bars = n, kind = case s.kind of
                              Kind.Bars _ -> Kind.Bars n
                              other -> other }
-  PickSource n -> H.modify_ _ { src = n }
-  SetMono b -> H.modify_ _ { mono = b }
+  -- **The loop's source is the loop's, not the page's.**
+  --
+  -- Held here once, and asserted again at Arm, it silently overrode whatever
+  -- had been chosen before a reload — the page came back thinking "board",
+  -- said nothing, and armed on an input with no drums on it. So: sent when
+  -- you click it, read back from the snapshot, and never re-asserted. The
+  -- daemon is the one that knows.
+  PickSource n -> send (Source n)
+  SetMono b -> send (Mono b)
   SetName v -> H.modify_ _ { name = v }
   Analyse -> analyse true
   Divide -> analyse false
@@ -236,8 +240,9 @@ handleAction = case _ of
     -- scratch loop is emptied first: it holds one take at a time, and a take
     -- that landed on top of another is the bug this page exists to avoid.
     send Clear
-    send (Source st.src)
-    send (Mono st.mono)
+    -- Not the source and not mono: those are the loop's own, set when you
+    -- chose them and shown from the snapshot. Asserting them here is how the
+    -- page came to overrule a choice it had forgotten making.
     -- Never alternates. Alternates sums a further pass into the layer that
     -- sounds, which is right for takes of one scene and wrong for everything
     -- here — and it is what put ten kicks in one layer on the looper page.
@@ -339,6 +344,11 @@ render st =
     ]
   where
   lp = loop st
+  -- What the daemon says this loop is doing, never a second copy of it.
+  srcNow = maybe 0 _.src lp
+  isMono = maybe true _.mono lp
+  srcName = maybe "?" _.name
+    (st.looper >>= \top -> Array.index top.sources (srcNow - 1))
   hasTake = maybe false (\l -> l.layers > 0) lp
   writing = maybe false Socket.isWriting lp
   listening = maybe false _.armed lp
@@ -361,15 +371,15 @@ render st =
             (\top -> Array.mapWithIndex chip top.sources)
             st.looper)
       , HH.div [ HP.class_ (HH.ClassName "ws-toggle") ]
-          [ tog "mono" st.mono (SetMono true)
-          , tog "stereo" (not st.mono) (SetMono false)
+          [ tog "mono" isMono (SetMono true)
+          , tog "stereo" (not isMono) (SetMono false)
           ]
       ]
 
   chip n s =
     HH.button
       [ HP.class_ (HH.ClassName ("ws-chip"
-          <> (if st.src == n + 1 then " on" else "")
+          <> (if srcNow == n + 1 then " on" else "")
           <> (if s.available then "" else " off")))
       , HP.disabled (not s.available || st.armed || writing)
       , HP.title (if s.available
@@ -411,7 +421,10 @@ render st =
               , HP.disabled (st.armed || writing)
               , HE.onValueInput SetName ]
           ]
-      , HH.p [ HP.class_ (HH.ClassName "ws-blurb") ] [ HH.text (Kind.blurb st.kind) ]
+      , HH.p [ HP.class_ (HH.ClassName "ws-blurb") ]
+          [ HH.text (Kind.blurb st.kind)
+          , HH.text (" Recording from " <> srcName <> (if isMono then ", mono." else ", stereo."))
+          ]
       , HH.div [ HP.class_ (HH.ClassName "ws-actions") ]
           [ if st.armed || writing || listening
               then HH.button

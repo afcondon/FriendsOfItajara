@@ -9361,8 +9361,6 @@
         looper: s.looper,
         kind: s.kind,
         bars: s.bars,
-        src: s.src,
-        mono: s.mono,
         armed: s.armed,
         name: s.name,
         peaks: s.peaks,
@@ -9411,10 +9409,10 @@
         var total = maybe(1)(function(l) {
           return l.loopSecs;
         })(loop2(st));
-        var n = maybe(0)(function($624) {
+        var n = maybe(0)(function($620) {
           return length3((function(v) {
             return v.hi;
-          })($624));
+          })($620));
         })(st.peaks);
         var kept = member3(i2)(st.keep);
         var b2 = bucketsFor(n)(total)(r.start)(r.end);
@@ -9428,8 +9426,8 @@
           ;
           return " is-dropped";
         })() + (function() {
-          var $526 = eq2(st.playing)(new Just(i2));
-          if ($526) {
+          var $527 = eq2(st.playing)(new Just(i2));
+          if ($527) {
             return " is-playing";
           }
           ;
@@ -9438,14 +9436,14 @@
           return new HoverPlay(i2);
         })])([button([class_("ws-tile-face"), title2(fmt(r.end - r.start) + (" s at " + (fmt(r.start) + " s"))), onClick(function(v) {
           return new Play(i2);
-        })])([svg(maybe([])(function($625) {
+        })])([svg(maybe([])(function($621) {
           return cut2((function(v) {
             return v.lo;
-          })($625));
-        })(st.peaks))(maybe([])(function($626) {
+          })($621));
+        })(st.peaks))(maybe([])(function($622) {
           return cut2((function(v) {
             return v.hi;
-          })($626));
+          })($622));
         })(st.peaks))([klass("ws-tile-svg")])]), div2([class_("ws-tile-foot")])([span3([class_("ws-tile-n")])([text5(show12(i2 + 1 | 0))]), span3([class_("ws-tile-len")])([text5(fmt(r.end - r.start))]), button([class_("ws-tile-keep"), title2((function() {
           if (kept) {
             return "drop this one";
@@ -9464,6 +9462,14 @@
       };
     };
     var lp = loop2(st);
+    var srcNow = maybe(0)(function(v) {
+      return v.src;
+    })(lp);
+    var srcName = maybe("?")(function(v) {
+      return v.name;
+    })(bind15(st.looper)(function(top3) {
+      return index2(top3.sources)(srcNow - 1 | 0);
+    }));
     var writing = maybe(false)(isWriting)(lp);
     var tog = function(lbl) {
       return function(on2) {
@@ -9485,8 +9491,8 @@
     })(lp);
     var kindBtn = function(k) {
       return button([class_("ws-kind" + (function() {
-        var $530 = name15(k) === name15(st.kind);
-        if ($530) {
+        var $531 = name15(k) === name15(st.kind);
+        if ($531) {
           return " on";
         }
         ;
@@ -9501,6 +9507,9 @@
         })());
       })])([text5(label5(k))]);
     };
+    var isMono = maybe(true)(function(v) {
+      return v.mono;
+    })(lp);
     var hasTake = maybe(false)(function(l) {
       return l.layers > 0;
     })(lp);
@@ -9518,9 +9527,15 @@
       }
       ;
       return text5("");
-    })(), label4([class_("ws-field")])([span_([text5("Call it")]), input2([type_19(InputText.value), value13(st.name), disabled10(st.armed || writing), onValueInput(SetName.create)])]), p([class_("ws-blurb")])([text5(blurb(st.kind))]), div2([class_("ws-actions")])([(function() {
-      var $535 = st.armed || (writing || listening);
-      if ($535) {
+    })(), label4([class_("ws-field")])([span_([text5("Call it")]), input2([type_19(InputText.value), value13(st.name), disabled10(st.armed || writing), onValueInput(SetName.create)])]), p([class_("ws-blurb")])([text5(blurb(st.kind)), text5(" Recording from " + (srcName + (function() {
+      if (isMono) {
+        return ", mono.";
+      }
+      ;
+      return ", stereo.";
+    })()))]), div2([class_("ws-actions")])([(function() {
+      var $537 = st.armed || (writing || listening);
+      if ($537) {
         return button([class_("ws-big is-stop"), onClick(function(v) {
           return Close.value;
         })])([text5((function() {
@@ -9545,8 +9560,8 @@
       }
       ;
       return maybe("")(function(l) {
-        var $539 = l.layers > 0;
-        if ($539) {
+        var $541 = l.layers > 0;
+        if ($541) {
           return "captured " + (fmt(l.loopSecs) + " s");
         }
         ;
@@ -9570,13 +9585,13 @@
         return span3([class_("ws-ok")])([text5("daemon")]);
       }
       ;
-      throw new Error("Failed pattern match at Workshop.Main (line 352, column 16 - line 354, column 80): " + [st.looper.constructor.name]);
+      throw new Error("Failed pattern match at Workshop.Main (line 362, column 16 - line 364, column 80): " + [st.looper.constructor.name]);
     })();
     var chip = function(n) {
       return function(s) {
         return button([class_("ws-chip" + ((function() {
-          var $544 = st.src === (n + 1 | 0);
-          if ($544) {
+          var $546 = srcNow === (n + 1 | 0);
+          if ($546) {
             return " on";
           }
           ;
@@ -9600,7 +9615,7 @@
     };
     var sourceBar = section([class_("ws-source")])([h2_([text5("Input")]), div2([class_("ws-chips")])(maybe([text5("\u2014")])(function(top3) {
       return mapWithIndex2(chip)(top3.sources);
-    })(st.looper)), div2([class_("ws-toggle")])([tog("mono")(st.mono)(new SetMono(true)), tog("stereo")(!st.mono)(new SetMono(false))])]);
+    })(st.looper)), div2([class_("ws-toggle")])([tog("mono")(isMono)(new SetMono(true)), tog("stereo")(!isMono)(new SetMono(false))])]);
     var caught = (function() {
       if ($$null2(st.regions) && (!st.busy && !hasTake)) {
         return text5("");
@@ -9618,8 +9633,8 @@
             return "dividing\u2026";
           }
           ;
-          var $550 = $$null2(st.regions);
-          if ($550) {
+          var $552 = $$null2(st.regions);
+          if ($552) {
             return maybe("")(function(l) {
               return fmt(l.loopSecs) + " s recorded, not divided yet";
             })(loop2(st));
@@ -9627,8 +9642,8 @@
           ;
           return show12(size2(st.keep)) + (" of " + (show12(length3(st.regions)) + " kept"));
         })())]), (function() {
-          var $551 = $$null2(st.regions) && (hasTake && !st.busy);
-          if ($551) {
+          var $553 = $$null2(st.regions) && (hasTake && !st.busy);
+          if ($553) {
             return button([class_("ws-plain"), onClick(function(v) {
               return Analyse.value;
             })])([text5("Divide it")]);
@@ -9642,7 +9657,7 @@
         })])([text5("Keep none")]), label4([class_("ws-quiet")])([span_([text5("more")]), input2([type_19(InputRange.value), min5(25), max6(1200), step3(new Step(25)), value13(show6(st.minGap)), onValueChange(SetGap.create), title2("how close two sounds can be and still be two, in milliseconds")]), span_([text5("fewer")]), span3([class_("ws-gapval")])([text5(show12(round2(st.minGap)) + " ms")])]), label4([class_("ws-hover")])([input2([type_19(InputCheckbox.value), checked2(st.hoverPlays), onChecked(SetHoverPlays.create)]), span_([text5("hover plays")])])]), div2([class_("ws-grid")])(mapWithIndex2(tile)(st.regions))]);
       }
       ;
-      throw new Error("Failed pattern match at Workshop.Main (line 450, column 3 - line 500, column 12): ");
+      throw new Error("Failed pattern match at Workshop.Main (line 463, column 3 - line 513, column 12): ");
     })();
     return div2([class_("ws")])([header([class_("ws-head")])([h1_([text5("Workshop")]), span3([class_("ws-sub")])([text5("record material, divide it, put it on a card")]), connection]), sourceBar, recordBox, caught, section([class_("ws-card")])([h2_([text5("The card")]), p([class_("ws-muted")])([text5("A virtual card lives here \u2014 banks, kits, voices \u2014 and stays a manifest until you ask for it. Writing it to a real card is a compile, never an edit in place, so what is on the card is always something you could read first. Next.")])]), section([class_("ws-log")])(map21(function(l) {
       return div_([text5(l)]);
@@ -9655,18 +9670,18 @@
     return function(write3) {
       var divide = function(st) {
         return discard12(modify_3(function(v) {
-          var $552 = {};
-          for (var $553 in v) {
-            if ({}.hasOwnProperty.call(v, $553)) {
-              $552[$553] = v[$553];
+          var $554 = {};
+          for (var $555 in v) {
+            if ({}.hasOwnProperty.call(v, $555)) {
+              $554[$555] = v[$555];
             }
             ;
           }
           ;
-          $552.busy = true;
-          $552.regions = [];
-          $552.keep = empty3;
-          return $552;
+          $554.busy = true;
+          $554.regions = [];
+          $554.keep = empty3;
+          return $554;
         }))(function() {
           return discard12(when4(write3)(discard12(send1(new AskPeaks(900)))(function() {
             return discard12(sendBare1(new ExportLayers(st.name)))(function() {
@@ -9683,15 +9698,13 @@
             return bind6(liftAff2(attempt(toAffE(divisions(takeName)(material(st.kind))(st.minGap)))))(function(r) {
               if (r instanceof Left) {
                 return modify_3((function() {
-                  var $627 = note("could not analyse: " + message(r.value0));
-                  return function($628) {
-                    return $627((function(v) {
+                  var $623 = note("could not analyse: " + message(r.value0));
+                  return function($624) {
+                    return $623((function(v) {
                       return {
                         looper: v.looper,
                         kind: v.kind,
                         bars: v.bars,
-                        src: v.src,
-                        mono: v.mono,
                         armed: v.armed,
                         name: v.name,
                         log: v.log,
@@ -9705,7 +9718,7 @@
                         minGap: v.minGap,
                         busy: false
                       };
-                    })($628));
+                    })($624));
                   };
                 })());
               }
@@ -9713,15 +9726,13 @@
               if (r instanceof Right) {
                 if (!r.value0.ok) {
                   return modify_3((function() {
-                    var $629 = note(r.value0.output);
-                    return function($630) {
-                      return $629((function(v) {
+                    var $625 = note(r.value0.output);
+                    return function($626) {
+                      return $625((function(v) {
                         return {
                           looper: v.looper,
                           kind: v.kind,
                           bars: v.bars,
-                          src: v.src,
-                          mono: v.mono,
                           armed: v.armed,
                           name: v.name,
                           log: v.log,
@@ -9735,7 +9746,7 @@
                           minGap: v.minGap,
                           busy: false
                         };
-                      })($630));
+                      })($626));
                     };
                   })());
                 }
@@ -9743,23 +9754,23 @@
                 if (otherwise) {
                   var n = length3(r.value0.regions);
                   return discard12(modify_3(function(v) {
-                    var $558 = {};
-                    for (var $559 in v) {
-                      if ({}.hasOwnProperty.call(v, $559)) {
-                        $558[$559] = v[$559];
+                    var $560 = {};
+                    for (var $561 in v) {
+                      if ({}.hasOwnProperty.call(v, $561)) {
+                        $560[$561] = v[$561];
                       }
                       ;
                     }
                     ;
-                    $558.regions = r.value0.regions;
-                    $558.keep = fromFoldable4(range2(0)(n - 1 | 0));
-                    $558.busy = false;
-                    $558.showing = takeName;
-                    return $558;
+                    $560.regions = r.value0.regions;
+                    $560.keep = fromFoldable4(range2(0)(n - 1 | 0));
+                    $560.busy = false;
+                    $560.showing = takeName;
+                    return $560;
                   }))(function() {
                     return modify_3(note(show12(n) + ((function() {
-                      var $561 = n === 1;
-                      if ($561) {
+                      var $563 = n === 1;
+                      if ($563) {
                         return " division";
                       }
                       ;
@@ -9776,7 +9787,7 @@
                 ;
               }
               ;
-              throw new Error("Failed pattern match at Workshop.Main (line 296, column 7 - line 311, column 80): " + [r.constructor.name]);
+              throw new Error("Failed pattern match at Workshop.Main (line 301, column 7 - line 316, column 80): " + [r.constructor.name]);
             });
           });
         });
@@ -9814,17 +9825,17 @@
           return bind6(liftEffect12(latest))(function(snap) {
             return bind6(liftEffect12(latestPeaks))(function(pk) {
               return discard12(modify_3(function(v1) {
-                var $567 = {};
-                for (var $568 in v1) {
-                  if ({}.hasOwnProperty.call(v1, $568)) {
-                    $567[$568] = v1[$568];
+                var $569 = {};
+                for (var $570 in v1) {
+                  if ({}.hasOwnProperty.call(v1, $570)) {
+                    $569[$570] = v1[$570];
                   }
                   ;
                 }
                 ;
-                $567.looper = snap;
-                $567.peaks = pk;
-                return $567;
+                $569.looper = snap;
+                $569.peaks = pk;
+                return $569;
               }))(function() {
                 return bind6(get2)(function(now) {
                   var has = maybe(false)(function(l) {
@@ -9837,15 +9848,13 @@
                     return bind6(get2)(function(st) {
                       return discard12(for_3(loop2(st))(function(lp) {
                         return when4(st.armed && (!lp.armed && (not1(isWriting)(lp) && lp.layers > 0)))(modify_3((function() {
-                          var $631 = note("closed itself: " + (fmt(lp.loopSecs) + " s"));
-                          return function($632) {
-                            return $631((function(v1) {
+                          var $627 = note("closed itself: " + (fmt(lp.loopSecs) + " s"));
+                          return function($628) {
+                            return $627((function(v1) {
                               return {
                                 looper: v1.looper,
                                 kind: v1.kind,
                                 bars: v1.bars,
-                                src: v1.src,
-                                mono: v1.mono,
                                 name: v1.name,
                                 log: v1.log,
                                 peaks: v1.peaks,
@@ -9859,23 +9868,23 @@
                                 armed: false,
                                 waiting: true
                               };
-                            })($632));
+                            })($628));
                           };
                         })()));
                       }))(function() {
                         return bind6(get2)(function(st2) {
                           return for_3(loop2(st2))(function(lp) {
                             return when4(st2.waiting && (lp.layers > 0 && (not1(isWriting)(lp) && !lp.armed)))(discard12(modify_3(function(v1) {
-                              var $570 = {};
-                              for (var $571 in v1) {
-                                if ({}.hasOwnProperty.call(v1, $571)) {
-                                  $570[$571] = v1[$571];
+                              var $572 = {};
+                              for (var $573 in v1) {
+                                if ({}.hasOwnProperty.call(v1, $573)) {
+                                  $572[$573] = v1[$573];
                                 }
                                 ;
                               }
                               ;
-                              $570.waiting = false;
-                              return $570;
+                              $572.waiting = false;
+                              return $572;
                             }))(function() {
                               return handleAction(dictMonadAff)(Analyse.value);
                             }));
@@ -9893,84 +9902,62 @@
       ;
       if (v instanceof PickKind) {
         return modify_3(function(v1) {
-          var $573 = {};
-          for (var $574 in v1) {
-            if ({}.hasOwnProperty.call(v1, $574)) {
-              $573[$574] = v1[$574];
+          var $575 = {};
+          for (var $576 in v1) {
+            if ({}.hasOwnProperty.call(v1, $576)) {
+              $575[$576] = v1[$576];
             }
             ;
           }
           ;
-          $573.kind = v.value0;
-          return $573;
+          $575.kind = v.value0;
+          return $575;
         });
       }
       ;
       if (v instanceof SetBars) {
         return modify_3(function(s) {
           var n = clamp3(1)(64)(fromMaybe(s.bars)(fromString2(v.value0)));
-          var $579 = {};
-          for (var $580 in s) {
-            if ({}.hasOwnProperty.call(s, $580)) {
-              $579[$580] = s[$580];
+          var $581 = {};
+          for (var $582 in s) {
+            if ({}.hasOwnProperty.call(s, $582)) {
+              $581[$582] = s[$582];
             }
             ;
           }
           ;
-          $579.bars = n;
-          $579.kind = (function() {
+          $581.bars = n;
+          $581.kind = (function() {
             if (s.kind instanceof Bars2) {
               return new Bars2(n);
             }
             ;
             return s.kind;
           })();
-          return $579;
+          return $581;
         });
       }
       ;
       if (v instanceof PickSource) {
-        return modify_3(function(v1) {
-          var $583 = {};
-          for (var $584 in v1) {
-            if ({}.hasOwnProperty.call(v1, $584)) {
-              $583[$584] = v1[$584];
-            }
-            ;
-          }
-          ;
-          $583.src = v.value0;
-          return $583;
-        });
+        return send1(new Source(v.value0));
       }
       ;
       if (v instanceof SetMono) {
-        return modify_3(function(v1) {
-          var $587 = {};
-          for (var $588 in v1) {
-            if ({}.hasOwnProperty.call(v1, $588)) {
-              $587[$588] = v1[$588];
-            }
-            ;
-          }
-          ;
-          $587.mono = v.value0;
-          return $587;
-        });
+        return send1(new Mono(v.value0));
       }
       ;
       if (v instanceof SetName) {
         return modify_3(function(v2) {
-          var $591 = {};
-          for (var $592 in v2) {
-            if ({}.hasOwnProperty.call(v2, $592)) {
-              $591[$592] = v2[$592];
+          var $587 = {};
+          for (var $588 in v2) {
+            if ({}.hasOwnProperty.call(v2, $588)) {
+              $587[$588] = v2[$588];
             }
             ;
           }
           ;
-          $591.name = v.value0;
-          return $591;
+          $587.name = v.value0;
+          return $587;
         });
       }
       ;
@@ -9984,16 +9971,16 @@
       ;
       if (v instanceof SetGap) {
         return discard12(modify_3(function(s) {
-          var $595 = {};
-          for (var $596 in s) {
-            if ({}.hasOwnProperty.call(s, $596)) {
-              $595[$596] = s[$596];
+          var $591 = {};
+          for (var $592 in s) {
+            if ({}.hasOwnProperty.call(s, $592)) {
+              $591[$592] = s[$592];
             }
             ;
           }
           ;
-          $595.minGap = fromMaybe(s.minGap)(fromString(v.value0));
-          return $595;
+          $591.minGap = fromMaybe(s.minGap)(fromString(v.value0));
+          return $591;
         }))(function() {
           return bind6(get2)(function(st) {
             return when4(st.showing !== "")(analyse1(false));
@@ -10004,16 +9991,16 @@
       if (v instanceof SetHoverPlays) {
         return discard12(unless2(v.value0)(liftEffect12(stop)))(function() {
           return modify_3(function(v1) {
-            var $599 = {};
-            for (var $600 in v1) {
-              if ({}.hasOwnProperty.call(v1, $600)) {
-                $599[$600] = v1[$600];
+            var $595 = {};
+            for (var $596 in v1) {
+              if ({}.hasOwnProperty.call(v1, $596)) {
+                $595[$596] = v1[$596];
               }
               ;
             }
             ;
-            $599.hoverPlays = v.value0;
-            return $599;
+            $595.hoverPlays = v.value0;
+            return $595;
           });
         });
       }
@@ -10029,16 +10016,16 @@
           return for_3(index2(st.regions)(v.value0))(function(r) {
             return discard12(liftEffect12(playRange("/api/take-audio?take=" + st.showing)(r.start)(r.end)))(function() {
               return modify_3(function(v1) {
-                var $604 = {};
-                for (var $605 in v1) {
-                  if ({}.hasOwnProperty.call(v1, $605)) {
-                    $604[$605] = v1[$605];
+                var $600 = {};
+                for (var $601 in v1) {
+                  if ({}.hasOwnProperty.call(v1, $601)) {
+                    $600[$601] = v1[$601];
                   }
                   ;
                 }
                 ;
-                $604.playing = new Just(v.value0);
-                return $604;
+                $600.playing = new Just(v.value0);
+                return $600;
               });
             });
           });
@@ -10047,59 +10034,57 @@
       ;
       if (v instanceof ToggleKeep) {
         return modify_3(function(s) {
-          var $609 = {};
-          for (var $610 in s) {
-            if ({}.hasOwnProperty.call(s, $610)) {
-              $609[$610] = s[$610];
+          var $605 = {};
+          for (var $606 in s) {
+            if ({}.hasOwnProperty.call(s, $606)) {
+              $605[$606] = s[$606];
             }
             ;
           }
           ;
-          $609.keep = (function() {
-            var $608 = member3(v.value0)(s.keep);
-            if ($608) {
+          $605.keep = (function() {
+            var $604 = member3(v.value0)(s.keep);
+            if ($604) {
               return $$delete4(v.value0)(s.keep);
             }
             ;
             return insert5(v.value0)(s.keep);
           })();
-          return $609;
+          return $605;
         });
       }
       ;
       if (v instanceof KeepAll) {
         return modify_3(function(s) {
-          var $614 = {};
-          for (var $615 in s) {
-            if ({}.hasOwnProperty.call(s, $615)) {
-              $614[$615] = s[$615];
+          var $610 = {};
+          for (var $611 in s) {
+            if ({}.hasOwnProperty.call(s, $611)) {
+              $610[$611] = s[$611];
             }
             ;
           }
           ;
-          $614.keep = (function() {
+          $610.keep = (function() {
             if (v.value0) {
               return fromFoldable4(range2(0)(length3(s.regions) - 1 | 0));
             }
             ;
             return empty3;
           })();
-          return $614;
+          return $610;
         });
       }
       ;
       if (v instanceof Discard) {
         return discard12(send1(Clear.value))(function() {
           return modify_3((function() {
-            var $633 = note("cleared");
-            return function($634) {
-              return $633((function(v1) {
+            var $629 = note("cleared");
+            return function($630) {
+              return $629((function(v1) {
                 return {
                   looper: v1.looper,
                   kind: v1.kind,
                   bars: v1.bars,
-                  src: v1.src,
-                  mono: v1.mono,
                   armed: v1.armed,
                   name: v1.name,
                   log: v1.log,
@@ -10113,7 +10098,7 @@
                   keep: empty3,
                   peaks: Nothing.value
                 };
-              })($634));
+              })($630));
             };
           })());
         });
@@ -10122,53 +10107,47 @@
       if (v instanceof Arm) {
         return bind6(get2)(function(st) {
           return discard12(send1(Clear.value))(function() {
-            return discard12(send1(new Source(st.src)))(function() {
-              return discard12(send1(new Mono(st.mono)))(function() {
-                return discard12(send1(new Alternates(false)))(function() {
-                  return discard12(send1(new Sounding(false)))(function() {
-                    return discard12(send1(new OnGrid(false)))(function() {
-                      return discard12((function() {
-                        var v1 = closes(st.kind);
-                        if (v1 instanceof AtCount) {
-                          return send1(new Bars(v1.value0));
-                        }
-                        ;
-                        if (v1 instanceof ByHand) {
-                          return pure13(unit);
-                        }
-                        ;
-                        throw new Error("Failed pattern match at Workshop.Main (line 248, column 5 - line 250, column 26): " + [v1.constructor.name]);
-                      })())(function() {
-                        return discard12(send1(new LevelArm(true)))(function() {
-                          return discard12(send1(Record.value))(function() {
-                            return modify_3((function() {
-                              var $635 = note(prompt(st.kind));
-                              return function($636) {
-                                return $635((function(v1) {
-                                  return {
-                                    looper: v1.looper,
-                                    kind: v1.kind,
-                                    bars: v1.bars,
-                                    src: v1.src,
-                                    mono: v1.mono,
-                                    name: v1.name,
-                                    log: v1.log,
-                                    peaks: v1.peaks,
-                                    regions: v1.regions,
-                                    keep: v1.keep,
-                                    busy: v1.busy,
-                                    hoverPlays: v1.hoverPlays,
-                                    playing: v1.playing,
-                                    showing: v1.showing,
-                                    waiting: v1.waiting,
-                                    minGap: v1.minGap,
-                                    armed: true
-                                  };
-                                })($636));
+            return discard12(send1(new Alternates(false)))(function() {
+              return discard12(send1(new Sounding(false)))(function() {
+                return discard12(send1(new OnGrid(false)))(function() {
+                  return discard12((function() {
+                    var v1 = closes(st.kind);
+                    if (v1 instanceof AtCount) {
+                      return send1(new Bars(v1.value0));
+                    }
+                    ;
+                    if (v1 instanceof ByHand) {
+                      return pure13(unit);
+                    }
+                    ;
+                    throw new Error("Failed pattern match at Workshop.Main (line 253, column 5 - line 255, column 26): " + [v1.constructor.name]);
+                  })())(function() {
+                    return discard12(send1(new LevelArm(true)))(function() {
+                      return discard12(send1(Record.value))(function() {
+                        return modify_3((function() {
+                          var $631 = note(prompt(st.kind));
+                          return function($632) {
+                            return $631((function(v1) {
+                              return {
+                                looper: v1.looper,
+                                kind: v1.kind,
+                                bars: v1.bars,
+                                name: v1.name,
+                                log: v1.log,
+                                peaks: v1.peaks,
+                                regions: v1.regions,
+                                keep: v1.keep,
+                                busy: v1.busy,
+                                hoverPlays: v1.hoverPlays,
+                                playing: v1.playing,
+                                showing: v1.showing,
+                                waiting: v1.waiting,
+                                minGap: v1.minGap,
+                                armed: true
                               };
-                            })());
-                          });
-                        });
+                            })($632));
+                          };
+                        })());
                       });
                     });
                   });
@@ -10182,8 +10161,8 @@
       if (v instanceof Close) {
         return bind6(get2)(function(st) {
           return discard12(for_3(loop2(st))(function(lp) {
-            var $620 = isWriting(lp) || lp.armed;
-            if ($620) {
+            var $616 = isWriting(lp) || lp.armed;
+            if ($616) {
               return discard12(send1(Record.value))(function() {
                 return modify_3(note("closed"));
               });
@@ -10194,17 +10173,17 @@
             return discard12(send1(new LevelArm(false)))(function() {
               return discard12(send1(new Sounding(true)))(function() {
                 return modify_3(function(s) {
-                  var $621 = {};
-                  for (var $622 in s) {
-                    if ({}.hasOwnProperty.call(s, $622)) {
-                      $621[$622] = s[$622];
+                  var $617 = {};
+                  for (var $618 in s) {
+                    if ({}.hasOwnProperty.call(s, $618)) {
+                      $617[$618] = s[$618];
                     }
                     ;
                   }
                   ;
-                  $621.armed = false;
-                  $621.waiting = true;
-                  return $621;
+                  $617.armed = false;
+                  $617.waiting = true;
+                  return $617;
                 });
               });
             });
@@ -10212,7 +10191,7 @@
         });
       }
       ;
-      throw new Error("Failed pattern match at Workshop.Main (line 165, column 16 - line 269, column 56): " + [v.constructor.name]);
+      throw new Error("Failed pattern match at Workshop.Main (line 162, column 16 - line 274, column 56): " + [v.constructor.name]);
     };
   };
   var component = function(dictMonadAff) {
@@ -10222,8 +10201,6 @@
           looper: Nothing.value,
           kind: DrumHits.value,
           bars: 1,
-          src: 1,
-          mono: true,
           armed: false,
           name: "kick",
           log: [],
