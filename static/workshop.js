@@ -264,11 +264,11 @@
 
   // output/Data.Ord/foreign.js
   var unsafeCompareImpl = function(lt) {
-    return function(eq3) {
+    return function(eq4) {
       return function(gt) {
         return function(x) {
           return function(y) {
-            return x < y ? lt : x === y ? eq3 : gt;
+            return x < y ? lt : x === y ? eq4 : gt;
           };
         };
       };
@@ -503,7 +503,7 @@
     };
   };
   var eqMaybe = function(dictEq) {
-    var eq3 = eq(dictEq);
+    var eq4 = eq(dictEq);
     return {
       eq: function(x) {
         return function(y) {
@@ -512,7 +512,7 @@
           }
           ;
           if (x instanceof Just && y instanceof Just) {
-            return eq3(x.value0)(y.value0);
+            return eq4(x.value0)(y.value0);
           }
           ;
           return false;
@@ -8523,6 +8523,20 @@
     Longform2.value = new Longform2();
     return Longform2;
   })();
+  var ToMono = /* @__PURE__ */ (function() {
+    function ToMono2() {
+    }
+    ;
+    ToMono2.value = new ToMono2();
+    return ToMono2;
+  })();
+  var ToStereo = /* @__PURE__ */ (function() {
+    function ToStereo2() {
+    }
+    ;
+    ToStereo2.value = new ToStereo2();
+    return ToStereo2;
+  })();
   var ByHand = /* @__PURE__ */ (function() {
     function ByHand2() {
     }
@@ -8540,6 +8554,21 @@
     };
     return AtCount2;
   })();
+  var eqFold = {
+    eq: function(x) {
+      return function(y) {
+        if (x instanceof ToMono && y instanceof ToMono) {
+          return true;
+        }
+        ;
+        if (x instanceof ToStereo && y instanceof ToStereo) {
+          return true;
+        }
+        ;
+        return false;
+      };
+    }
+  };
   var prompt = function(v) {
     if (v instanceof DrumHits) {
       return "listening \u2014 play them softest first, then stop";
@@ -8551,8 +8580,8 @@
     ;
     if (v instanceof Bars2) {
       return "listening \u2014 it starts on your first note and closes after " + (show4(v.value0) + (function() {
-        var $29 = v.value0 === 1;
-        if ($29) {
+        var $36 = v.value0 === 1;
+        if ($36) {
           return " bar";
         }
         ;
@@ -8568,7 +8597,7 @@
       return "listening \u2014 starts on your first sound, stop when you are done";
     }
     ;
-    throw new Error("Failed pattern match at Workshop.Kind (line 124, column 10 - line 130, column 79): " + [v.constructor.name]);
+    throw new Error("Failed pattern match at Workshop.Kind (line 159, column 10 - line 165, column 79): " + [v.constructor.name]);
   };
   var name15 = function(v) {
     if (v instanceof DrumHits) {
@@ -8591,7 +8620,7 @@
       return "longform";
     }
     ;
-    throw new Error("Failed pattern match at Workshop.Kind (line 47, column 8 - line 52, column 25): " + [v.constructor.name]);
+    throw new Error("Failed pattern match at Workshop.Kind (line 50, column 8 - line 55, column 25): " + [v.constructor.name]);
   };
   var material = function(v) {
     if (v instanceof DrumHits) {
@@ -8614,7 +8643,7 @@
       return "ambient";
     }
     ;
-    throw new Error("Failed pattern match at Workshop.Kind (line 115, column 12 - line 120, column 24): " + [v.constructor.name]);
+    throw new Error("Failed pattern match at Workshop.Kind (line 118, column 12 - line 123, column 24): " + [v.constructor.name]);
   };
   var label5 = function(v) {
     if (v instanceof DrumHits) {
@@ -8626,8 +8655,8 @@
     }
     ;
     if (v instanceof Bars2) {
-      var $36 = v.value0 === 1;
-      if ($36) {
+      var $43 = v.value0 === 1;
+      if ($43) {
         return "One bar";
       }
       ;
@@ -8642,7 +8671,42 @@
       return "Longform";
     }
     ;
-    throw new Error("Failed pattern match at Workshop.Kind (line 55, column 9 - line 60, column 25): " + [v.constructor.name]);
+    throw new Error("Failed pattern match at Workshop.Kind (line 58, column 9 - line 63, column 25): " + [v.constructor.name]);
+  };
+  var foldsTo = function(v) {
+    if (v instanceof DrumHits) {
+      return ToMono.value;
+    }
+    ;
+    if (v instanceof ChordHits) {
+      return ToStereo.value;
+    }
+    ;
+    if (v instanceof Bars2) {
+      return ToMono.value;
+    }
+    ;
+    if (v instanceof Chromatic) {
+      return ToMono.value;
+    }
+    ;
+    if (v instanceof Longform) {
+      return ToStereo.value;
+    }
+    ;
+    throw new Error("Failed pattern match at Workshop.Kind (line 138, column 11 - line 144, column 23): " + [v.constructor.name]);
+  };
+  var voicesOn = function(k) {
+    var v = foldsTo(k);
+    if (v instanceof ToMono) {
+      return 1;
+    }
+    ;
+    if (v instanceof ToStereo) {
+      return 2;
+    }
+    ;
+    throw new Error("Failed pattern match at Workshop.Kind (line 153, column 14 - line 155, column 16): " + [v.constructor.name]);
   };
   var closes = function(v) {
     if (v instanceof DrumHits) {
@@ -8665,7 +8729,7 @@
       return ByHand.value;
     }
     ;
-    throw new Error("Failed pattern match at Workshop.Kind (line 92, column 10 - line 99, column 21): " + [v.constructor.name]);
+    throw new Error("Failed pattern match at Workshop.Kind (line 95, column 10 - line 102, column 21): " + [v.constructor.name]);
   };
   var blurb = function(v) {
     if (v instanceof DrumHits) {
@@ -8688,7 +8752,7 @@
       return "Starts on your first sound and runs until you stop it. Nothing is divided.";
     }
     ;
-    throw new Error("Failed pattern match at Workshop.Kind (line 63, column 9 - line 78, column 81): " + [v.constructor.name]);
+    throw new Error("Failed pattern match at Workshop.Kind (line 66, column 9 - line 81, column 81): " + [v.constructor.name]);
   };
   var all3 = /* @__PURE__ */ (function() {
     return [DrumHits.value, ChordHits.value, new Bars2(1), Chromatic.value, Longform.value];
@@ -8771,6 +8835,7 @@
   var type_19 = /* @__PURE__ */ type_18(isPropInputType);
   var value13 = /* @__PURE__ */ value12(isPropString);
   var map21 = /* @__PURE__ */ map(functorArray);
+  var eq3 = /* @__PURE__ */ eq(eqFold);
   var discard5 = /* @__PURE__ */ discard(discardUnit);
   var discard12 = /* @__PURE__ */ discard5(bindHalogenM);
   var when4 = /* @__PURE__ */ when(applicativeHalogenM);
@@ -8819,16 +8884,6 @@
       return new SetBars2(value0);
     };
     return SetBars2;
-  })();
-  var SetMono = /* @__PURE__ */ (function() {
-    function SetMono2(value0) {
-      this.value0 = value0;
-    }
-    ;
-    SetMono2.create = function(value0) {
-      return new SetMono2(value0);
-    };
-    return SetMono2;
   })();
   var SetName = /* @__PURE__ */ (function() {
     function SetName2(value0) {
@@ -8993,10 +9048,10 @@
         var total = maybe(1)(function(l) {
           return l.loopSecs;
         })(loop2(st));
-        var n = maybe(0)(function($206) {
+        var n = maybe(0)(function($204) {
           return length3((function(v) {
             return v.hi;
-          })($206));
+          })($204));
         })(st.peaks);
         var kept = member3(i2)(st.keep);
         var b2 = bucketsFor(n)(total)(r.start)(r.end);
@@ -9010,8 +9065,8 @@
           ;
           return " is-dropped";
         })() + (function() {
-          var $113 = eq2(st.playing)(new Just(i2));
-          if ($113) {
+          var $112 = eq2(st.playing)(new Just(i2));
+          if ($112) {
             return " is-playing";
           }
           ;
@@ -9020,14 +9075,14 @@
           return new HoverPlay(i2);
         })])([button([class_("ws-tile-face"), title2(fmt(r.end - r.start) + (" s at " + (fmt(r.start) + " s"))), onClick(function(v) {
           return new Play(i2);
-        })])([svg(maybe([])(function($207) {
+        })])([svg(maybe([])(function($205) {
           return cut2((function(v) {
             return v.lo;
-          })($207));
-        })(st.peaks))(maybe([])(function($208) {
+          })($205));
+        })(st.peaks))(maybe([])(function($206) {
           return cut2((function(v) {
             return v.hi;
-          })($208));
+          })($206));
         })(st.peaks))([klass("ws-tile-svg")])]), div2([class_("ws-tile-foot")])([span3([class_("ws-tile-n")])([text5(show12(i2 + 1 | 0))]), span3([class_("ws-tile-len")])([text5(fmt(r.end - r.start))]), button([class_("ws-tile-keep"), title2((function() {
           if (kept) {
             return "drop this one";
@@ -9055,28 +9110,13 @@
       return index2(top3.sources)(srcNow - 1 | 0);
     }));
     var writing = maybe(false)(isWriting)(lp);
-    var tog = function(lbl) {
-      return function(on2) {
-        return function(act) {
-          return button([class_("ws-tog" + (function() {
-            if (on2) {
-              return " on";
-            }
-            ;
-            return "";
-          })()), disabled10(st.armed || writing), onClick(function(v) {
-            return act;
-          })])([text5(lbl)]);
-        };
-      };
-    };
     var listening = maybe(false)(function(v) {
       return v.armed;
     })(lp);
     var kindBtn = function(k) {
       return button([class_("ws-kind" + (function() {
-        var $117 = name15(k) === name15(st.kind);
-        if ($117) {
+        var $115 = name15(k) === name15(st.kind);
+        if ($115) {
           return " on";
         }
         ;
@@ -9091,9 +9131,6 @@
         })());
       })])([text5(label5(k))]);
     };
-    var isMono = maybe(true)(function(v) {
-      return v.mono;
-    })(lp);
     var hasTake = maybe(false)(function(l) {
       return l.layers > 0;
     })(lp);
@@ -9114,13 +9151,13 @@
         return span3([class_("ws-ok")])([text5("daemon")]);
       }
       ;
-      throw new Error("Failed pattern match at Workshop.Main (line 364, column 16 - line 366, column 80): " + [st.looper.constructor.name]);
+      throw new Error("Failed pattern match at Workshop.Main (line 361, column 16 - line 363, column 80): " + [st.looper.constructor.name]);
     })();
     var chip = function(n) {
       return function(s) {
         return button([class_("ws-chip is-arm" + ((function() {
-          var $122 = srcNow === (n + 1 | 0);
-          if ($122) {
+          var $120 = srcNow === (n + 1 | 0);
+          if ($120) {
             return " on";
           }
           ;
@@ -9159,8 +9196,8 @@
             return "dividing\u2026";
           }
           ;
-          var $128 = $$null2(st.regions);
-          if ($128) {
+          var $126 = $$null2(st.regions);
+          if ($126) {
             return maybe("")(function(l) {
               return fmt(l.loopSecs) + " s recorded, not divided yet";
             })(loop2(st));
@@ -9168,8 +9205,8 @@
           ;
           return show12(size2(st.keep)) + (" of " + (show12(length3(st.regions)) + " kept"));
         })())]), (function() {
-          var $129 = $$null2(st.regions) && (hasTake && !st.busy);
-          if ($129) {
+          var $127 = $$null2(st.regions) && (hasTake && !st.busy);
+          if ($127) {
             return button([class_("ws-plain"), onClick(function(v) {
               return Analyse.value;
             })])([text5("Divide it")]);
@@ -9183,26 +9220,34 @@
         })])([text5("Keep none")]), label4([class_("ws-quiet")])([span_([text5("more")]), input2([type_19(InputRange.value), min5(25), max6(1200), step3(new Step(25)), value13(show6(st.minGap)), onValueChange(SetGap.create), title2("how close two sounds can be and still be two, in milliseconds")]), span_([text5("fewer")]), span3([class_("ws-gapval")])([text5(show12(round2(st.minGap)) + " ms")])]), label4([class_("ws-hover")])([input2([type_19(InputCheckbox.value), checked2(st.hoverPlays), onChecked(SetHoverPlays.create)]), span_([text5("hover plays")])])]), div2([class_("ws-grid")])(mapWithIndex2(tile)(st.regions))]);
       }
       ;
-      throw new Error("Failed pattern match at Workshop.Main (line 467, column 3 - line 517, column 12): ");
+      throw new Error("Failed pattern match at Workshop.Main (line 458, column 3 - line 508, column 12): ");
     })();
     var armRow = div2([class_("ws-arm")])([span3([class_("ws-arm-label")])([text5("Arm on")]), div2([class_("ws-chips")])(maybe([text5("no daemon")])(function(top3) {
       return mapWithIndex2(chip)(top3.sources);
-    })(st.looper)), div2([class_("ws-toggle")])([tog("mono")(isMono)(new SetMono(true)), tog("stereo")(!isMono)(new SetMono(false))])]);
+    })(st.looper))]);
     var recordBox = section([class_("ws-rec")])([h2_([text5("Record")]), div2([class_("ws-kinds")])(map21(kindBtn)(all3)), (function() {
       if (st.kind instanceof Bars2) {
         return label4([class_("ws-field")])([span_([text5("How many bars")]), input2([type_19(InputText.value), value13(show12(st.bars)), disabled10(st.armed || writing), onValueInput(SetBars.create)])]);
       }
       ;
       return text5("");
-    })(), label4([class_("ws-field")])([span_([text5("Call it")]), input2([type_19(InputText.value), value13(st.name), disabled10(st.armed || writing), onValueInput(SetName.create)])]), p([class_("ws-blurb")])([text5(blurb(st.kind)), text5(" Recording from " + (srcName + (function() {
-      if (isMono) {
-        return ", mono.";
+    })(), label4([class_("ws-field")])([span_([text5("Call it")]), input2([type_19(InputText.value), value13(st.name), disabled10(st.armed || writing), onValueInput(SetName.create)])]), p([class_("ws-blurb")])([text5(blurb(st.kind)), text5(" Captured from " + (srcName + (" as it comes" + (", and folded to " + ((function() {
+      var $130 = eq3(foldsTo(st.kind))(ToMono.value);
+      if ($130) {
+        return "mono";
       }
       ;
-      return ", stereo.";
-    })()))]), div2([class_("ws-actions")])([(function() {
-      var $133 = st.armed || (writing || listening);
-      if ($133) {
+      return "stereo";
+    })() + (" on the way to a card" + (function() {
+      var $131 = voicesOn(st.kind) === 2;
+      if ($131) {
+        return " \u2014 where it takes two of the four voices.";
+      }
+      ;
+      return ".";
+    })()))))))]), div2([class_("ws-actions")])([(function() {
+      var $132 = st.armed || (writing || listening);
+      if ($132) {
         return button([class_("ws-big is-stop"), onClick(function(v) {
           return Close.value;
         })])([text5((function() {
@@ -9225,8 +9270,8 @@
       }
       ;
       return maybe("")(function(l) {
-        var $137 = l.layers > 0;
-        if ($137) {
+        var $136 = l.layers > 0;
+        if ($136) {
           return "captured " + (fmt(l.loopSecs) + " s");
         }
         ;
@@ -9252,18 +9297,18 @@
     return function(write3) {
       var divide = function(st) {
         return discard12(modify_3(function(v) {
-          var $140 = {};
-          for (var $141 in v) {
-            if ({}.hasOwnProperty.call(v, $141)) {
-              $140[$141] = v[$141];
+          var $139 = {};
+          for (var $140 in v) {
+            if ({}.hasOwnProperty.call(v, $140)) {
+              $139[$140] = v[$140];
             }
             ;
           }
           ;
-          $140.busy = true;
-          $140.regions = [];
-          $140.keep = empty3;
-          return $140;
+          $139.busy = true;
+          $139.regions = [];
+          $139.keep = empty3;
+          return $139;
         }))(function() {
           return discard12(when4(write3)(discard12(send1(new AskPeaks(900)))(function() {
             return discard12(sendBare1(new ExportLayers(st.name)))(function() {
@@ -9280,9 +9325,9 @@
             return bind6(liftAff2(attempt(toAffE(divisions(takeName)(material(st.kind))(st.minGap)))))(function(r) {
               if (r instanceof Left) {
                 return modify_3((function() {
-                  var $209 = note("could not analyse: " + message(r.value0));
-                  return function($210) {
-                    return $209((function(v) {
+                  var $207 = note("could not analyse: " + message(r.value0));
+                  return function($208) {
+                    return $207((function(v) {
                       return {
                         looper: v.looper,
                         kind: v.kind,
@@ -9300,7 +9345,7 @@
                         minGap: v.minGap,
                         busy: false
                       };
-                    })($210));
+                    })($208));
                   };
                 })());
               }
@@ -9308,9 +9353,9 @@
               if (r instanceof Right) {
                 if (!r.value0.ok) {
                   return modify_3((function() {
-                    var $211 = note(r.value0.output);
-                    return function($212) {
-                      return $211((function(v) {
+                    var $209 = note(r.value0.output);
+                    return function($210) {
+                      return $209((function(v) {
                         return {
                           looper: v.looper,
                           kind: v.kind,
@@ -9328,7 +9373,7 @@
                           minGap: v.minGap,
                           busy: false
                         };
-                      })($212));
+                      })($210));
                     };
                   })());
                 }
@@ -9336,23 +9381,23 @@
                 if (otherwise) {
                   var n = length3(r.value0.regions);
                   return discard12(modify_3(function(v) {
-                    var $146 = {};
-                    for (var $147 in v) {
-                      if ({}.hasOwnProperty.call(v, $147)) {
-                        $146[$147] = v[$147];
+                    var $145 = {};
+                    for (var $146 in v) {
+                      if ({}.hasOwnProperty.call(v, $146)) {
+                        $145[$146] = v[$146];
                       }
                       ;
                     }
                     ;
-                    $146.regions = r.value0.regions;
-                    $146.keep = fromFoldable4(range2(0)(n - 1 | 0));
-                    $146.busy = false;
-                    $146.showing = takeName;
-                    return $146;
+                    $145.regions = r.value0.regions;
+                    $145.keep = fromFoldable4(range2(0)(n - 1 | 0));
+                    $145.busy = false;
+                    $145.showing = takeName;
+                    return $145;
                   }))(function() {
                     return modify_3(note(show12(n) + ((function() {
-                      var $149 = n === 1;
-                      if ($149) {
+                      var $148 = n === 1;
+                      if ($148) {
                         return " division";
                       }
                       ;
@@ -9369,7 +9414,7 @@
                 ;
               }
               ;
-              throw new Error("Failed pattern match at Workshop.Main (line 304, column 7 - line 319, column 80): " + [r.constructor.name]);
+              throw new Error("Failed pattern match at Workshop.Main (line 302, column 7 - line 317, column 80): " + [r.constructor.name]);
             });
           });
         });
@@ -9407,17 +9452,17 @@
           return bind6(liftEffect12(latest))(function(snap) {
             return bind6(liftEffect12(latestPeaks))(function(pk) {
               return discard12(modify_3(function(v1) {
-                var $155 = {};
-                for (var $156 in v1) {
-                  if ({}.hasOwnProperty.call(v1, $156)) {
-                    $155[$156] = v1[$156];
+                var $154 = {};
+                for (var $155 in v1) {
+                  if ({}.hasOwnProperty.call(v1, $155)) {
+                    $154[$155] = v1[$155];
                   }
                   ;
                 }
                 ;
-                $155.looper = snap;
-                $155.peaks = pk;
-                return $155;
+                $154.looper = snap;
+                $154.peaks = pk;
+                return $154;
               }))(function() {
                 return bind6(get2)(function(now) {
                   var has = maybe(false)(function(l) {
@@ -9430,9 +9475,9 @@
                     return bind6(get2)(function(st) {
                       return discard12(for_3(loop2(st))(function(lp) {
                         return when4(st.armed && (!lp.armed && (not1(isWriting)(lp) && lp.layers > 0)))(modify_3((function() {
-                          var $213 = note("closed itself: " + (fmt(lp.loopSecs) + " s"));
-                          return function($214) {
-                            return $213((function(v1) {
+                          var $211 = note("closed itself: " + (fmt(lp.loopSecs) + " s"));
+                          return function($212) {
+                            return $211((function(v1) {
                               return {
                                 looper: v1.looper,
                                 kind: v1.kind,
@@ -9450,23 +9495,23 @@
                                 armed: false,
                                 waiting: true
                               };
-                            })($214));
+                            })($212));
                           };
                         })()));
                       }))(function() {
                         return bind6(get2)(function(st2) {
                           return for_3(loop2(st2))(function(lp) {
                             return when4(st2.waiting && (lp.layers > 0 && (not1(isWriting)(lp) && !lp.armed)))(discard12(modify_3(function(v1) {
-                              var $158 = {};
-                              for (var $159 in v1) {
-                                if ({}.hasOwnProperty.call(v1, $159)) {
-                                  $158[$159] = v1[$159];
+                              var $157 = {};
+                              for (var $158 in v1) {
+                                if ({}.hasOwnProperty.call(v1, $158)) {
+                                  $157[$158] = v1[$158];
                                 }
                                 ;
                               }
                               ;
-                              $158.waiting = false;
-                              return $158;
+                              $157.waiting = false;
+                              return $157;
                             }))(function() {
                               return handleAction(dictMonadAff)(Analyse.value);
                             }));
@@ -9484,58 +9529,54 @@
       ;
       if (v instanceof PickKind) {
         return modify_3(function(v1) {
-          var $161 = {};
-          for (var $162 in v1) {
-            if ({}.hasOwnProperty.call(v1, $162)) {
-              $161[$162] = v1[$162];
+          var $160 = {};
+          for (var $161 in v1) {
+            if ({}.hasOwnProperty.call(v1, $161)) {
+              $160[$161] = v1[$161];
             }
             ;
           }
           ;
-          $161.kind = v.value0;
-          return $161;
+          $160.kind = v.value0;
+          return $160;
         });
       }
       ;
       if (v instanceof SetBars) {
         return modify_3(function(s) {
           var n = clamp3(1)(64)(fromMaybe(s.bars)(fromString2(v.value0)));
-          var $167 = {};
-          for (var $168 in s) {
-            if ({}.hasOwnProperty.call(s, $168)) {
-              $167[$168] = s[$168];
+          var $166 = {};
+          for (var $167 in s) {
+            if ({}.hasOwnProperty.call(s, $167)) {
+              $166[$167] = s[$167];
             }
             ;
           }
           ;
-          $167.bars = n;
-          $167.kind = (function() {
+          $166.bars = n;
+          $166.kind = (function() {
             if (s.kind instanceof Bars2) {
               return new Bars2(n);
             }
             ;
             return s.kind;
           })();
-          return $167;
+          return $166;
         });
-      }
-      ;
-      if (v instanceof SetMono) {
-        return send1(new Mono(v.value0));
       }
       ;
       if (v instanceof SetName) {
         return modify_3(function(v2) {
-          var $172 = {};
-          for (var $173 in v2) {
-            if ({}.hasOwnProperty.call(v2, $173)) {
-              $172[$173] = v2[$173];
+          var $170 = {};
+          for (var $171 in v2) {
+            if ({}.hasOwnProperty.call(v2, $171)) {
+              $170[$171] = v2[$171];
             }
             ;
           }
           ;
-          $172.name = v.value0;
-          return $172;
+          $170.name = v.value0;
+          return $170;
         });
       }
       ;
@@ -9549,16 +9590,16 @@
       ;
       if (v instanceof SetGap) {
         return discard12(modify_3(function(s) {
-          var $176 = {};
-          for (var $177 in s) {
-            if ({}.hasOwnProperty.call(s, $177)) {
-              $176[$177] = s[$177];
+          var $174 = {};
+          for (var $175 in s) {
+            if ({}.hasOwnProperty.call(s, $175)) {
+              $174[$175] = s[$175];
             }
             ;
           }
           ;
-          $176.minGap = fromMaybe(s.minGap)(fromString(v.value0));
-          return $176;
+          $174.minGap = fromMaybe(s.minGap)(fromString(v.value0));
+          return $174;
         }))(function() {
           return bind6(get2)(function(st) {
             return when4(st.showing !== "")(analyse1(false));
@@ -9569,16 +9610,16 @@
       if (v instanceof SetHoverPlays) {
         return discard12(unless2(v.value0)(liftEffect12(stop)))(function() {
           return modify_3(function(v1) {
-            var $180 = {};
-            for (var $181 in v1) {
-              if ({}.hasOwnProperty.call(v1, $181)) {
-                $180[$181] = v1[$181];
+            var $178 = {};
+            for (var $179 in v1) {
+              if ({}.hasOwnProperty.call(v1, $179)) {
+                $178[$179] = v1[$179];
               }
               ;
             }
             ;
-            $180.hoverPlays = v.value0;
-            return $180;
+            $178.hoverPlays = v.value0;
+            return $178;
           });
         });
       }
@@ -9594,16 +9635,16 @@
           return for_3(index2(st.regions)(v.value0))(function(r) {
             return discard12(liftEffect12(playRange("/api/take-audio?take=" + st.showing)(r.start)(r.end)))(function() {
               return modify_3(function(v1) {
-                var $185 = {};
-                for (var $186 in v1) {
-                  if ({}.hasOwnProperty.call(v1, $186)) {
-                    $185[$186] = v1[$186];
+                var $183 = {};
+                for (var $184 in v1) {
+                  if ({}.hasOwnProperty.call(v1, $184)) {
+                    $183[$184] = v1[$184];
                   }
                   ;
                 }
                 ;
-                $185.playing = new Just(v.value0);
-                return $185;
+                $183.playing = new Just(v.value0);
+                return $183;
               });
             });
           });
@@ -9612,53 +9653,53 @@
       ;
       if (v instanceof ToggleKeep) {
         return modify_3(function(s) {
-          var $190 = {};
-          for (var $191 in s) {
-            if ({}.hasOwnProperty.call(s, $191)) {
-              $190[$191] = s[$191];
+          var $188 = {};
+          for (var $189 in s) {
+            if ({}.hasOwnProperty.call(s, $189)) {
+              $188[$189] = s[$189];
             }
             ;
           }
           ;
-          $190.keep = (function() {
-            var $189 = member3(v.value0)(s.keep);
-            if ($189) {
+          $188.keep = (function() {
+            var $187 = member3(v.value0)(s.keep);
+            if ($187) {
               return $$delete4(v.value0)(s.keep);
             }
             ;
             return insert5(v.value0)(s.keep);
           })();
-          return $190;
+          return $188;
         });
       }
       ;
       if (v instanceof KeepAll) {
         return modify_3(function(s) {
-          var $195 = {};
-          for (var $196 in s) {
-            if ({}.hasOwnProperty.call(s, $196)) {
-              $195[$196] = s[$196];
+          var $193 = {};
+          for (var $194 in s) {
+            if ({}.hasOwnProperty.call(s, $194)) {
+              $193[$194] = s[$194];
             }
             ;
           }
           ;
-          $195.keep = (function() {
+          $193.keep = (function() {
             if (v.value0) {
               return fromFoldable4(range2(0)(length3(s.regions) - 1 | 0));
             }
             ;
             return empty3;
           })();
-          return $195;
+          return $193;
         });
       }
       ;
       if (v instanceof Discard) {
         return discard12(send1(Clear.value))(function() {
           return modify_3((function() {
-            var $215 = note("cleared");
-            return function($216) {
-              return $215((function(v1) {
+            var $213 = note("cleared");
+            return function($214) {
+              return $213((function(v1) {
                 return {
                   looper: v1.looper,
                   kind: v1.kind,
@@ -9676,7 +9717,7 @@
                   keep: empty3,
                   peaks: Nothing.value
                 };
-              })($216));
+              })($214));
             };
           })());
         });
@@ -9699,14 +9740,14 @@
                         return pure13(unit);
                       }
                       ;
-                      throw new Error("Failed pattern match at Workshop.Main (line 256, column 5 - line 258, column 26): " + [v1.constructor.name]);
+                      throw new Error("Failed pattern match at Workshop.Main (line 254, column 5 - line 256, column 26): " + [v1.constructor.name]);
                     })())(function() {
                       return discard12(send1(new LevelArm(true)))(function() {
                         return discard12(send1(Record.value))(function() {
                           return modify_3((function() {
-                            var $217 = note(prompt(st.kind));
-                            return function($218) {
-                              return $217((function(v1) {
+                            var $215 = note(prompt(st.kind));
+                            return function($216) {
+                              return $215((function(v1) {
                                 return {
                                   looper: v1.looper,
                                   kind: v1.kind,
@@ -9724,7 +9765,7 @@
                                   minGap: v1.minGap,
                                   armed: true
                                 };
-                              })($218));
+                              })($216));
                             };
                           })());
                         });
@@ -9741,8 +9782,8 @@
       if (v instanceof Close) {
         return bind6(get2)(function(st) {
           return discard12(for_3(loop2(st))(function(lp) {
-            var $202 = isWriting(lp) || lp.armed;
-            if ($202) {
+            var $200 = isWriting(lp) || lp.armed;
+            if ($200) {
               return discard12(send1(Record.value))(function() {
                 return modify_3(note("closed"));
               });
@@ -9753,17 +9794,17 @@
             return discard12(send1(new LevelArm(false)))(function() {
               return discard12(send1(new Sounding(true)))(function() {
                 return modify_3(function(s) {
-                  var $203 = {};
-                  for (var $204 in s) {
-                    if ({}.hasOwnProperty.call(s, $204)) {
-                      $203[$204] = s[$204];
+                  var $201 = {};
+                  for (var $202 in s) {
+                    if ({}.hasOwnProperty.call(s, $202)) {
+                      $201[$202] = s[$202];
                     }
                     ;
                   }
                   ;
-                  $203.armed = false;
-                  $203.waiting = true;
-                  return $203;
+                  $201.armed = false;
+                  $201.waiting = true;
+                  return $201;
                 });
               });
             });
@@ -9771,7 +9812,7 @@
         });
       }
       ;
-      throw new Error("Failed pattern match at Workshop.Main (line 161, column 16 - line 277, column 56): " + [v.constructor.name]);
+      throw new Error("Failed pattern match at Workshop.Main (line 160, column 16 - line 275, column 56): " + [v.constructor.name]);
     };
   };
   var component = function(dictMonadAff) {

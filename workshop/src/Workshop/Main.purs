@@ -27,7 +27,7 @@ import Data.Number as Number
 -- `Bars` names a thing in both vocabularies — a length in the daemon's verbs
 -- and a kind of material here — so the verbs come in by name and the kinds
 -- through `Kind.`.
-import Data.Looper.Verb (Verb(Alternates, AskPeaks, Clear, ExportLayers, LevelArm, Mono, OnGrid, Record, Sounding, Source))
+import Data.Looper.Verb (Verb(Alternates, AskPeaks, Clear, ExportLayers, LevelArm, OnGrid, Record, Sounding, Source))
 import Data.Looper.Verb as Verb
 import Effect (Effect)
 import Effect.Aff (Milliseconds(..), attempt, delay)
@@ -49,7 +49,7 @@ import Control.Promise (toAffE)
 import Workshop.Audio as Audio
 import Workshop.Http as Http
 import Workshop.Wave as Wave
-import Workshop.Kind (Close(..), Kind)
+import Workshop.Kind (Close(..), Fold(..), Kind)
 import Workshop.Kind as Kind
 
 main :: Effect Unit
@@ -112,7 +112,6 @@ data Action
   | Poll
   | PickKind Kind
   | SetBars String
-  | SetMono Boolean
   | SetName String
   | ArmOn Int
   | Close
@@ -206,7 +205,6 @@ handleAction = case _ of
   -- said nothing, and armed on an input with no drums on it. So: sent when
   -- you click it, read back from the snapshot, and never re-asserted. The
   -- daemon is the one that knows.
-  SetMono b -> send (Mono b)
   SetName v -> H.modify_ _ { name = v }
   Analyse -> analyse true
   Divide -> analyse false
@@ -348,7 +346,6 @@ render st =
   lp = loop st
   -- What the daemon says this loop is doing, never a second copy of it.
   srcNow = maybe 0 _.src lp
-  isMono = maybe true _.mono lp
   srcName = maybe "?" _.name
     (st.looper >>= \top -> Array.index top.sources (srcNow - 1))
   hasTake = maybe false (\l -> l.layers > 0) lp
@@ -378,10 +375,6 @@ render st =
           (maybe [ HH.text "no daemon" ]
             (\top -> Array.mapWithIndex chip top.sources)
             st.looper)
-      , HH.div [ HP.class_ (HH.ClassName "ws-toggle") ]
-          [ tog "mono" isMono (SetMono true)
-          , tog "stereo" (not isMono) (SetMono false)
-          ]
       ]
 
   chip n s =
@@ -398,14 +391,6 @@ render st =
       [ HH.span [ HP.class_ (HH.ClassName "ws-chip-name") ] [ HH.text s.name ]
       , HH.span [ HP.class_ (HH.ClassName "ws-chip-db") ] [ HH.text (fmt s.db) ]
       ]
-
-  tog lbl on act =
-    HH.button
-      [ HP.class_ (HH.ClassName ("ws-tog" <> if on then " on" else ""))
-      , HP.disabled (st.armed || writing)
-      , HE.onClick \_ -> act
-      ]
-      [ HH.text lbl ]
 
   recordBox =
     HH.section [ HP.class_ (HH.ClassName "ws-rec") ]
@@ -431,7 +416,13 @@ render st =
           ]
       , HH.p [ HP.class_ (HH.ClassName "ws-blurb") ]
           [ HH.text (Kind.blurb st.kind)
-          , HH.text (" Recording from " <> srcName <> (if isMono then ", mono." else ", stereo."))
+          , HH.text (" Captured from " <> srcName <> " as it comes"
+              <> ", and folded to "
+              <> (if Kind.foldsTo st.kind == ToMono then "mono" else "stereo")
+              <> " on the way to a card"
+              <> (if Kind.voicesOn st.kind == 2
+                    then " — where it takes two of the four voices."
+                    else "."))
           ]
       , HH.div [ HP.class_ (HH.ClassName "ws-actions") ]
           [ if st.armed || writing || listening

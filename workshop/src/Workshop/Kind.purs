@@ -17,6 +17,9 @@ module Workshop.Kind
   , divides
   , material
   , prompt
+  , Fold(..)
+  , foldsTo
+  , voicesOn
   ) where
 
 import Prelude
@@ -118,6 +121,38 @@ material = case _ of
   Bars _ -> "break"
   Chromatic -> "hits"
   Longform -> "ambient"
+
+-- | **How many channels this material wants on the card.**
+-- |
+-- | Not how it is captured: a take is recorded in whatever the input offers,
+-- | because folding at capture throws the right channel away for ever and
+-- | folding at the cut loses nothing. This is the decision made *later*, and
+-- | it is a property of the material — Andrew's rule, and it matches the
+-- | module: drum hits and most bass are mono, pads and chords and progressions
+-- | and ambient takes lean stereo.
+data Fold = ToMono | ToStereo
+
+derive instance Eq Fold
+
+foldsTo :: Kind -> Fold
+foldsTo = case _ of
+  DrumHits -> ToMono
+  -- A chord is a voicing in a room, and the room is half of it.
+  ChordHits -> ToStereo
+  Bars _ -> ToMono
+  Chromatic -> ToMono
+  Longform -> ToStereo
+
+-- | **How many of a Rample's four voices one sample occupies.**
+-- |
+-- | Measured, and from Squarp: *a stereo sample will fill 2 mono voices*. So a
+-- | kit is four mono voices, or **two stereo ones**, or a mix — and a stereo
+-- | kit answers on SP1 and SP3 rather than on all four trigger notes, which is
+-- | a fact anything playing it has to know.
+voicesOn :: Kind -> Int
+voicesOn k = case foldsTo k of
+  ToMono -> 1
+  ToStereo -> 2
 
 -- | What to say while it is listening.
 prompt :: Kind -> String
