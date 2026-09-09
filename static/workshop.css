@@ -91,3 +91,5 @@ body {
 .ws-tile-len { flex: 1; }
 .ws-tile-keep { border: 0; background: none; cursor: pointer; font-size: 13px; color: var(--live); padding: 0 2px; line-height: 1; }
 .ws-tile.is-dropped .ws-tile-keep { color: var(--muted); }
+.ws-quiet { display: inline-flex; align-items: center; gap: 7px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; }
+.ws-quiet input { width: 110px; }

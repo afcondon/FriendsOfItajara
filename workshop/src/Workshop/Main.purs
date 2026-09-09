@@ -23,6 +23,7 @@ import Data.Foldable (for_)
 import Data.Int as Int
 import Data.Either (Either(..))
 import Data.Maybe (Maybe(..), fromMaybe, maybe)
+import Data.Number as Number
 -- `Bars` names a thing in both vocabularies — a length in the daemon's verbs
 -- and a kind of material here — so the verbs come in by name and the kinds
 -- through `Kind.`.
@@ -92,6 +93,19 @@ type State =
   -- | typing a new name does not silently repoint the audio at a take that
   -- | has not been recorded yet.
   , showing :: String
+  -- | A take has been asked to close and its layer has not landed yet.
+  -- |
+  -- | Closing is not instant: the daemon commits the layer on its own thread,
+  -- | measured at about 70 ms after the press. Analysing straight away found
+  -- | `layers == 0`, took the "nothing to do" branch and said nothing at all,
+  -- | which is why two recordings in a row appeared to do nothing.
+  , waiting :: Boolean
+  -- | **How fussy the divider is**, as the fraction of the take's own loudest
+  -- | moment an onset must still reach. The detector cannot know the material
+  -- | — its defaults were chosen against drum hits and a break, and a patch
+  -- | with two-second tails is a different animal — and the only person who
+  -- | knows how many hits were played is the one who played them.
+  , quiet :: Number
   }
 
 data Action
@@ -108,6 +122,8 @@ data Action
   | ToggleKeep Int
   | KeepAll Boolean
   | Analyse
+  | Divide
+  | SetQuiet String
   | Play Int
   | HoverPlay Int
   | SetHoverPlays Boolean
@@ -118,7 +134,8 @@ component = H.mkComponent
       { looper: Nothing, kind: Kind.DrumHits, bars: 1, src: 1, mono: true
       , armed: false, name: "kick", log: []
       , peaks: Nothing, regions: [], keep: Set.empty, busy: false
-      , hoverPlays: false, playing: Nothing, showing: "" }
+      , hoverPlays: false, playing: Nothing, showing: "", waiting: false
+      , quiet: 0.02 }
   , render
   , eval: H.mkEval H.defaultEval { handleAction = handleAction, initialize = Just Init }
   }
@@ -152,16 +169,31 @@ handleAction = case _ of
         liftEffect (emit Poll)
       pure (Aff.launchAff_ (Aff.killFiber (Aff.error "stopped") fiber))
   Poll -> do
+    before <- H.get
     snap <- liftEffect Socket.latest
     pk <- liftEffect Socket.latestPeaks
     H.modify_ _ { looper = snap, peaks = pk }
+    -- The daemon draws; ask it to, the first time a take comes into view. That
+    -- covers a reload as well as a recording — the engine did not forget the
+    -- loop just because the page did.
+    now <- H.get
+    let had = maybe false (\l -> l.layers > 0) (loop before)
+        has = maybe false (\l -> l.layers > 0) (loop now)
+    when (has && not had) (send (AskPeaks 900))
     -- A take that closed itself — a bar count — leaves `armed` set here, so
     -- the page would go on saying "listening" over a finished recording.
     st <- H.get
     for_ (loop st) \lp ->
-      when (st.armed && not lp.armed && not Socket.isWriting lp && lp.layers > 0) do
+      when (st.armed && not lp.armed && not Socket.isWriting lp && lp.layers > 0) $
         H.modify_ (note ("closed itself: " <> fmt lp.loopSecs <> " s")
-                     <<< _ { armed = false })
+                     <<< _ { armed = false, waiting = true })
+
+    -- The one place a take becomes something to look at, whichever way it
+    -- ended — by hand, or at its own count.
+    st2 <- H.get
+    for_ (loop st2) \lp ->
+      when (st2.waiting && lp.layers > 0 && not Socket.isWriting lp && not lp.armed) do
+        H.modify_ _ { waiting = false }
         handleAction Analyse
   PickKind k -> H.modify_ _ { kind = k }
   SetBars v -> H.modify_ \s ->
@@ -172,7 +204,12 @@ handleAction = case _ of
   PickSource n -> H.modify_ _ { src = n }
   SetMono b -> H.modify_ _ { mono = b }
   SetName v -> H.modify_ _ { name = v }
-  Analyse -> analyse
+  Analyse -> analyse true
+  Divide -> analyse false
+  SetQuiet v -> do
+    H.modify_ \s -> s { quiet = fromMaybe s.quiet (Number.fromString v) }
+    st <- H.get
+    when (st.showing /= "") (analyse false)
   SetHoverPlays b -> do
     unless b (liftEffect Audio.stop)
     H.modify_ _ { hoverPlays = b }
@@ -225,26 +262,35 @@ handleAction = case _ of
         else H.modify_ (note "nothing is recording")
     send (LevelArm false)
     send (Sounding true)
-    H.modify_ \s -> s { armed = false }
-    handleAction Analyse
+    -- Not `Analyse` here: the layer is not there yet. Ask for it, and let the
+    -- poll that sees it arrive do the work.
+    H.modify_ \s -> s { armed = false, waiting = true }
 
 -- | Write the take down and ask where the sounds are.
 -- |
 -- | Two hops, because they are two different kinds of knowledge: the daemon
 -- | holds the audio and writes it, `msm` reads the file and says where things
 -- | begin. Neither could do the other's half.
-analyse :: forall o m. MonadAff m => H.HalogenM State Action () o m Unit
-analyse = do
+-- | `write` is false when the take is already on disk and only the dividing
+-- | is being asked again — which is what moving the slider does, and it should
+-- | not cost a re-export every time.
+analyse :: forall o m. MonadAff m => Boolean -> H.HalogenM State Action () o m Unit
+analyse write = do
   st <- H.get
-  for_ (loop st) \lp ->
-    when (lp.layers > 0) do
+  case loop st of
+    Just lp | lp.layers > 0 -> divide st
+    _ -> H.modify_ (note "nothing to divide — the scratch loop is empty")
+  where
+  divide st = do
       H.modify_ _ { busy = true, regions = [], keep = Set.empty }
-      send (AskPeaks 900)
-      sendBare (ExportLayers st.name)
-      -- The daemon writes on its own thread and the ack lands in a snapshot;
-      -- the folder is there a moment later.
-      H.liftAff (delay (Milliseconds 900.0))
-      r <- H.liftAff (attempt (toAffE (Http.divisions st.name (Kind.material st.kind))))
+      when write do
+        send (AskPeaks 900)
+        sendBare (ExportLayers st.name)
+        -- The daemon writes on its own thread and the ack lands in a snapshot;
+        -- the folder is there a moment later.
+        H.liftAff (delay (Milliseconds 900.0))
+      let takeName = if write then st.name else st.showing
+      r <- H.liftAff (attempt (toAffE (Http.divisions takeName (Kind.material st.kind) st.quiet)))
       case r of
         Left e -> H.modify_ (note ("could not analyse: " <> Aff.message e) <<< _ { busy = false })
         Right d
@@ -255,7 +301,7 @@ analyse = do
                 { regions = d.regions
                 , keep = Set.fromFoldable (Array.range 0 (n - 1))
                 , busy = false
-                , showing = st.name
+                , showing = takeName
                 }
               H.modify_ (note
                 (show n <> (if n == 1 then " division" else " divisions")
@@ -291,6 +337,7 @@ render st =
     ]
   where
   lp = loop st
+  hasTake = maybe false (\l -> l.layers > 0) lp
   writing = maybe false Socket.isWriting lp
   listening = maybe false _.armed lp
   -- How long this take has been running, from the daemon's own frame count
@@ -394,25 +441,49 @@ render st =
   -- | underneath. Small multiples because the question is comparative — which
   -- | of these forty is the one I meant, and are they the same sound? — and a
   -- | list of numbers cannot be read that way while a grid of shapes can.
+  -- Shown whenever there is anything to show — which includes a take the
+  -- daemon is still holding from before the page was reloaded. A page that
+  -- forgot a recording the engine had not forgotten was the difference between
+  -- "nothing changed" and "everything is one press away".
   caught
-    | Array.null st.regions && not st.busy = HH.text ""
+    | Array.null st.regions && not st.busy && not hasTake = HH.text ""
     | otherwise =
         HH.section [ HP.class_ (HH.ClassName "ws-caught") ]
           [ HH.h2_ [ HH.text "What was caught" ]
           , case st.peaks of
               Just pk | Array.length pk.hi > 0 ->
                 HH.div [ HP.class_ (HH.ClassName "ws-whole") ]
-                  [ Wave.svg pk.lo pk.hi [ HP.class_ (HH.ClassName "ws-whole-svg") ] ]
+                  [ Wave.svg pk.lo pk.hi [ Wave.klass "ws-whole-svg" ] ]
               _ -> HH.text ""
           , HH.div [ HP.class_ (HH.ClassName "ws-gridhead") ]
               [ HH.span_
                   [ HH.text (if st.busy then "dividing…"
-                             else show (Set.size st.keep) <> " of "
+                             else if Array.null st.regions
+                               then maybe "" (\l -> fmt l.loopSecs <> " s recorded, not divided yet") (loop st)
+                               else show (Set.size st.keep) <> " of "
                                     <> show (Array.length st.regions) <> " kept") ]
+              , if Array.null st.regions && hasTake && not st.busy
+                  then HH.button [ HP.class_ (HH.ClassName "ws-plain"), HE.onClick \_ -> Analyse ]
+                         [ HH.text "Divide it" ]
+                  else HH.text ""
               , HH.button [ HP.class_ (HH.ClassName "ws-plain"), HE.onClick \_ -> KeepAll true ]
                   [ HH.text "Keep all" ]
               , HH.button [ HP.class_ (HH.ClassName "ws-plain"), HE.onClick \_ -> KeepAll false ]
                   [ HH.text "Keep none" ]
+              , HH.label [ HP.class_ (HH.ClassName "ws-quiet") ]
+                  -- Higher means a division has to be louder to count, so the
+                  -- right-hand end is FEWER of them. Measured on a real take:
+                  -- 0.003 gave 70 and 0.15 gave 7.
+                  [ HH.span_ [ HH.text "more" ]
+                  , HH.input
+                      [ HP.type_ HP.InputRange
+                      , HP.min 0.002, HP.max 0.30, HP.step (HP.Step 0.002)
+                      , HP.value (show st.quiet)
+                      , HE.onValueChange SetQuiet
+                      , HP.title "how far below the loudest moment an onset may still be"
+                      ]
+                  , HH.span_ [ HH.text "fewer" ]
+                  ]
               , HH.label [ HP.class_ (HH.ClassName "ws-hover") ]
                   [ HH.input
                       [ HP.type_ HP.InputCheckbox, HP.checked st.hoverPlays
@@ -447,7 +518,7 @@ render st =
             ]
             [ Wave.svg (maybe [] (cut <<< _.lo) st.peaks)
                        (maybe [] (cut <<< _.hi) st.peaks)
-                       [ HP.class_ (HH.ClassName "ws-tile-svg") ]
+                       [ Wave.klass "ws-tile-svg" ]
             ]
         , HH.div [ HP.class_ (HH.ClassName "ws-tile-foot") ]
             [ HH.span [ HP.class_ (HH.ClassName "ws-tile-n") ] [ HH.text (show (i + 1)) ]

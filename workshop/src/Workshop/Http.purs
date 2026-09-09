@@ -23,6 +23,7 @@ type Divisions =
   , regions :: Array Region
   }
 
--- | `POST /api/onsets` — a take's name and what it is, back with where the
--- | detector thinks things begin.
-foreign import divisions :: String -> String -> Effect (Promise Divisions)
+-- | `POST /api/onsets` — a take's name, what it is, and how far below the
+-- | loudest thing an onset may still be; back with where the detector thinks
+-- | things begin.
+foreign import divisions :: String -> String -> Number -> Effect (Promise Divisions)

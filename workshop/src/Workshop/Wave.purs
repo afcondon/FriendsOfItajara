@@ -10,6 +10,7 @@
 module Workshop.Wave
   ( bucketsFor
   , svg
+  , klass
   ) where
 
 import Prelude
@@ -18,7 +19,7 @@ import Data.Array as Array
 import Data.Int as Int
 import Halogen.HTML as HH
 import Halogen.HTML.Properties as HP
-import Unsafe.Coerce (unsafeCoerce)
+import Halogen (AttrName(..), ElemName(..), Namespace(..))
 
 -- | Which buckets of a whole-take envelope belong to a stretch of seconds.
 -- |
@@ -60,8 +61,22 @@ svg lo hi props =
   where
   pt a b = show a <> "," <> show b
 
+-- | **An SVG element, in the SVG namespace.**
+-- |
+-- | `HH.element` makes an HTML element called `svg`, which the browser renders
+-- | as nothing at all: a box the right size with no shape in it. That is not a
+-- | missing-data symptom and it reads exactly like one.
 el :: forall r w i. String -> Array (HH.IProp r i) -> Array (HH.HTML w i) -> HH.HTML w i
-el = unsafeCoerce HH.element <<< HH.ElemName
+el name = HH.elementNS (Namespace "http://www.w3.org/2000/svg") (ElemName name)
 
+-- | A class on an SVG node. See `attr` for why `HP.class_` will not do.
+klass :: forall r i. String -> HH.IProp r i
+klass = attr "class"
+
+-- | And an attribute, not a property.
+-- |
+-- | `HP.class_` sets the DOM *property*, and on an SVG element `className` is a
+-- | read-only `SVGAnimatedString` — so the assignment does nothing, quietly,
+-- | and every rule keyed on that class never applies.
 attr :: forall r i. String -> String -> HH.IProp r i
-attr k v = unsafeCoerce (HP.attr (HH.AttrName k) v)
+attr k v = HP.attr (AttrName k) v

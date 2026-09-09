@@ -122,6 +122,12 @@ function onsets(body) {
   if (!wav) return Promise.resolve({ ok: false, output: `${take} holds no audio` });
 
   const args = ["onset", wav, "--as", String(body.as || "hits").replace(/[^a-z]/g, ""), "--json"];
+  // The one knob that matters inside a long decay, where the adaptive
+  // threshold has nothing to hold on to. Bounded here so a slider cannot ask
+  // for something meaningless.
+  if (body.quiet != null && isFinite(Number(body.quiet))) {
+    args.push("--quiet", String(Math.min(0.5, Math.max(0.0005, Number(body.quiet)))));
+  }
   return new Promise((resolve) => {
     let out = "", err = "";
     let child;
