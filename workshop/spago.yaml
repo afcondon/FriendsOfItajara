@@ -1,0 +1,43 @@
+package:
+  name: workshop
+  description: |
+    The Workshop — a page for BUILDING A CARD, on the same daemon the Friend
+    uses and deliberately not on the Friend's looper page.
+
+    The looper page was tried first and fought back: its source bar points
+    every loop at one input, its Record button is the obvious thing to press,
+    and its takes are loops with layers. A capture session wants none of that.
+    A hit session is not ten recordings — it is ONE recording with ten hits in
+    it, armed once, closed by hand, and divided afterwards by the onset
+    detector in `msm`. Everything that went wrong on the looper page came from
+    using loops for something that does not loop.
+
+    So: a source chooser, one recording box whose actions are the KINDS of
+    material, and a virtual card that is a manifest until you ask for it to be
+    written.
+  dependencies:
+    - aff
+    - aff-promise
+    - arrays
+    - console
+    - effect
+    - either
+    - foldable-traversable
+    - halogen
+    - halogen-subscriptions
+    - integers
+    - itajara-client
+    - maybe
+    - numbers
+    - ordered-collections
+    - prelude
+    - strings
+    - web-dom
+    - web-html
+    - web-uievents
+  build:
+    strict: true
+  bundle:
+    module: Workshop.Main
+    outfile: ../static/workshop.js
+    platform: browser

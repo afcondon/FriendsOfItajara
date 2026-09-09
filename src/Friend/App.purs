@@ -614,6 +614,9 @@ handleAction = case _ of
             H.modify_ \s -> s
               { session = s.session { base = lp.layers, running = true, pending = false } }
             H.modify_ (note
+              ("SESSION on loop " <> show (i + 1) <> ": alternates off, silenced, "
+                <> show st.session.secs <> "s a pass, listening at the arm level"))
+            H.modify_ (note
               ("listening for " <> show st.session.want <> " × " <> st.session.label
                 <> " on loop " <> show (i + 1)
                 <> " — softest first, and do not stop between them"))
@@ -864,8 +867,18 @@ render st =
               then [ slabBtn "fix" (fixWord lp)
                        (Do (OnLoop i) (Duty.RecordFixed f.windowSecs)) (Socket.isWriting lp) (lp.armed || summing lp) ]
               else [])
-          <> [ slabBtn "rec" (openWord lp) (Do (OnLoop i) Duty.RecordLoop)
-                 (Socket.isWriting lp && lp.layers == 0) (f.windowSecs > 0.0 && lp.layers > 0) ]
+          <> (if sessionOn i
+                -- **A session is pressing record for you.** Leaving the ordinary
+                -- button here is how the first two runs went: the source bar
+                -- and Record are on the page, Start is inside a modal, so the
+                -- obvious thing to press was the one that bypasses the whole
+                -- session. Now the button says who has the loop.
+                then [ slabBtn "rec"
+                         (show (sessionDone i) <> "/" <> show st.session.want
+                            <> " " <> st.session.label)
+                         (OpenPanel SessionPanel) false true ]
+                else [ slabBtn "rec" (openWord lp) (Do (OnLoop i) Duty.RecordLoop)
+                         (Socket.isWriting lp && lp.layers == 0) (f.windowSecs > 0.0 && lp.layers > 0) ])
           <> (if f.alternates
               then [ slabBtn "sum" (if overdubbing lp then "Close" else "Sum") (Do (OnLoop i) Duty.OverdubLoop)
                        (overdubbing lp)
@@ -1330,6 +1343,10 @@ render st =
       , cell LNotes r.notes
       ]
 
+  sessionOn i = st.session.running && st.session.loop == i
+  sessionDone i =
+    maybe 0 (\l -> l.layers - st.session.base)
+      (st.looper >>= \top -> Array.index top.loops i)
   hasMaterial i = maybe false (\top -> maybe false (\lp -> lp.layers > 0) (Array.index top.loops (i - 1))) st.looper
 
   -- **The stick, and where on it.** A loop is a library bank and a scene;

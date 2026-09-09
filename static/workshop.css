@@ -1,0 +1,60 @@
+/* The Workshop. A different job from the looper page and it should not look
+   like it: one column, a lot of air, and the record box the only thing with
+   any weight on it. Swiss rather than console — this is a bench, not a
+   transport. */
+:root {
+  --ink: #16161a; --muted: #7a7a85; --rule: #dcdce2; --ground: #fbfbfc;
+  --hot: #c8442a; --live: #2a7d4f;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--ground); color: var(--ink);
+  font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+.ws { max-width: 940px; margin: 0 auto; padding: 32px 28px 80px; }
+.ws-head { display: flex; align-items: baseline; gap: 14px; border-bottom: 2px solid var(--ink); padding-bottom: 10px; margin-bottom: 28px; }
+.ws-head h1 { margin: 0; font-size: 26px; font-weight: 600; letter-spacing: -0.01em; }
+.ws-sub { color: var(--muted); font-size: 13px; flex: 1; }
+.ws-ok { color: var(--live); font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; }
+.ws-warn { color: var(--hot); font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; }
+
+.ws h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); margin: 0 0 10px; font-weight: 600; }
+.ws section { margin-bottom: 30px; }
+
+.ws-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.ws-chip { display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
+  padding: 7px 12px; border: 1px solid var(--rule); background: #fff; border-radius: 3px;
+  cursor: pointer; font: inherit; min-width: 92px; }
+.ws-chip:hover { border-color: var(--ink); }
+.ws-chip.on { border-color: var(--ink); background: var(--ink); color: #fff; }
+.ws-chip.off { opacity: 0.4; text-decoration: line-through; cursor: not-allowed; }
+.ws-chip-name { font-size: 14px; }
+.ws-chip-db { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.ws-chip.on .ws-chip-db { color: #b9b9c2; }
+
+.ws-toggle { display: inline-flex; border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; }
+.ws-tog { padding: 5px 14px; border: 0; background: #fff; cursor: pointer; font: inherit; font-size: 13px; }
+.ws-tog.on { background: var(--ink); color: #fff; }
+
+.ws-rec { border: 1px solid var(--rule); border-radius: 4px; background: #fff; padding: 20px; }
+.ws-kinds { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.ws-kind { padding: 8px 14px; border: 1px solid var(--rule); background: #fff; border-radius: 3px; cursor: pointer; font: inherit; }
+.ws-kind:hover { border-color: var(--ink); }
+.ws-kind.on { border-color: var(--ink); background: var(--ink); color: #fff; }
+.ws-blurb { color: var(--muted); font-size: 13px; margin: 10px 0 16px; max-width: 62ch; }
+.ws-field { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; font-size: 13px; }
+.ws-field span { color: var(--muted); min-width: 96px; }
+.ws-field input { padding: 6px 9px; border: 1px solid var(--rule); border-radius: 3px; font: inherit; width: 190px; }
+
+.ws-actions { display: flex; align-items: center; gap: 16px; border-top: 1px solid var(--rule); padding-top: 16px; }
+.ws-big { padding: 12px 30px; border: 0; border-radius: 3px; background: var(--ink); color: #fff;
+  font: inherit; font-size: 15px; font-weight: 500; cursor: pointer; }
+.ws-big.is-stop { background: var(--hot); }
+.ws-big:disabled { background: var(--rule); cursor: not-allowed; }
+.ws-state { color: var(--muted); font-size: 13px; flex: 1; }
+.ws-plain { border: 1px solid var(--rule); background: #fff; padding: 8px 14px; border-radius: 3px; cursor: pointer; font: inherit; font-size: 13px; }
+
+.ws-card { border-top: 1px solid var(--rule); padding-top: 20px; }
+.ws-muted { color: var(--muted); font-size: 13px; max-width: 62ch; }
+.ws-log { font: 12px/1.7 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); }

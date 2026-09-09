@@ -30,6 +30,35 @@
         "test": {
           "dependencies": []
         }
+      },
+      "workshop": {
+        "path": "workshop",
+        "core": {
+          "dependencies": [
+            "aff",
+            "aff-promise",
+            "arrays",
+            "console",
+            "effect",
+            "either",
+            "foldable-traversable",
+            "halogen",
+            "halogen-subscriptions",
+            "integers",
+            "itajara-client",
+            "maybe",
+            "numbers",
+            "ordered-collections",
+            "prelude",
+            "strings",
+            "web-dom",
+            "web-html",
+            "web-uievents"
+          ]
+        },
+        "test": {
+          "dependencies": []
+        }
       }
     },
     "package_set": {
