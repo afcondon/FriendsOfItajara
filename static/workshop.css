@@ -146,3 +146,8 @@ body {
    reuse, but never by accident. */
 .ws-warn { flex: 1 1 240px; font-size: 12px; line-height: 1.45; color: #a8442a; }
 .ws-plain.is-go.is-replacing { border-color: #a8442a; color: #a8442a; }
+
+/* Two verbs, side by side: stand beside what is there, or take its place.
+   The additive one reads as ordinary, the destructive one as a warning. */
+.ws-twoverbs { display: flex; gap: 8px; align-items: center; }
+.ws-plain.is-replacing { border-color: #a8442a; color: #a8442a; }

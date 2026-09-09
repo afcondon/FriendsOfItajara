@@ -55,6 +55,12 @@ type CardRow =
   -- | rather than a stack of layers. `SETTINGS > SLICER` has to be set to it
   -- | by hand: the module keeps it globally and a card cannot carry it.
   , slicer :: Int
+  -- | Every set on this voice, in the order they sound. One is the ordinary
+  -- | case; several make the voice an axis of its own, picked by the layer
+  -- | selector while the start point indexes inside each of them.
+  , sets :: Array String
+  -- | How the layer selector moves: manual, velocity, random, cyclic.
+  , mode :: String
   }
 
 type CardView =
@@ -75,7 +81,7 @@ foreign import card :: Effect (Promise CardView)
 foreign import addToCard
   :: { take :: String, set :: String, bank :: String, kit :: String
      , voice :: Int, kind :: String, stereo :: Boolean, join :: Boolean
-     , regions :: Array Region }
+     , append :: Boolean, layerMode :: String, regions :: Array Region }
   -> Effect (Promise Wrote)
 
 -- | Compile the manifest onto a mounted card.

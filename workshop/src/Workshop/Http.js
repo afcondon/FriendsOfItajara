@@ -23,16 +23,27 @@ export const card = () =>
   fetch("/api/card").then(j).then((d) => ({
     rows: (d.card?.banks ?? []).flatMap((b) =>
       (b.kits ?? []).flatMap((k) =>
-        Object.entries(k.voices ?? {}).map(([v, val]) => ({
-          bank: String(b.name ?? ""),
-          kit: String(k.name ?? ""),
-          voice: Number(v),
-          set: String(val.set ?? ""),
-          count: Number(d.sets?.[val.set] ?? 0),
-          stereo: !!val.stereo,
-          kind: String(val.kind ?? ""),
-          slicer: Number(val.slicer ?? 0),
-        })))),
+        Object.entries(k.voices ?? {}).map(([v, val]) => {
+          // Read both shapes: a voice used to be one set, and is now an
+          // ordered stack of layers.
+          const st = Array.isArray(val.layers)
+            ? val
+            : { layers: [{ set: val.set }], kind: val.kind, stereo: val.stereo,
+                sliced: !!val.joined, slots: val.slicer ?? 0 };
+          const sets = st.layers.map((l) => String(l.set ?? ""));
+          return {
+            bank: String(b.name ?? ""),
+            kit: String(k.name ?? ""),
+            voice: Number(v),
+            set: sets[0] ?? "",
+            sets,
+            count: sets.reduce((n, x) => n + Number(d.sets?.[x] ?? 0), 0),
+            stereo: !!st.stereo,
+            kind: String(st.kind ?? ""),
+            slicer: Number(st.slots ?? 0),
+            mode: String(k.layers ?? ""),
+          };
+        }))),
     cards: d.cards ?? [],
     plan: String(d.plan ?? ""),
     ok: !!d.ok,

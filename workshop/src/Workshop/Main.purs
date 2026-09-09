@@ -22,9 +22,10 @@ import Data.Array as Array
 import Data.Foldable (for_)
 import Data.Int as Int
 import Data.Either (Either(..))
-import Data.Maybe (Maybe(..), fromMaybe, isJust, maybe)
+import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Data.Number as Number
 import Data.String as String
+import Data.String.Common (joinWith)
 -- `Bars` names a thing in both vocabularies — a length in the daemon's verbs
 -- and a kind of material here — so the verbs come in by name and the kinds
 -- through `Kind.`.
@@ -112,6 +113,7 @@ type State =
   , divider :: Divider
   , mine :: Boolean
   , kitMine :: Boolean
+  , layerMode :: String
   , equalN :: Int
   -- | The virtual card, as the server flattens it, plus what `kit build` says
   -- | about it. Refreshed after anything that could change it.
@@ -142,7 +144,8 @@ data Action
   | SetBank String
   | SetKit String
   | SetVoice String
-  | SendToCard
+  | SendToCard Boolean
+  | SetLayerMode String
   | WriteCard String
   | Play Int
   | HoverPlay Int
@@ -155,7 +158,7 @@ component = H.mkComponent
       , armed: false, name: "", log: []
       , peaks: Nothing, regions: [], keep: Set.empty, busy: false
       , hoverPlays: false, playing: Nothing, showing: "", waiting: false
-      , minGap: 300.0, divider: Divider.Attacks, equalN: 16, mine: false, kitMine: false
+      , minGap: 300.0, divider: Divider.Attacks, equalN: 16, mine: false, kitMine: false, layerMode: ""
       , cardView: Nothing, bank: "WORKSHOP", kit: "", voice: 1, cardBusy: false }
   , render
   , eval: H.mkEval H.defaultEval { handleAction = handleAction, initialize = Just Init }
@@ -256,7 +259,11 @@ handleAction = case _ of
       Left e -> H.modify_ (note (Aff.message e) <<< _ { cardBusy = false })
       Right w -> H.modify_ (note (lastLine w.output) <<< _ { cardBusy = false })
     handleAction RefreshCard
-  SendToCard -> do
+  SetLayerMode m -> H.modify_ _ { layerMode = m }
+  -- | `append` is the whole of the two-axis change at this end: the same set,
+  -- | the same voice, and a choice about whether it stands beside what is
+  -- | there or in its place.
+  SendToCard append -> do
     st <- H.get
     -- Only what you kept, in the order they were played. `msm cut` numbers
     -- them zero-padded from that order, and the module reads a voice's stack
@@ -287,6 +294,8 @@ handleAction = case _ of
               -- into 32 would have tried to be 32 layers, and the module
               -- plays twelve.
               , join: Kind.joins st.kind || isEqual st.divider
+              , append
+              , layerMode: st.layerMode
               , regions: keptRegions })))
         case r of
           Left e -> H.modify_ (note (Aff.message e) <<< _ { cardBusy = false })
@@ -721,15 +730,38 @@ render st =
                                     then " + " <> show (n + 1) else "")) ])
                       [ 1, 2, 3, 4 ])
               ]
-          , HH.button
-              [ HP.class_ (HH.ClassName ("ws-plain is-go"
-                  <> if isJust occupant then " is-replacing" else ""))
-              , HP.disabled (st.cardBusy || Set.isEmpty st.keep)
-              , HE.onClick \_ -> SendToCard
-              ]
-              [ HH.text (case occupant of
-                  Nothing -> show (Set.size st.keep) <> " to the kit"
-                  Just _ -> "replace with " <> show (Set.size st.keep)) ]
+          -- **Two verbs where there was one.**
+          --
+          -- A voice used to hold one set, so sending could only mean "put it
+          -- here". It can now hold a stack, and the two things you might mean
+          -- are opposites: stand beside what is there, or take its place. The
+          -- additive one is offered first and plainly; the destructive one has
+          -- to be aimed at.
+          , case occupant of
+              Nothing ->
+                HH.button
+                  [ HP.class_ (HH.ClassName "ws-plain is-go")
+                  , HP.disabled (st.cardBusy || Set.isEmpty st.keep)
+                  , HE.onClick \_ -> SendToCard false
+                  ]
+                  [ HH.text (show (Set.size st.keep) <> " to the kit") ]
+              Just r ->
+                HH.div [ HP.class_ (HH.ClassName "ws-twoverbs") ]
+                  [ HH.button
+                      [ HP.class_ (HH.ClassName "ws-plain is-go")
+                      , HP.disabled (st.cardBusy || Set.isEmpty st.keep)
+                      , HP.title "the layer selector picks between them"
+                      , HE.onClick \_ -> SendToCard true
+                      ]
+                      [ HH.text ("add as layer "
+                          <> show (Array.length r.sets + 1)) ]
+                  , HH.button
+                      [ HP.class_ (HH.ClassName "ws-plain is-replacing")
+                      , HP.disabled (st.cardBusy || Set.isEmpty st.keep)
+                      , HE.onClick \_ -> SendToCard false
+                      ]
+                      [ HH.text "replace" ]
+                  ]
           -- **Say what is about to be destroyed, before it is.**
           --
           -- A kit's voice is an address, and sending to one that is taken
@@ -739,12 +771,30 @@ render st =
           -- reached the disk; only the card's record of them collided. Naming
           -- the occupant costs one line and makes the whole class of mistake
           -- visible at the moment it can still be avoided.
+          -- **How the layer selector moves.** Only worth asking once a voice
+          -- holds more than one thing to choose between — and it is the whole
+          -- reason to use layers rather than slices, since these are the modes
+          -- where the module decides for itself.
+          , case occupant of
+              Just r | Array.length r.sets >= 1 ->
+                HH.label [ HP.class_ (HH.ClassName "ws-field is-tight") ]
+                  [ HH.span_ [ HH.text "picked by" ]
+                  , HH.select [ HE.onValueChange SetLayerMode ]
+                      (map (\m -> HH.option
+                              [ HP.value m
+                              , HP.selected (m == (if st.layerMode == "" then r.mode else st.layerMode)) ]
+                              [ HH.text m ])
+                          [ "manual", "velocity", "random", "cyclic" ])
+                  ]
+              _ -> HH.text ""
           , case occupant of
               Nothing -> HH.text ""
               Just r ->
                 HH.span [ HP.class_ (HH.ClassName "ws-warn") ]
-                  [ HH.text ("voice " <> show st.voice <> " of this kit already \
-                             \holds " <> r.set <> " — sending puts this in its place") ]
+                  [ HH.text ("voice " <> show st.voice <> " holds "
+                      <> joinWith ", " r.sets
+                      <> (if r.slicer > 0 then " in " <> show r.slicer <> " slots" else "")
+                      <> " — add stands beside them, replace puts this in their place") ]
           ]
 
   -- | What already sits at the address this send would write to — and only

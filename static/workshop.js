@@ -4894,6 +4894,11 @@
       return s.split(sep);
     };
   };
+  var joinWith = function(s) {
+    return function(xs) {
+      return xs.join(s);
+    };
+  };
 
   // output/Effect.Aff.Class/index.js
   var monadAffAff = {
@@ -9042,16 +9047,28 @@
   })).catch((e) => ({ ok: false, output: String(e.message ?? e), secs: 0, divides: false, regions: [] }));
   var j = (r) => r.json();
   var card = () => fetch("/api/card").then(j).then((d) => ({
-    rows: (d.card?.banks ?? []).flatMap((b2) => (b2.kits ?? []).flatMap((k) => Object.entries(k.voices ?? {}).map(([v, val]) => ({
-      bank: String(b2.name ?? ""),
-      kit: String(k.name ?? ""),
-      voice: Number(v),
-      set: String(val.set ?? ""),
-      count: Number(d.sets?.[val.set] ?? 0),
-      stereo: !!val.stereo,
-      kind: String(val.kind ?? ""),
-      slicer: Number(val.slicer ?? 0)
-    })))),
+    rows: (d.card?.banks ?? []).flatMap((b2) => (b2.kits ?? []).flatMap((k) => Object.entries(k.voices ?? {}).map(([v, val]) => {
+      const st = Array.isArray(val.layers) ? val : {
+        layers: [{ set: val.set }],
+        kind: val.kind,
+        stereo: val.stereo,
+        sliced: !!val.joined,
+        slots: val.slicer ?? 0
+      };
+      const sets = st.layers.map((l) => String(l.set ?? ""));
+      return {
+        bank: String(b2.name ?? ""),
+        kit: String(k.name ?? ""),
+        voice: Number(v),
+        set: sets[0] ?? "",
+        sets,
+        count: sets.reduce((n, x) => n + Number(d.sets?.[x] ?? 0), 0),
+        stereo: !!st.stereo,
+        kind: String(st.kind ?? ""),
+        slicer: Number(st.slots ?? 0),
+        mode: String(k.layers ?? "")
+      };
+    }))),
     cards: d.cards ?? [],
     plan: String(d.plan ?? ""),
     ok: !!d.ok
@@ -9333,11 +9350,24 @@
     return SetVoice2;
   })();
   var SendToCard = /* @__PURE__ */ (function() {
-    function SendToCard2() {
+    function SendToCard2(value0) {
+      this.value0 = value0;
     }
     ;
-    SendToCard2.value = new SendToCard2();
+    SendToCard2.create = function(value0) {
+      return new SendToCard2(value0);
+    };
     return SendToCard2;
+  })();
+  var SetLayerMode = /* @__PURE__ */ (function() {
+    function SetLayerMode2(value0) {
+      this.value0 = value0;
+    }
+    ;
+    SetLayerMode2.create = function(value0) {
+      return new SetLayerMode2(value0);
+    };
+    return SetLayerMode2;
   })();
   var WriteCard = /* @__PURE__ */ (function() {
     function WriteCard2(value0) {
@@ -9403,6 +9433,7 @@
         divider: s.divider,
         mine: s.mine,
         kitMine: s.kitMine,
+        layerMode: s.layerMode,
         equalN: s.equalN,
         cardView: s.cardView,
         bank: s.bank,
@@ -9450,8 +9481,8 @@
   var freeVoice = function(st) {
     var wide = notEq1(foldsTo(st.kind))(ToMono.value);
     var kitName = (function() {
-      var $138 = st.kit === "";
-      if ($138) {
+      var $142 = st.kit === "";
+      if ($142) {
         return st.name;
       }
       ;
@@ -9468,7 +9499,7 @@
         })(st.cardView.value0.rows);
       }
       ;
-      throw new Error("Failed pattern match at Workshop.Main (line 455, column 17 - line 460, column 18): " + [st.cardView.constructor.name]);
+      throw new Error("Failed pattern match at Workshop.Main (line 464, column 17 - line 469, column 18): " + [st.cardView.constructor.name]);
     };
     var fits = function(v) {
       return !taken(v) && (!wide || !taken(v + 1 | 0));
@@ -9489,8 +9520,8 @@
   var render2 = function(st) {
     var writeRow = function(v) {
       return div2([class_("ws-send")])([span3([class_("ws-arm-label")])([text5("Write to")]), (function() {
-        var $142 = $$null2(v.cards);
-        if ($142) {
+        var $146 = $$null2(v.cards);
+        if ($146) {
           return span3([class_("ws-muted")])([text5("no Rample card is mounted \u2014 everything above is safe on disk; mount one when you want it written")]);
         }
         ;
@@ -9506,10 +9537,10 @@
         var total = maybe(1)(function(l) {
           return l.loopSecs;
         })(loop2(st));
-        var n = maybe(0)(function($310) {
+        var n = maybe(0)(function($322) {
           return length3((function(v) {
             return v.hi;
-          })($310));
+          })($322));
         })(st.peaks);
         var kept = member3(i2)(st.keep);
         var b2 = bucketsFor(n)(total)(r.start)(r.end);
@@ -9523,8 +9554,8 @@
           ;
           return " is-dropped";
         })() + (function() {
-          var $144 = eq22(st.playing)(new Just(i2));
-          if ($144) {
+          var $148 = eq22(st.playing)(new Just(i2));
+          if ($148) {
             return " is-playing";
           }
           ;
@@ -9533,14 +9564,14 @@
           return new HoverPlay(i2);
         })])([button([class_("ws-tile-face"), title2(fmt(r.end - r.start) + (" s at " + (fmt(r.start) + " s"))), onClick(function(v) {
           return new Play(i2);
-        })])([svg(maybe([])(function($311) {
+        })])([svg(maybe([])(function($323) {
           return cut2((function(v) {
             return v.lo;
-          })($311));
-        })(st.peaks))(maybe([])(function($312) {
+          })($323));
+        })(st.peaks))(maybe([])(function($324) {
           return cut2((function(v) {
             return v.hi;
-          })($312));
+          })($324));
         })(st.peaks))([klass("ws-tile-svg")])]), div2([class_("ws-tile-foot")])([span3([class_("ws-tile-n")])([text5(show12(i2 + 1 | 0))]), span3([class_("ws-tile-len")])([text5(fmt(r.end - r.start))]), button([class_("ws-tile-keep"), title2((function() {
           if (kept) {
             return "drop this one";
@@ -9573,14 +9604,14 @@
         ;
         return "";
       })())]), td_([text5(r.set + (" \u2014 " + ((function() {
-        var $148 = r.slicer > 0;
-        if ($148) {
+        var $152 = r.slicer > 0;
+        if ($152) {
           return "one file, SLICER " + show12(r.slicer);
         }
         ;
         return show12(r.count) + (function() {
-          var $149 = r.count === 1;
-          if ($149) {
+          var $153 = r.count === 1;
+          if ($153) {
             return " sample";
           }
           ;
@@ -9596,16 +9627,16 @@
     };
     var occupant = (function() {
       var setName14 = (function() {
-        var $151 = st.name === "";
-        if ($151) {
+        var $155 = st.name === "";
+        if ($155) {
           return "set";
         }
         ;
         return st.name;
       })();
       var kitName = (function() {
-        var $152 = st.kit === "";
-        if ($152) {
+        var $156 = st.kit === "";
+        if ($156) {
           return st.name;
         }
         ;
@@ -9624,54 +9655,73 @@
       ;
       if (otherwise) {
         return div2([class_("ws-send")])([span3([class_("ws-arm-label")])([text5("Send to")]), small2("bank")(st.bank)(SetBank.create), small2("kit")((function() {
-          var $153 = st.kit === "";
-          if ($153) {
+          var $157 = st.kit === "";
+          if ($157) {
             return st.name;
           }
           ;
           return st.kit;
         })())(SetKit.create), label4([class_("ws-field is-tight")])([span_([text5("voice")]), select3([onValueChange(SetVoice.create)])(map23(function(n) {
           return option([value13(show12(n)), selected2(n === st.voice)])([text5(show12(n) + (function() {
-            var $154 = notEq1(foldsTo(st.kind))(ToMono.value);
-            if ($154) {
+            var $158 = notEq1(foldsTo(st.kind))(ToMono.value);
+            if ($158) {
               return " + " + show12(n + 1 | 0);
             }
             ;
             return "";
           })())]);
-        })([1, 2, 3, 4]))]), button([class_("ws-plain is-go" + (function() {
-          var $155 = isJust(occupant);
-          if ($155) {
-            return " is-replacing";
-          }
-          ;
-          return "";
-        })()), disabled10(st.cardBusy || isEmpty2(st.keep)), onClick(function(v) {
-          return SendToCard.value;
-        })])([text5((function() {
+        })([1, 2, 3, 4]))]), (function() {
           if (occupant instanceof Nothing) {
-            return show12(size2(st.keep)) + " to the kit";
+            return button([class_("ws-plain is-go"), disabled10(st.cardBusy || isEmpty2(st.keep)), onClick(function(v) {
+              return new SendToCard(false);
+            })])([text5(show12(size2(st.keep)) + " to the kit")]);
           }
           ;
           if (occupant instanceof Just) {
-            return "replace with " + show12(size2(st.keep));
+            return div2([class_("ws-twoverbs")])([button([class_("ws-plain is-go"), disabled10(st.cardBusy || isEmpty2(st.keep)), title2("the layer selector picks between them"), onClick(function(v) {
+              return new SendToCard(true);
+            })])([text5("add as layer " + show12(length3(occupant.value0.sets) + 1 | 0))]), button([class_("ws-plain is-replacing"), disabled10(st.cardBusy || isEmpty2(st.keep)), onClick(function(v) {
+              return new SendToCard(false);
+            })])([text5("replace")])]);
           }
           ;
-          throw new Error("Failed pattern match at Workshop.Main (line 730, column 26 - line 732, column 71): " + [occupant.constructor.name]);
-        })())]), (function() {
+          throw new Error("Failed pattern match at Workshop.Main (line 740, column 13 - line 764, column 20): " + [occupant.constructor.name]);
+        })(), (function() {
+          if (occupant instanceof Just && length3(occupant.value0.sets) >= 1) {
+            return label4([class_("ws-field is-tight")])([span_([text5("picked by")]), select3([onValueChange(SetLayerMode.create)])(map23(function(m) {
+              return option([value13(m), selected2(m === (function() {
+                var $162 = st.layerMode === "";
+                if ($162) {
+                  return occupant.value0.mode;
+                }
+                ;
+                return st.layerMode;
+              })())])([text5(m)]);
+            })(["manual", "velocity", "random", "cyclic"]))]);
+          }
+          ;
+          return text5("");
+        })(), (function() {
           if (occupant instanceof Nothing) {
             return text5("");
           }
           ;
           if (occupant instanceof Just) {
-            return span3([class_("ws-warn")])([text5("voice " + (show12(st.voice) + (" of this kit already holds " + (occupant.value0.set + " \u2014 sending puts this in its place"))))]);
+            return span3([class_("ws-warn")])([text5("voice " + (show12(st.voice) + (" holds " + (joinWith(", ")(occupant.value0.sets) + ((function() {
+              var $165 = occupant.value0.slicer > 0;
+              if ($165) {
+                return " in " + (show12(occupant.value0.slicer) + " slots");
+              }
+              ;
+              return "";
+            })() + " \u2014 add stands beside them, replace puts this in their place")))))]);
           }
           ;
-          throw new Error("Failed pattern match at Workshop.Main (line 742, column 13 - line 747, column 89): " + [occupant.constructor.name]);
+          throw new Error("Failed pattern match at Workshop.Main (line 790, column 13 - line 797, column 90): " + [occupant.constructor.name]);
         })()]);
       }
       ;
-      throw new Error("Failed pattern match at Workshop.Main (line 707, column 3 - line 748, column 12): ");
+      throw new Error("Failed pattern match at Workshop.Main (line 716, column 3 - line 798, column 12): ");
     })();
     var lp = loop2(st);
     var srcNow = maybe(0)(function(v) {
@@ -9688,8 +9738,8 @@
     })(lp);
     var kindBtn = function(k) {
       return button([class_("ws-kind" + (function() {
-        var $160 = name15(k) === name15(st.kind);
-        if ($160) {
+        var $167 = name15(k) === name15(st.kind);
+        if ($167) {
           return " on";
         }
         ;
@@ -9717,8 +9767,8 @@
     })();
     var dividerBtn = function(dv) {
       return button([class_("ws-chip" + (function() {
-        var $163 = eq3(dv)(st.divider);
-        if ($163) {
+        var $170 = eq3(dv)(st.divider);
+        if ($170) {
           return " on";
         }
         ;
@@ -9734,8 +9784,8 @@
       ;
       if (otherwise) {
         return div2([class_("ws-dividers")])([span3([class_("ws-arm-label")])([text5("Divide")]), div2([class_("ws-chips")])(map23(dividerBtn)(all4(st.equalN))), (function() {
-          var $164 = needsCount(st.divider);
-          if ($164) {
+          var $171 = needsCount(st.divider);
+          if ($171) {
             return label4([class_("ws-field is-tight")])([span_([text5("pieces")]), input2([type_19(InputNumber.value), value13(show12(st.equalN)), min5(2), max6(128), onValueInput(SetEqualN.create)])]);
           }
           ;
@@ -9743,7 +9793,7 @@
         })(), span3([class_("ws-muted")])([text5(blurb2(st.divider))])]);
       }
       ;
-      throw new Error("Failed pattern match at Workshop.Main (line 677, column 3 - line 695, column 12): ");
+      throw new Error("Failed pattern match at Workshop.Main (line 686, column 3 - line 704, column 12): ");
     })();
     var connection = (function() {
       if (st.looper instanceof Nothing) {
@@ -9754,13 +9804,13 @@
         return span3([class_("ws-ok")])([text5("daemon")]);
       }
       ;
-      throw new Error("Failed pattern match at Workshop.Main (line 525, column 16 - line 527, column 80): " + [st.looper.constructor.name]);
+      throw new Error("Failed pattern match at Workshop.Main (line 534, column 16 - line 536, column 80): " + [st.looper.constructor.name]);
     })();
     var chip = function(n) {
       return function(s) {
         return button([class_("ws-chip is-arm" + ((function() {
-          var $167 = srcNow === (n + 1 | 0);
-          if ($167) {
+          var $174 = srcNow === (n + 1 | 0);
+          if ($174) {
             return " on";
           }
           ;
@@ -9799,8 +9849,8 @@
             return "dividing\u2026";
           }
           ;
-          var $173 = $$null2(st.regions);
-          if ($173) {
+          var $180 = $$null2(st.regions);
+          if ($180) {
             return maybe("")(function(l) {
               return fmt(l.loopSecs) + " s recorded, not divided yet";
             })(loop2(st));
@@ -9808,8 +9858,8 @@
           ;
           return show12(size2(st.keep)) + (" of " + (show12(length3(st.regions)) + " kept"));
         })())]), (function() {
-          var $174 = $$null2(st.regions) && (hasTake && !st.busy);
-          if ($174) {
+          var $181 = $$null2(st.regions) && (hasTake && !st.busy);
+          if ($181) {
             return button([class_("ws-plain"), onClick(function(v) {
               return Analyse.value;
             })])([text5("Divide it")]);
@@ -9823,7 +9873,7 @@
         })])([text5("Keep none")]), label4([class_("ws-quiet")])([span_([text5("more")]), input2([type_19(InputRange.value), min5(25), max6(1200), step3(new Step(25)), value13(show7(st.minGap)), onValueChange(SetGap.create), title2("how close two sounds can be and still be two, in milliseconds")]), span_([text5("fewer")]), span3([class_("ws-gapval")])([text5(show12(round2(st.minGap)) + " ms")])]), label4([class_("ws-hover")])([input2([type_19(InputCheckbox.value), checked2(st.hoverPlays), onChecked(SetHoverPlays.create)]), span_([text5("hover plays")])])]), dividerRow, div2([class_("ws-grid")])(mapWithIndex2(tile)(st.regions)), sendRow]);
       }
       ;
-      throw new Error("Failed pattern match at Workshop.Main (line 617, column 3 - line 669, column 12): ");
+      throw new Error("Failed pattern match at Workshop.Main (line 626, column 3 - line 678, column 12): ");
     })();
     var cardView = section([class_("ws-card")])([h2_([text5("The card, so far")]), (function() {
       if (st.cardView instanceof Nothing) {
@@ -9839,8 +9889,8 @@
           return div_([table([class_("ws-table")])([thead_([tr_(map23(function(h) {
             return th_([text5(h)]);
           })(["bank", "kit", "voice", "holds"]))]), tbody_(map23(row)(st.cardView.value0.rows))]), writeRow(st.cardView.value0), (function() {
-            var $176 = st.cardView.value0.plan === "";
-            if ($176) {
+            var $183 = st.cardView.value0.plan === "";
+            if ($183) {
               return text5("");
             }
             ;
@@ -9856,7 +9906,7 @@
         ;
       }
       ;
-      throw new Error("Failed pattern match at Workshop.Main (line 816, column 9 - line 835, column 20): " + [st.cardView.constructor.name]);
+      throw new Error("Failed pattern match at Workshop.Main (line 866, column 9 - line 885, column 20): " + [st.cardView.constructor.name]);
     })()]);
     var armRow = div2([class_("ws-arm")])([span3([class_("ws-arm-label")])([text5("Arm on")]), div2([class_("ws-chips")])(maybe([text5("no daemon")])(function(top3) {
       return mapWithIndex2(chip)(top3.sources);
@@ -9868,22 +9918,22 @@
       ;
       return text5("");
     })(), label4([class_("ws-field")])([span_([text5("Call it")]), input2([type_19(InputText.value), value13(st.name), disabled10(st.armed || writing), onValueInput(SetName.create)])]), p([class_("ws-blurb")])([text5(blurb(st.kind)), text5(" Captured from " + (srcName + (" as it comes" + (", and folded to " + ((function() {
-      var $181 = eq4(foldsTo(st.kind))(ToMono.value);
-      if ($181) {
+      var $188 = eq4(foldsTo(st.kind))(ToMono.value);
+      if ($188) {
         return "mono";
       }
       ;
       return "stereo";
     })() + (" on the way to a card" + (function() {
-      var $182 = voicesOn(st.kind) === 2;
-      if ($182) {
+      var $189 = voicesOn(st.kind) === 2;
+      if ($189) {
         return " \u2014 where it takes two of the four voices.";
       }
       ;
       return ".";
     })()))))))]), div2([class_("ws-actions")])([(function() {
-      var $183 = st.armed || (writing || listening);
-      if ($183) {
+      var $190 = st.armed || (writing || listening);
+      if ($190) {
         return button([class_("ws-big is-stop"), onClick(function(v) {
           return Close.value;
         })])([text5((function() {
@@ -9906,8 +9956,8 @@
       }
       ;
       return maybe("")(function(l) {
-        var $187 = l.layers > 0;
-        if ($187) {
+        var $194 = l.layers > 0;
+        if ($194) {
           return "captured " + (fmt(l.loopSecs) + " s");
         }
         ;
@@ -9925,18 +9975,18 @@
     return function(write3) {
       var divide = function(st) {
         return discard12(modify_3(function(v) {
-          var $188 = {};
-          for (var $189 in v) {
-            if ({}.hasOwnProperty.call(v, $189)) {
-              $188[$189] = v[$189];
+          var $195 = {};
+          for (var $196 in v) {
+            if ({}.hasOwnProperty.call(v, $196)) {
+              $195[$196] = v[$196];
             }
             ;
           }
           ;
-          $188.busy = true;
-          $188.regions = [];
-          $188.keep = empty3;
-          return $188;
+          $195.busy = true;
+          $195.regions = [];
+          $195.keep = empty3;
+          return $195;
         }))(function() {
           return discard12(when4(write3)(discard12(send1(new AskPeaks(900)))(function() {
             return discard12(sendBare1(new ExportLayers(st.name)))(function() {
@@ -9958,9 +10008,9 @@
             })))))(function(r) {
               if (r instanceof Left) {
                 return modify_3((function() {
-                  var $313 = note("could not analyse: " + message(r.value0));
-                  return function($314) {
-                    return $313((function(v) {
+                  var $325 = note("could not analyse: " + message(r.value0));
+                  return function($326) {
+                    return $325((function(v) {
                       return {
                         looper: v.looper,
                         kind: v.kind,
@@ -9979,6 +10029,7 @@
                         divider: v.divider,
                         mine: v.mine,
                         kitMine: v.kitMine,
+                        layerMode: v.layerMode,
                         equalN: v.equalN,
                         cardView: v.cardView,
                         bank: v.bank,
@@ -9987,7 +10038,7 @@
                         cardBusy: v.cardBusy,
                         busy: false
                       };
-                    })($314));
+                    })($326));
                   };
                 })());
               }
@@ -9995,9 +10046,9 @@
               if (r instanceof Right) {
                 if (!r.value0.ok) {
                   return modify_3((function() {
-                    var $315 = note(r.value0.output);
-                    return function($316) {
-                      return $315((function(v) {
+                    var $327 = note(r.value0.output);
+                    return function($328) {
+                      return $327((function(v) {
                         return {
                           looper: v.looper,
                           kind: v.kind,
@@ -10016,6 +10067,7 @@
                           divider: v.divider,
                           mine: v.mine,
                           kitMine: v.kitMine,
+                          layerMode: v.layerMode,
                           equalN: v.equalN,
                           cardView: v.cardView,
                           bank: v.bank,
@@ -10024,7 +10076,7 @@
                           cardBusy: v.cardBusy,
                           busy: false
                         };
-                      })($316));
+                      })($328));
                     };
                   })());
                 }
@@ -10032,19 +10084,19 @@
                 if (otherwise) {
                   var n = length3(r.value0.regions);
                   return discard12(modify_3(function(v) {
-                    var $194 = {};
-                    for (var $195 in v) {
-                      if ({}.hasOwnProperty.call(v, $195)) {
-                        $194[$195] = v[$195];
+                    var $201 = {};
+                    for (var $202 in v) {
+                      if ({}.hasOwnProperty.call(v, $202)) {
+                        $201[$202] = v[$202];
                       }
                       ;
                     }
                     ;
-                    $194.regions = r.value0.regions;
-                    $194.keep = fromFoldable4(range2(0)(n - 1 | 0));
-                    $194.busy = false;
-                    $194.showing = takeName;
-                    return $194;
+                    $201.regions = r.value0.regions;
+                    $201.keep = fromFoldable4(range2(0)(n - 1 | 0));
+                    $201.busy = false;
+                    $201.showing = takeName;
+                    return $201;
                   }))(function() {
                     return discard12(modify_3(function(s) {
                       var v = freeVoice(s);
@@ -10063,6 +10115,7 @@
                           kind: s.kind,
                           kit: s.kit,
                           kitMine: s.kitMine,
+                          layerMode: s.layerMode,
                           log: s.log,
                           looper: s.looper,
                           minGap: s.minGap,
@@ -10090,6 +10143,7 @@
                           hoverPlays: s.hoverPlays,
                           keep: s.keep,
                           kind: s.kind,
+                          layerMode: s.layerMode,
                           log: s.log,
                           looper: s.looper,
                           minGap: s.minGap,
@@ -10106,11 +10160,11 @@
                         };
                       }
                       ;
-                      throw new Error("Failed pattern match at Workshop.Main (line 435, column 31 - line 440, column 59): " + [v.constructor.name]);
+                      throw new Error("Failed pattern match at Workshop.Main (line 444, column 31 - line 449, column 59): " + [v.constructor.name]);
                     }))(function() {
                       return modify_3(note(show12(n) + ((function() {
-                        var $199 = n === 1;
-                        if ($199) {
+                        var $206 = n === 1;
+                        if ($206) {
                           return " division";
                         }
                         ;
@@ -10128,7 +10182,7 @@
                 ;
               }
               ;
-              throw new Error("Failed pattern match at Workshop.Main (line 416, column 7 - line 444, column 80): " + [r.constructor.name]);
+              throw new Error("Failed pattern match at Workshop.Main (line 425, column 7 - line 453, column 80): " + [r.constructor.name]);
             });
           });
         });
@@ -10152,16 +10206,16 @@
       if (v instanceof Init) {
         return bind6(liftEffect12(slugFor(DrumHits.value)))(function(n) {
           return discard12(modify_3(function(v1) {
-            var $205 = {};
-            for (var $206 in v1) {
-              if ({}.hasOwnProperty.call(v1, $206)) {
-                $205[$206] = v1[$206];
+            var $212 = {};
+            for (var $213 in v1) {
+              if ({}.hasOwnProperty.call(v1, $213)) {
+                $212[$213] = v1[$213];
               }
               ;
             }
             ;
-            $205.name = n;
-            return $205;
+            $212.name = n;
+            return $212;
           }))(function() {
             return discard12(handleAction(dictMonadAff)(RefreshCard.value))(function() {
               return discard12(liftEffect12(connect2(defaultUrl)))(function() {
@@ -10184,17 +10238,17 @@
           return bind6(liftEffect12(latest))(function(snap) {
             return bind6(liftEffect12(latestPeaks))(function(pk) {
               return discard12(modify_3(function(v1) {
-                var $208 = {};
-                for (var $209 in v1) {
-                  if ({}.hasOwnProperty.call(v1, $209)) {
-                    $208[$209] = v1[$209];
+                var $215 = {};
+                for (var $216 in v1) {
+                  if ({}.hasOwnProperty.call(v1, $216)) {
+                    $215[$216] = v1[$216];
                   }
                   ;
                 }
                 ;
-                $208.looper = snap;
-                $208.peaks = pk;
-                return $208;
+                $215.looper = snap;
+                $215.peaks = pk;
+                return $215;
               }))(function() {
                 return bind6(get2)(function(now) {
                   var has = maybe(false)(function(l) {
@@ -10207,9 +10261,9 @@
                     return bind6(get2)(function(st) {
                       return discard12(for_3(loop2(st))(function(lp) {
                         return when4(st.armed && (!lp.armed && (not1(isWriting)(lp) && lp.layers > 0)))(modify_3((function() {
-                          var $317 = note("closed itself: " + (fmt(lp.loopSecs) + " s"));
-                          return function($318) {
-                            return $317((function(v1) {
+                          var $329 = note("closed itself: " + (fmt(lp.loopSecs) + " s"));
+                          return function($330) {
+                            return $329((function(v1) {
                               return {
                                 looper: v1.looper,
                                 kind: v1.kind,
@@ -10227,6 +10281,7 @@
                                 divider: v1.divider,
                                 mine: v1.mine,
                                 kitMine: v1.kitMine,
+                                layerMode: v1.layerMode,
                                 equalN: v1.equalN,
                                 cardView: v1.cardView,
                                 bank: v1.bank,
@@ -10236,23 +10291,23 @@
                                 armed: false,
                                 waiting: true
                               };
-                            })($318));
+                            })($330));
                           };
                         })()));
                       }))(function() {
                         return bind6(get2)(function(st2) {
                           return for_3(loop2(st2))(function(lp) {
                             return when4(st2.waiting && (lp.layers > 0 && (not1(isWriting)(lp) && !lp.armed)))(discard12(modify_3(function(v1) {
-                              var $211 = {};
-                              for (var $212 in v1) {
-                                if ({}.hasOwnProperty.call(v1, $212)) {
-                                  $211[$212] = v1[$212];
+                              var $218 = {};
+                              for (var $219 in v1) {
+                                if ({}.hasOwnProperty.call(v1, $219)) {
+                                  $218[$219] = v1[$219];
                                 }
                                 ;
                               }
                               ;
-                              $211.waiting = false;
-                              return $211;
+                              $218.waiting = false;
+                              return $218;
                             }))(function() {
                               return handleAction(dictMonadAff)(Analyse.value);
                             }));
@@ -10270,31 +10325,31 @@
       ;
       if (v instanceof PickKind) {
         return discard12(modify_3(function(v1) {
-          var $214 = {};
-          for (var $215 in v1) {
-            if ({}.hasOwnProperty.call(v1, $215)) {
-              $214[$215] = v1[$215];
+          var $221 = {};
+          for (var $222 in v1) {
+            if ({}.hasOwnProperty.call(v1, $222)) {
+              $221[$222] = v1[$222];
             }
             ;
           }
           ;
-          $214.kind = v.value0;
-          $214.divider = defaultFor(v.value0);
-          return $214;
+          $221.kind = v.value0;
+          $221.divider = defaultFor(v.value0);
+          return $221;
         }))(function() {
           return bind6(get2)(function(st) {
             return when4(wantsAName(st))(bind6(liftEffect12(slugFor(v.value0)))(function(n) {
               return modify_3(function(v1) {
-                var $217 = {};
-                for (var $218 in v1) {
-                  if ({}.hasOwnProperty.call(v1, $218)) {
-                    $217[$218] = v1[$218];
+                var $224 = {};
+                for (var $225 in v1) {
+                  if ({}.hasOwnProperty.call(v1, $225)) {
+                    $224[$225] = v1[$225];
                   }
                   ;
                 }
                 ;
-                $217.name = n;
-                return $217;
+                $224.name = n;
+                return $224;
               });
             }));
           });
@@ -10304,39 +10359,39 @@
       if (v instanceof SetBars) {
         return modify_3(function(s) {
           var n = clamp3(1)(64)(fromMaybe(s.bars)(fromString2(v.value0)));
-          var $223 = {};
-          for (var $224 in s) {
-            if ({}.hasOwnProperty.call(s, $224)) {
-              $223[$224] = s[$224];
+          var $230 = {};
+          for (var $231 in s) {
+            if ({}.hasOwnProperty.call(s, $231)) {
+              $230[$231] = s[$231];
             }
             ;
           }
           ;
-          $223.bars = n;
-          $223.kind = (function() {
+          $230.bars = n;
+          $230.kind = (function() {
             if (s.kind instanceof Bars2) {
               return new Bars2(n);
             }
             ;
             return s.kind;
           })();
-          return $223;
+          return $230;
         });
       }
       ;
       if (v instanceof SetName) {
         return modify_3(function(v2) {
-          var $227 = {};
-          for (var $228 in v2) {
-            if ({}.hasOwnProperty.call(v2, $228)) {
-              $227[$228] = v2[$228];
+          var $234 = {};
+          for (var $235 in v2) {
+            if ({}.hasOwnProperty.call(v2, $235)) {
+              $234[$235] = v2[$235];
             }
             ;
           }
           ;
-          $227.name = v.value0;
-          $227.mine = v.value0 !== "";
-          return $227;
+          $234.name = v.value0;
+          $234.mine = v.value0 !== "";
+          return $234;
         });
       }
       ;
@@ -10348,89 +10403,89 @@
           ;
           if (r instanceof Right) {
             return modify_3(function(v2) {
-              var $233 = {};
-              for (var $234 in v2) {
-                if ({}.hasOwnProperty.call(v2, $234)) {
-                  $233[$234] = v2[$234];
+              var $240 = {};
+              for (var $241 in v2) {
+                if ({}.hasOwnProperty.call(v2, $241)) {
+                  $240[$241] = v2[$241];
                 }
                 ;
               }
               ;
-              $233.cardView = new Just(r.value0);
-              return $233;
+              $240.cardView = new Just(r.value0);
+              return $240;
             });
           }
           ;
-          throw new Error("Failed pattern match at Workshop.Main (line 246, column 5 - line 248, column 51): " + [r.constructor.name]);
+          throw new Error("Failed pattern match at Workshop.Main (line 249, column 5 - line 251, column 51): " + [r.constructor.name]);
         });
       }
       ;
       if (v instanceof SetBank) {
         return modify_3(function(v2) {
-          var $237 = {};
-          for (var $238 in v2) {
-            if ({}.hasOwnProperty.call(v2, $238)) {
-              $237[$238] = v2[$238];
+          var $244 = {};
+          for (var $245 in v2) {
+            if ({}.hasOwnProperty.call(v2, $245)) {
+              $244[$245] = v2[$245];
             }
             ;
           }
           ;
-          $237.bank = v.value0;
-          return $237;
+          $244.bank = v.value0;
+          return $244;
         });
       }
       ;
       if (v instanceof SetKit) {
         return modify_3(function(v2) {
-          var $241 = {};
-          for (var $242 in v2) {
-            if ({}.hasOwnProperty.call(v2, $242)) {
-              $241[$242] = v2[$242];
+          var $248 = {};
+          for (var $249 in v2) {
+            if ({}.hasOwnProperty.call(v2, $249)) {
+              $248[$249] = v2[$249];
             }
             ;
           }
           ;
-          $241.kit = v.value0;
-          $241.kitMine = v.value0 !== "";
-          return $241;
+          $248.kit = v.value0;
+          $248.kitMine = v.value0 !== "";
+          return $248;
         });
       }
       ;
       if (v instanceof SetVoice) {
         return modify_3(function(s) {
-          var $245 = {};
-          for (var $246 in s) {
-            if ({}.hasOwnProperty.call(s, $246)) {
-              $245[$246] = s[$246];
+          var $252 = {};
+          for (var $253 in s) {
+            if ({}.hasOwnProperty.call(s, $253)) {
+              $252[$253] = s[$253];
             }
             ;
           }
           ;
-          $245.voice = clamp3(1)(4)(fromMaybe(s.voice)(fromString2(v.value0)));
-          return $245;
+          $252.voice = clamp3(1)(4)(fromMaybe(s.voice)(fromString2(v.value0)));
+          return $252;
         });
       }
       ;
       if (v instanceof WriteCard) {
         return discard12(modify_3(function(v1) {
-          var $249 = {};
-          for (var $250 in v1) {
-            if ({}.hasOwnProperty.call(v1, $250)) {
-              $249[$250] = v1[$250];
+          var $256 = {};
+          for (var $257 in v1) {
+            if ({}.hasOwnProperty.call(v1, $257)) {
+              $256[$257] = v1[$257];
             }
             ;
           }
           ;
-          $249.cardBusy = true;
-          return $249;
+          $256.cardBusy = true;
+          return $256;
         }))(function() {
           return bind6(liftAff2(attempt(toAffE(writeToCard(v.value0)))))(function(r) {
             return discard12((function() {
               if (r instanceof Left) {
                 return modify_3((function() {
-                  var $319 = note(message(r.value0));
-                  return function($320) {
-                    return $319((function(v1) {
+                  var $331 = note(message(r.value0));
+                  return function($332) {
+                    return $331((function(v1) {
                       return {
                         looper: v1.looper,
                         kind: v1.kind,
@@ -10450,6 +10505,7 @@
                         divider: v1.divider,
                         mine: v1.mine,
                         kitMine: v1.kitMine,
+                        layerMode: v1.layerMode,
                         equalN: v1.equalN,
                         cardView: v1.cardView,
                         bank: v1.bank,
@@ -10457,16 +10513,16 @@
                         voice: v1.voice,
                         cardBusy: false
                       };
-                    })($320));
+                    })($332));
                   };
                 })());
               }
               ;
               if (r instanceof Right) {
                 return modify_3((function() {
-                  var $321 = note(lastLine(r.value0.output));
-                  return function($322) {
-                    return $321((function(v1) {
+                  var $333 = note(lastLine(r.value0.output));
+                  return function($334) {
+                    return $333((function(v1) {
                       return {
                         looper: v1.looper,
                         kind: v1.kind,
@@ -10486,6 +10542,7 @@
                         divider: v1.divider,
                         mine: v1.mine,
                         kitMine: v1.kitMine,
+                        layerMode: v1.layerMode,
                         equalN: v1.equalN,
                         cardView: v1.cardView,
                         bank: v1.bank,
@@ -10493,12 +10550,12 @@
                         voice: v1.voice,
                         cardBusy: false
                       };
-                    })($322));
+                    })($334));
                   };
                 })());
               }
               ;
-              throw new Error("Failed pattern match at Workshop.Main (line 255, column 5 - line 257, column 81): " + [r.constructor.name]);
+              throw new Error("Failed pattern match at Workshop.Main (line 258, column 5 - line 260, column 81): " + [r.constructor.name]);
             })())(function() {
               return handleAction(dictMonadAff)(RefreshCard.value);
             });
@@ -10506,38 +10563,53 @@
         });
       }
       ;
+      if (v instanceof SetLayerMode) {
+        return modify_3(function(v1) {
+          var $263 = {};
+          for (var $264 in v1) {
+            if ({}.hasOwnProperty.call(v1, $264)) {
+              $263[$264] = v1[$264];
+            }
+            ;
+          }
+          ;
+          $263.layerMode = v.value0;
+          return $263;
+        });
+      }
+      ;
       if (v instanceof SendToCard) {
         return bind6(get2)(function(st) {
           var keptRegions = catMaybes2(mapWithIndex2(function(i2) {
             return function(r) {
-              var $256 = member3(i2)(st.keep);
-              if ($256) {
+              var $267 = member3(i2)(st.keep);
+              if ($267) {
                 return new Just(r);
               }
               ;
               return Nothing.value;
             };
           })(st.regions));
-          var $257 = $$null2(keptRegions);
-          if ($257) {
+          var $268 = $$null2(keptRegions);
+          if ($268) {
             return modify_3(note("nothing kept, so there is nothing to send"));
           }
           ;
           return discard12(modify_3(function(v1) {
-            var $258 = {};
-            for (var $259 in v1) {
-              if ({}.hasOwnProperty.call(v1, $259)) {
-                $258[$259] = v1[$259];
+            var $269 = {};
+            for (var $270 in v1) {
+              if ({}.hasOwnProperty.call(v1, $270)) {
+                $269[$270] = v1[$270];
               }
               ;
             }
             ;
-            $258.cardBusy = true;
-            return $258;
+            $269.cardBusy = true;
+            return $269;
           }))(function() {
             var setName14 = (function() {
-              var $261 = st.name === "";
-              if ($261) {
+              var $272 = st.name === "";
+              if ($272) {
                 return "set";
               }
               ;
@@ -10548,8 +10620,8 @@
               set: setName14,
               bank: st.bank,
               kit: (function() {
-                var $262 = st.kit === "";
-                if ($262) {
+                var $273 = st.kit === "";
+                if ($273) {
                   return setName14;
                 }
                 ;
@@ -10559,14 +10631,16 @@
               kind: name15(st.kind),
               stereo: notEq1(foldsTo(st.kind))(ToMono.value),
               join: joins(st.kind) || isEqual(st.divider),
+              append: v.value0,
+              layerMode: st.layerMode,
               regions: keptRegions
             })))))(function(r) {
               return discard12((function() {
                 if (r instanceof Left) {
                   return modify_3((function() {
-                    var $323 = note(message(r.value0));
-                    return function($324) {
-                      return $323((function(v1) {
+                    var $335 = note(message(r.value0));
+                    return function($336) {
+                      return $335((function(v1) {
                         return {
                           looper: v1.looper,
                           kind: v1.kind,
@@ -10586,6 +10660,7 @@
                           divider: v1.divider,
                           mine: v1.mine,
                           kitMine: v1.kitMine,
+                          layerMode: v1.layerMode,
                           equalN: v1.equalN,
                           cardView: v1.cardView,
                           bank: v1.bank,
@@ -10593,16 +10668,16 @@
                           voice: v1.voice,
                           cardBusy: false
                         };
-                      })($324));
+                      })($336));
                     };
                   })());
                 }
                 ;
                 if (r instanceof Right) {
                   return modify_3((function() {
-                    var $325 = note(lastLine(r.value0.output));
-                    return function($326) {
-                      return $325((function(v1) {
+                    var $337 = note(lastLine(r.value0.output));
+                    return function($338) {
+                      return $337((function(v1) {
                         return {
                           looper: v1.looper,
                           kind: v1.kind,
@@ -10622,6 +10697,7 @@
                           divider: v1.divider,
                           mine: v1.mine,
                           kitMine: v1.kitMine,
+                          layerMode: v1.layerMode,
                           equalN: v1.equalN,
                           cardView: v1.cardView,
                           bank: v1.bank,
@@ -10629,12 +10705,12 @@
                           voice: v1.voice,
                           cardBusy: false
                         };
-                      })($326));
+                      })($338));
                     };
                   })());
                 }
                 ;
-                throw new Error("Failed pattern match at Workshop.Main (line 291, column 9 - line 293, column 85): " + [r.constructor.name]);
+                throw new Error("Failed pattern match at Workshop.Main (line 300, column 9 - line 302, column 85): " + [r.constructor.name]);
               })())(function() {
                 return handleAction(dictMonadAff)(RefreshCard.value);
               });
@@ -10653,16 +10729,16 @@
       ;
       if (v instanceof SetGap) {
         return discard12(modify_3(function(s) {
-          var $266 = {};
-          for (var $267 in s) {
-            if ({}.hasOwnProperty.call(s, $267)) {
-              $266[$267] = s[$267];
+          var $278 = {};
+          for (var $279 in s) {
+            if ({}.hasOwnProperty.call(s, $279)) {
+              $278[$279] = s[$279];
             }
             ;
           }
           ;
-          $266.minGap = fromMaybe(s.minGap)(fromString(v.value0));
-          return $266;
+          $278.minGap = fromMaybe(s.minGap)(fromString(v.value0));
+          return $278;
         }))(function() {
           return bind6(get2)(function(st) {
             return when4(st.showing !== "")(analyse1(false));
@@ -10672,16 +10748,16 @@
       ;
       if (v instanceof PickDivider) {
         return discard12(modify_3(function(v1) {
-          var $270 = {};
-          for (var $271 in v1) {
-            if ({}.hasOwnProperty.call(v1, $271)) {
-              $270[$271] = v1[$271];
+          var $282 = {};
+          for (var $283 in v1) {
+            if ({}.hasOwnProperty.call(v1, $283)) {
+              $282[$283] = v1[$283];
             }
             ;
           }
           ;
-          $270.divider = v.value0;
-          return $270;
+          $282.divider = v.value0;
+          return $282;
         }))(function() {
           return bind6(get2)(function(st) {
             return when4(st.showing !== "")(analyse1(false));
@@ -10692,23 +10768,23 @@
       if (v instanceof SetEqualN) {
         return discard12(modify_3(function(s) {
           var n = clamp3(2)(128)(fromMaybe(s.equalN)(fromString2(v.value0)));
-          var $276 = {};
-          for (var $277 in s) {
-            if ({}.hasOwnProperty.call(s, $277)) {
-              $276[$277] = s[$277];
+          var $288 = {};
+          for (var $289 in s) {
+            if ({}.hasOwnProperty.call(s, $289)) {
+              $288[$289] = s[$289];
             }
             ;
           }
           ;
-          $276.equalN = n;
-          $276.divider = (function() {
+          $288.equalN = n;
+          $288.divider = (function() {
             if (s.divider instanceof Equal) {
               return new Equal(n);
             }
             ;
             return s.divider;
           })();
-          return $276;
+          return $288;
         }))(function() {
           return bind6(get2)(function(st) {
             return when4(st.showing !== "" && needsCount(st.divider))(analyse1(false));
@@ -10719,16 +10795,16 @@
       if (v instanceof SetHoverPlays) {
         return discard12(unless2(v.value0)(liftEffect12(stop)))(function() {
           return modify_3(function(v1) {
-            var $280 = {};
-            for (var $281 in v1) {
-              if ({}.hasOwnProperty.call(v1, $281)) {
-                $280[$281] = v1[$281];
+            var $292 = {};
+            for (var $293 in v1) {
+              if ({}.hasOwnProperty.call(v1, $293)) {
+                $292[$293] = v1[$293];
               }
               ;
             }
             ;
-            $280.hoverPlays = v.value0;
-            return $280;
+            $292.hoverPlays = v.value0;
+            return $292;
           });
         });
       }
@@ -10744,16 +10820,16 @@
           return for_3(index2(st.regions)(v.value0))(function(r) {
             return discard12(liftEffect12(playRange("/api/take-audio?take=" + st.showing)(r.start)(r.end)))(function() {
               return modify_3(function(v1) {
-                var $285 = {};
-                for (var $286 in v1) {
-                  if ({}.hasOwnProperty.call(v1, $286)) {
-                    $285[$286] = v1[$286];
+                var $297 = {};
+                for (var $298 in v1) {
+                  if ({}.hasOwnProperty.call(v1, $298)) {
+                    $297[$298] = v1[$298];
                   }
                   ;
                 }
                 ;
-                $285.playing = new Just(v.value0);
-                return $285;
+                $297.playing = new Just(v.value0);
+                return $297;
               });
             });
           });
@@ -10762,44 +10838,44 @@
       ;
       if (v instanceof ToggleKeep) {
         return modify_3(function(s) {
-          var $290 = {};
-          for (var $291 in s) {
-            if ({}.hasOwnProperty.call(s, $291)) {
-              $290[$291] = s[$291];
+          var $302 = {};
+          for (var $303 in s) {
+            if ({}.hasOwnProperty.call(s, $303)) {
+              $302[$303] = s[$303];
             }
             ;
           }
           ;
-          $290.keep = (function() {
-            var $289 = member3(v.value0)(s.keep);
-            if ($289) {
+          $302.keep = (function() {
+            var $301 = member3(v.value0)(s.keep);
+            if ($301) {
               return $$delete4(v.value0)(s.keep);
             }
             ;
             return insert5(v.value0)(s.keep);
           })();
-          return $290;
+          return $302;
         });
       }
       ;
       if (v instanceof KeepAll) {
         return modify_3(function(s) {
-          var $295 = {};
-          for (var $296 in s) {
-            if ({}.hasOwnProperty.call(s, $296)) {
-              $295[$296] = s[$296];
+          var $307 = {};
+          for (var $308 in s) {
+            if ({}.hasOwnProperty.call(s, $308)) {
+              $307[$308] = s[$308];
             }
             ;
           }
           ;
-          $295.keep = (function() {
+          $307.keep = (function() {
             if (v.value0) {
               return fromFoldable4(range2(0)(length3(s.regions) - 1 | 0));
             }
             ;
             return empty3;
           })();
-          return $295;
+          return $307;
         });
       }
       ;
@@ -10820,35 +10896,35 @@
                         return pure13(unit);
                       }
                       ;
-                      throw new Error("Failed pattern match at Workshop.Main (line 358, column 5 - line 360, column 26): " + [v1.constructor.name]);
+                      throw new Error("Failed pattern match at Workshop.Main (line 367, column 5 - line 369, column 26): " + [v1.constructor.name]);
                     })())(function() {
                       return discard12(send1(new LevelArm(true)))(function() {
                         return discard12(send1(Record.value))(function() {
                           return discard12(when4(wantsAName(st))(bind6(liftEffect12(slugFor(st.kind)))(function(n) {
                             return modify_3(function(v1) {
-                              var $302 = {};
-                              for (var $303 in v1) {
-                                if ({}.hasOwnProperty.call(v1, $303)) {
-                                  $302[$303] = v1[$303];
+                              var $314 = {};
+                              for (var $315 in v1) {
+                                if ({}.hasOwnProperty.call(v1, $315)) {
+                                  $314[$315] = v1[$315];
                                 }
                                 ;
                               }
                               ;
-                              $302.name = n;
-                              $302.kit = (function() {
+                              $314.name = n;
+                              $314.kit = (function() {
                                 if (st.kitMine) {
                                   return st.kit;
                                 }
                                 ;
                                 return "";
                               })();
-                              return $302;
+                              return $314;
                             });
                           })))(function() {
                             return modify_3((function() {
-                              var $327 = note(prompt(st.kind));
-                              return function($328) {
-                                return $327((function(v1) {
+                              var $339 = note(prompt(st.kind));
+                              return function($340) {
+                                return $339((function(v1) {
                                   return {
                                     looper: v1.looper,
                                     kind: v1.kind,
@@ -10867,6 +10943,7 @@
                                     divider: v1.divider,
                                     mine: v1.mine,
                                     kitMine: v1.kitMine,
+                                    layerMode: v1.layerMode,
                                     equalN: v1.equalN,
                                     cardView: v1.cardView,
                                     bank: v1.bank,
@@ -10875,7 +10952,7 @@
                                     cardBusy: v1.cardBusy,
                                     armed: true
                                   };
-                                })($328));
+                                })($340));
                               };
                             })());
                           });
@@ -10893,8 +10970,8 @@
       if (v instanceof Close) {
         return bind6(get2)(function(st) {
           return discard12(for_3(loop2(st))(function(lp) {
-            var $306 = isWriting(lp) || lp.armed;
-            if ($306) {
+            var $318 = isWriting(lp) || lp.armed;
+            if ($318) {
               return discard12(send1(Record.value))(function() {
                 return modify_3(note("closed"));
               });
@@ -10905,17 +10982,17 @@
             return discard12(send1(new LevelArm(false)))(function() {
               return discard12(send1(new Sounding(true)))(function() {
                 return modify_3(function(s) {
-                  var $307 = {};
-                  for (var $308 in s) {
-                    if ({}.hasOwnProperty.call(s, $308)) {
-                      $307[$308] = s[$308];
+                  var $319 = {};
+                  for (var $320 in s) {
+                    if ({}.hasOwnProperty.call(s, $320)) {
+                      $319[$320] = s[$320];
                     }
                     ;
                   }
                   ;
-                  $307.armed = false;
-                  $307.waiting = true;
-                  return $307;
+                  $319.armed = false;
+                  $319.waiting = true;
+                  return $319;
                 });
               });
             });
@@ -10923,7 +11000,7 @@
         });
       }
       ;
-      throw new Error("Failed pattern match at Workshop.Main (line 184, column 16 - line 385, column 56): " + [v.constructor.name]);
+      throw new Error("Failed pattern match at Workshop.Main (line 187, column 16 - line 394, column 56): " + [v.constructor.name]);
     };
   };
   var component = function(dictMonadAff) {
@@ -10949,6 +11026,7 @@
           equalN: 16,
           mine: false,
           kitMine: false,
+          layerMode: "",
           cardView: Nothing.value,
           bank: "WORKSHOP",
           kit: "",
