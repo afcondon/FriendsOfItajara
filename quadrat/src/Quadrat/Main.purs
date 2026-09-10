@@ -609,6 +609,8 @@ handleAction = case _ of
     H.liftAff (delay (Milliseconds (Int.toNumber st.sweep.settleMs)))
     for_ st.sweep.trigger.gate \b -> void $ H.liftAff (attempt (toAffE (Rig.pulse
       { bus: b, level: st.sweep.trigger.gateLevel, ms: st.sweep.trigger.ms })))
+    for_ st.sweep.trigger.es5 \b -> void $
+      H.liftAff (attempt (toAffE (Rig.es5pulse { bit: b, ms: st.sweep.trigger.ms })))
     when (st.sweep.port /= "") $ for_ st.sweep.trigger.note \n -> liftEffect $
       Rig.sendNote { port: st.sweep.port, channel: st.sweep.trigger.channel, note: n
                    , velocity: st.sweep.trigger.velocity, ms: st.sweep.trigger.ms }
@@ -787,8 +789,8 @@ runSweep = do
   H.liftAff (delay (Milliseconds 400.0))
   for_ (Sweep.steps p) \s -> do
     H.modify_ _ { sweepAt = Just s.index }
-    unless (Array.null s.cv) $ void $
-      H.liftAff (attempt (toAffE (Rig.setCv { set: s.cv })))
+    unless (Array.null s.cv && Array.null s.esx) $ void $
+      H.liftAff (attempt (toAffE (Rig.setCv { set: s.cv, esx: s.esx })))
     when (p.port /= "") $ liftEffect $ for_ s.cc \c ->
       Rig.sendCc { port: p.port, channel: c.channel, cc: c.cc, value: c.value }
     H.liftAff (delay (Milliseconds (Int.toNumber p.settleMs)))
@@ -801,6 +803,8 @@ runSweep = do
     for_ p.trigger.gate \b -> void $
       H.liftAff (attempt (toAffE (Rig.pulse
         { bus: b, level: p.trigger.gateLevel, ms: p.trigger.ms })))
+    for_ p.trigger.es5 \b -> void $
+      H.liftAff (attempt (toAffE (Rig.es5pulse { bit: b, ms: p.trigger.ms })))
     when (p.port /= "") $ for_ p.trigger.note \n -> liftEffect $
       Rig.sendNote { port: p.port, channel: p.trigger.channel, note: n
                    , velocity: p.trigger.velocity, ms: p.trigger.ms }
@@ -823,8 +827,8 @@ setCellCv :: forall o m. MonadAff m => Int -> H.HalogenM State Action () o m Uni
 setCellCv j = do
   st <- H.get
   for_ (Array.index (Sweep.steps st.sweep) j) \step -> do
-    unless (Array.null step.cv) $ void $
-      H.liftAff (attempt (toAffE (Rig.setCv { set: step.cv })))
+    unless (Array.null step.cv && Array.null step.esx) $ void $
+      H.liftAff (attempt (toAffE (Rig.setCv { set: step.cv, esx: step.esx })))
     when (st.sweep.port /= "") $ liftEffect $ for_ step.cc \c ->
       Rig.sendCc { port: st.sweep.port, channel: c.channel, cc: c.cc, value: c.value }
 
@@ -840,8 +844,14 @@ restCv = do
   let buses = Array.nub
         (Array.mapMaybe _.cv st.sweep.params
            <> Array.catMaybes [ st.sweep.trigger.gate ])
-  unless (Array.null buses) $ void $ H.liftAff
-    (attempt (toAffE (Rig.setCv { set: map (\b -> { bus: b, level: 0.0 }) buses })))
+      -- The ESX holds its last value exactly as a bus does. A voltage left
+      -- standing at the top of a sweep is a thing you hear in an unrelated
+      -- patch an hour later and blame on something else.
+      slots = Array.nub (Array.mapMaybe _.esx st.sweep.params)
+  unless (Array.null buses && Array.null slots) $ void $ H.liftAff
+    (attempt (toAffE (Rig.setCv
+      { set: map (\b -> { bus: b, level: 0.0 }) buses
+      , esx: map (\k -> { slot: k, level: 0.0 }) slots })))
 
 -- | Write the take down and ask where the sounds are.
 -- |
@@ -1284,14 +1294,16 @@ render st =
             , HE.onValueChange \_ -> Hear j
             ]
         , HH.span [ HP.class_ (HH.ClassName "q-pivotsays") ]
-            [ HH.text (case q.cv of
-                Just b -> "cv " <> show b <> "  " <> fmt level
-                    <> " (" <> fmt (level * 10.0) <> " V)"
-                Nothing -> case q.cc of
-                  Just c -> "cc " <> show c <> "  "
-                    <> show (Int.round (Int.toNumber q.ccLo
-                         + (Int.toNumber q.ccHi - Int.toNumber q.ccLo) * v))
-                  Nothing -> "not routed") ]
+            -- Volts, because that is the instrument's own term and the one
+            -- you can look up in a manual a year later. Measured: level 1.0
+            -- is 10 V on the ES-9, and the ESX is the same scale.
+            [ HH.text (case q.cv, q.esx, q.cc of
+                Just b, _, _ -> "cv " <> show b <> "  " <> fmt (level * 10.0) <> " V"
+                _, Just k, _ -> "esx " <> show k <> "  " <> fmt (level * 10.0) <> " V"
+                _, _, Just c -> "cc " <> show c <> "  "
+                  <> show (Int.round (Int.toNumber q.ccLo
+                       + (Int.toNumber q.ccHi - Int.toNumber q.ccLo) * v))
+                _, _, _ -> "not routed") ]
         ]
 
   -- The cell at this index, in the encoding's own recording order.

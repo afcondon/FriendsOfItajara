@@ -27,6 +27,7 @@ module Quadrat.Rig
   , sendNote
   , setCv
   , pulse
+  , es5pulse
   ) where
 
 import Data.Unit (Unit)
@@ -67,10 +68,20 @@ type Sent = { ok :: Boolean, output :: String }
 
 -- | Set every bus at once: one request, one UDP burst, so seven parameters
 -- | arrive together rather than smeared across seven round trips.
+-- | `esx` rides the same request: the ESX-8CV's eight channels reach the rig
+-- | through Silent Way on one expander bus, which es9-daemon enables on first
+-- | use. Eight more CVs for the price of bus 4 no longer being raw.
 foreign import setCv
-  :: { set :: Array { bus :: Int, level :: Number } } -> Effect (Promise Sent)
+  :: { set :: Array { bus :: Int, level :: Number }
+     , esx :: Array { slot :: Int, level :: Number }
+     } -> Effect (Promise Sent)
 
 -- | A gate: up to `level`, down after `ms`, timed by the daemon in frames
 -- | rather than here in milliseconds.
 foreign import pulse
   :: { bus :: Int, level :: Number, ms :: Int } -> Effect (Promise Sent)
+
+-- | **An ES-5 gate**, which has no duration of its own — the daemon takes a
+-- | bit and a state, so the hold happens in `server.mjs` rather than here,
+-- | where a round trip would land inside the gate.
+foreign import es5pulse :: { bit :: Int, ms :: Int } -> Effect (Promise Sent)

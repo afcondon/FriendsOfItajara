@@ -80,6 +80,10 @@ const post = (url, body) =>
     .then((d) => ({ ok: !!d.ok, output: String(d.output ?? "") }))
     .catch((e) => ({ ok: false, output: String(e.message ?? e) }));
 
-export const setCv = (req) => () => post("/api/cv", { set: req.set });
+export const setCv = (req) => () => post("/api/cv", { set: req.set, esx: req.esx ?? [] });
 export const pulse = (req) => () =>
   post("/api/cv", { pulse: { bus: req.bus, level: req.level, ms: req.ms } });
+// The ES-5's own gates: a bit and a length, and the daemon has no duration
+// form for them, so `server.mjs` holds it. See its note.
+export const es5pulse = (req) => () =>
+  post("/api/cv", { es5pulse: { bit: req.bit, ms: req.ms } });

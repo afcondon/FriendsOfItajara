@@ -67,6 +67,16 @@ type Param =
   -- | `SAFETY_SCALE`; the direct `/cv <bus> <val>` path this uses does not.
   , cvLo :: Number
   , cvHi :: Number
+  -- | **An ESX-8CV channel, 0…7**, reached through Silent Way on one expander
+  -- | bus. Beside `cv` rather than instead of it, for the same reason `cc` is
+  -- | beside both: a parameter may be driven from more than one place, and
+  -- | leaving two set is legal and means two.
+  -- |
+  -- | Shares `cvLo`/`cvHi`: both are voltages on the same -1…1 scale, and a
+  -- | second pair of range fields for the same range would be a second thing
+  -- | to keep in step. The ESX is 12-bit where the panel is the audio DAC's
+  -- | full depth — about a sixteenth of a semitone on a V/oct.
+  , esx :: Maybe Int
   , cc :: Maybe Int
   , ccLo :: Int
   , ccHi :: Int
@@ -84,6 +94,9 @@ type Param =
 -- | **What actually makes the sound happen**, once the parameters have settled.
 type Trigger =
   { gate :: Maybe Int
+  -- | **An ES-5 gate, 0…7.** The expander's own eight, which are gates and
+  -- | nothing else — no level, because they have none.
+  , es5 :: Maybe Int
   , gateLevel :: Number
   , note :: Maybe Int
   , channel :: Int
@@ -129,7 +142,7 @@ emptyPlan =
   { encoding: RampleLayers
   , extent: Encoding.defaultExtent RampleLayers
   , params: [ param "morph" 8 ]
-  , trigger: { gate: Just 15, gateLevel: 0.5, note: Nothing, channel: 1, velocity: 100, ms: 10 }
+  , trigger: { gate: Just 15, es5: Nothing, gateLevel: 0.5, note: Nothing, channel: 1, velocity: 100, ms: 10 }
   , port: ""
   , settleMs: 120
   , spacingMs: 2000
@@ -140,6 +153,7 @@ param :: String -> Int -> Param
 param nm bus =
   { name: nm
   , cv: Just bus, cvLo: 0.0, cvHi: 0.5
+  , esx: Nothing
   , cc: Nothing, ccLo: 0, ccHi: 127
   , channel: 1
   , curve: Named Linear false
@@ -163,6 +177,7 @@ data Msg
   | SetCv Int String
   | SetCvLo Int String
   | SetCvHi Int String
+  | SetEsx Int String
   | SetCc Int String
   | SetCcLo Int String
   | SetCcHi Int String
@@ -177,6 +192,7 @@ data Msg
   | SetValue Int Int String
   | SetPort String
   | SetGate String
+  | SetEs5 String
   | SetGateLevel String
   | SetNote String
   | SetTrigChannel String
@@ -203,9 +219,14 @@ update = case _ of
     p { extent = fromMaybe p.extent
           (Array.updateAt a (clamp 1 128 (intOr (sizeOfAxis p a) v)) p.extent) }
   AddParam -> \p ->
-    -- Seven is what the FH-2 has spare and about what a row of curves can be
-    -- read at a glance; it is not a law of anything.
-    if Array.length p.params >= 8 then p
+    -- **Sixteen**, which is still not a law of anything.
+    --
+    -- Eight was "what the FH-2 has spare", and then the ES-9's own panel is
+    -- eight, the ESX-8CV is eight more, and every FH-2 jack mapped to a
+    -- controller is reachable as MIDI without any of them. The ceiling is now
+    -- how many curves can be read down a column rather than how many places
+    -- there are to send one.
+    if Array.length p.params >= 16 then p
     else p { params = Array.snoc p.params
                (param ("param " <> show (Array.length p.params + 1))
                       (8 + Array.length p.params)) }
@@ -214,6 +235,7 @@ update = case _ of
   SetCv i v -> onParam i \q -> q { cv = busOf v }
   SetCvLo i v -> onParam i \q -> q { cvLo = level q.cvLo v }
   SetCvHi i v -> onParam i \q -> q { cvHi = level q.cvHi v }
+  SetEsx i v -> onParam i \q -> q { esx = slotOf v }
   SetCc i v -> onParam i \q -> q { cc = ccOf v }
   SetCcLo i v -> onParam i \q -> q { ccLo = clamp 0 127 (intOr q.ccLo v) }
   SetCcHi i v -> onParam i \q -> q { ccHi = clamp 0 127 (intOr q.ccHi v) }
@@ -230,6 +252,7 @@ update = case _ of
       p
   SetPort v -> \p -> p { port = v }
   SetGate v -> onTrig \t -> t { gate = busOf v }
+  SetEs5 v -> onTrig \t -> t { es5 = slotOf v }
   SetGateLevel v -> onTrig \t -> t { gateLevel = level t.gateLevel v }
   SetNote v -> onTrig \t -> t { note = noteOf v }
   SetTrigChannel v -> onTrig \t -> t { channel = clamp 1 16 (intOr t.channel v) }
@@ -250,6 +273,7 @@ update = case _ of
   -- An empty box means "not routed", which has to be distinguishable from bus
   -- zero — and bus zero is a perfectly ordinary place to send something.
   busOf v = if v == "" then Nothing else map (clamp 0 15) (Int.fromString v)
+  slotOf v = if v == "" then Nothing else map (clamp 0 7) (Int.fromString v)
   ccOf v = if v == "" then Nothing else map (clamp 0 127) (Int.fromString v)
   noteOf v = if v == "" then Nothing else map (clamp 0 127) (Int.fromString v)
 
@@ -281,6 +305,7 @@ type Step =
   { index :: Int
   , cell :: Cell
   , cv :: Array { bus :: Int, level :: Number }
+  , esx :: Array { slot :: Int, level :: Number }
   , cc :: Array { channel :: Int, cc :: Int, value :: Int }
   , means :: Array Meaning
   }
@@ -292,6 +317,7 @@ steps p = Array.mapWithIndex one (Encoding.cells p.encoding p.extent)
     { index: i
     , cell
     , cv: Array.mapMaybe (\q -> map (\b -> { bus: b, level: lerp q.cvLo q.cvHi (v q cell) }) q.cv) p.params
+    , esx: Array.mapMaybe (\q -> map (\k -> { slot: k, level: lerp q.cvLo q.cvHi (v q cell) }) q.esx) p.params
     , cc: Array.mapMaybe
             (\q -> map
               (\c -> { channel: q.channel, cc: c
@@ -302,9 +328,9 @@ steps p = Array.mapWithIndex one (Encoding.cells p.encoding p.extent)
         (\q ->
           { name: q.name
           , at: v q cell
-          , level: case q.cv of
-              Just _ -> lerp q.cvLo q.cvHi (v q cell)
-              Nothing -> 0.0
+          , level: case q.cv, q.esx of
+              Nothing, Nothing -> 0.0
+              _, _ -> lerp q.cvLo q.cvHi (v q cell)
           , cc: case q.cc of
               Just _ -> Int.round (lerp (Int.toNumber q.ccLo) (Int.toNumber q.ccHi) (v q cell))
               Nothing -> -1
@@ -338,6 +364,7 @@ steps p = Array.mapWithIndex one (Encoding.cells p.encoding p.extent)
 type PlainParam =
   { name :: String
   , cv :: Int, cvLo :: Number, cvHi :: Number
+  , esx :: Int
   , cc :: Int, ccLo :: Int, ccHi :: Int
   , channel :: Int
   , axis :: Int
@@ -355,6 +382,7 @@ type Plain =
   , extent :: Array Int
   , params :: Array PlainParam
   , gate :: Int
+  , es5 :: Int
   , gateLevel :: Number
   , note :: Int
   , trigChannel :: Int
@@ -398,6 +426,7 @@ flatten p =
   , extent: p.extent
   , params: map one p.params
   , gate: fromMaybe (-1) p.trigger.gate
+  , es5: fromMaybe (-1) p.trigger.es5
   , gateLevel: p.trigger.gateLevel
   , note: fromMaybe (-1) p.trigger.note
   , trigChannel: p.trigger.channel
@@ -412,6 +441,7 @@ flatten p =
   one q =
     { name: q.name
     , cv: fromMaybe (-1) q.cv, cvLo: q.cvLo, cvHi: q.cvHi
+    , esx: fromMaybe (-1) q.esx
     , cc: fromMaybe (-1) q.cc, ccLo: q.ccLo, ccHi: q.ccHi
     , channel: q.channel
     , axis: q.axis
@@ -439,6 +469,7 @@ unflatten p =
     , params: map (one nAxes) p.params
     , trigger:
         { gate: some p.gate
+        , es5: some p.es5
         , gateLevel: clamp (-1.0) 1.0 p.gateLevel
         , note: some p.note
         , channel: clamp 1 16 p.trigChannel
@@ -455,6 +486,7 @@ unflatten p =
   one nAxes q =
     { name: q.name
     , cv: some q.cv, cvLo: clamp (-1.0) 1.0 q.cvLo, cvHi: clamp (-1.0) 1.0 q.cvHi
+    , esx: some q.esx
     , cc: some q.cc, ccLo: clamp 0 127 q.ccLo, ccHi: clamp 0 127 q.ccHi
     , channel: clamp 1 16 q.channel
     , axis: clamp 0 (nAxes - 1) q.axis

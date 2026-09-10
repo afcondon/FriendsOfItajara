@@ -247,16 +247,19 @@ body h =
   -- | saying out loud: a curve routed nowhere moves nothing, and it looks
   -- | exactly like one that does until the take comes back flat.
   routing q =
-    case q.cv, q.cc of
-      Nothing, Nothing -> "not routed — this parameter moves nothing"
-      Just b, Nothing -> "cv " <> show b <> "  " <> num q.cvLo <> " → " <> num q.cvHi
-      Nothing, Just c ->
-        "cc " <> show c <> " ch " <> show q.channel
-          <> "  " <> show q.ccLo <> " → " <> show q.ccHi
-      Just b, Just c ->
-        "cv " <> show b <> "  " <> num q.cvLo <> " → " <> num q.cvHi
-          <> "   ·   cc " <> show c <> " ch " <> show q.channel
-          <> "  " <> show q.ccLo <> " → " <> show q.ccHi
+    let
+      volts = "  " <> num q.cvLo <> " → " <> num q.cvHi
+      parts =
+        Array.catMaybes
+          [ map (\b -> "cv " <> show b <> volts) q.cv
+          , map (\k -> "esx " <> show k <> volts) q.esx
+          , map (\c -> "cc " <> show c <> " ch " <> show q.channel
+                   <> "  " <> show q.ccLo <> " → " <> show q.ccHi) q.cc
+          ]
+    in
+      if Array.null parts
+        then "not routed — this parameter moves nothing"
+        else Array.intercalate "   ·   " parts
 
   -- | **The routing, where you opened the parameter to change it.**
   -- |
@@ -268,9 +271,12 @@ body h =
       [ HH.span [ cls "q-swgroup" ]
           [ tiny "cv bus" 3 (maybe "" show q.cv) (SetCv i)
               "es9-daemon bus — 8 is ES-9 panel jack 1, 15 is jack 8; blank for none"
+          , tiny "esx" 2 (maybe "" show q.esx) (SetEsx i)
+              "ESX-8CV channel 0-7, through Silent Way on one expander bus. \
+              \12-bit, so coarser than a panel jack; blank for none"
           , tiny "at 0" 4 (num q.cvLo) (SetCvLo i)
-              "what 0 means on that bus, -1 to 1 (1.0 is FULL output: this path is not halved)"
-          , tiny "at 1" 4 (num q.cvHi) (SetCvHi i) "what 1 means on that bus"
+              "what 0 means on either, -1 to 1 (1.0 is FULL output: this path is not halved)"
+          , tiny "at 1" 4 (num q.cvHi) (SetCvHi i) "what 1 means on either"
           ]
       , HH.span [ cls "q-swgroup" ]
           [ tiny "cc" 3 (maybe "" show q.cc) (SetCc i) "controller number; blank for none"
@@ -303,6 +309,9 @@ body h =
       , field "gate bus" (maybe "" show p.trigger.gate) SetGate 3
           "an es9-daemon bus pulsed to fire the sound; 15 is ES-9 panel jack 8"
       , field "level" (num p.trigger.gateLevel) SetGateLevel 4 "how high that pulse goes, -1 to 1"
+      , field "es5 gate" (maybe "" show p.trigger.es5) SetEs5 3
+          "one of the ES-5's own eight gates, 0-7. No level — they have none. \
+          \Fires alongside the bus gate if both are set"
       , field "note" (maybe "" show p.trigger.note) SetNote 4
           "a MIDI note to play instead of, or as well as, the gate"
       , field "ch" (show p.trigger.channel) SetTrigChannel 3 "MIDI channel for the note"

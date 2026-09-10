@@ -24,7 +24,9 @@
 //   GET  /api/sets                 every stored sample set, newest first
 //   GET  /api/sets/:name           one set whole: spec, schedule, measurements,
 //                                  and what each sample meant
-//   POST /api/cv                   { set: [{bus, level}] } | { pulse: {bus, level, ms} }
+//   POST /api/cv                   { set: [{bus, level}], esx: [{slot, level}] }
+//                                  | { pulse: {bus, level, ms} }
+//                                  | { es5pulse: {bit, ms} }
 //                                  → OSC to es9-daemon. See the note above it:
 //                                    this reports what was SENT, never what
 //                                    arrived.
@@ -690,12 +692,28 @@ function osc(msgs) {
   for (const m of msgs) sock.send(m, ES9_PORT, ES9_HOST);
 }
 
+// **The ES-5's own gates and the ESX-8CV's eight channels.**
+//
+// Both ride the same Silent Way lane on `ES5_L_BUS` (bus 4) and es9-daemon
+// auto-enables the encoding on first use — so the only cost of reaching them
+// is that bus 4 stops being raw CV. Buses 8-15, the ES-9's panel jacks, are
+// untouched. Eight more CVs and eight more gates for one expander bus.
+//
+// **The ESX is 12-bit** where the panel jacks are the audio DAC's full
+// resolution: `val * 2048`, so about 4.9 mV a step over +/-10 V. Ample for a
+// morph; coarse for a V/oct, where it is about a sixteenth of a semitone.
+const slot = (n) => Math.max(0, Math.min(7, Number(n) | 0));
+
 function cv(body) {
   const msgs = [];
   const said = [];
   for (const s of body?.set ?? []) {
     msgs.push(oscMsg("/cv", [{ t: "i", v: bus(s.bus) }, { t: "f", v: level(s.level) }]));
     said.push(`${bus(s.bus)}=${level(s.level).toFixed(3)}`);
+  }
+  for (const e of body?.esx ?? []) {
+    msgs.push(oscMsg("/esx", [{ t: "i", v: slot(e.slot) }, { t: "f", v: level(e.level) }]));
+    said.push(`esx${slot(e.slot)}=${level(e.level).toFixed(3)}`);
   }
   const p = body?.pulse;
   if (p) {
@@ -706,6 +724,20 @@ function cv(body) {
       { t: "f", v: ms },
     ]));
     said.push(`trig ${bus(p.bus)}=${level(p.level).toFixed(3)} for ${ms}ms`);
+  }
+  // **An ES-5 gate has no duration of its own**, so a pulse is on, wait, off —
+  // and the waiting happens HERE rather than in the browser, because two HTTP
+  // round trips with the hold between them would put the page's latency inside
+  // the gate. It is fire-and-forget either way; see the note above `cv`.
+  const g = body?.es5pulse;
+  if (g) {
+    const bit = slot(g.bit);
+    const ms = Math.max(1, Math.min(10000, Number(g.ms) || 10));
+    msgs.push(oscMsg("/esx5gate", [{ t: "i", v: bit }, { t: "i", v: 1 }]));
+    said.push(`es5 gate ${bit} for ${ms}ms`);
+    setTimeout(() => {
+      try { osc([oscMsg("/esx5gate", [{ t: "i", v: bit }, { t: "i", v: 0 }])]); } catch {}
+    }, ms);
   }
   if (!msgs.length) return { ok: false, output: "nothing to send" };
   try {
