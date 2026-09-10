@@ -27,10 +27,16 @@ module Workshop.Sweep
   , valuesFor
   , Msg(..)
   , update
+  , Meaning
   , Step
   , steps
   , remember
   , restore
+  , Plain
+  , PlainParam
+  , flatten
+  , unflatten
+  , adopt
   ) where
 
 import Prelude
@@ -247,12 +253,36 @@ update = case _ of
   ccOf v = if v == "" then Nothing else map (clamp 0 127) (Int.fromString v)
   noteOf v = if v == "" then Nothing else map (clamp 0 127) (Int.fromString v)
 
--- | **One cell, resolved.** What to set, immediately before its hit.
+-- | **What one parameter is doing at one cell, in the instrument's own terms.**
+-- |
+-- | A sample's meaning is not its index. `morph 2.5 V` is a thing you can read
+-- | a year later, look up in a manual and set by hand; `position 7 of 12` is
+-- | only a fact about a run nobody remembers. The spec holds every one of
+-- | these at the moment of capture, so writing them down beside the audio
+-- | costs nothing and is the difference between a folder of WAVs and a
+-- | library.
+-- |
+-- | `at` is the curve's own value, 0…1 — resolution-independent, so the same
+-- | sample re-run at sixteen positions can still be recognised as the same
+-- | point on the same curve. `level` is what actually went on the bus, and
+-- | `cc` is `-1` where nothing was sent. Volts are deliberately NOT here: how
+-- | many a level is worth is a fact about the interface, stated once for the
+-- | whole set, not repeated on every sample as though it could differ.
+type Meaning =
+  { name :: String
+  , at :: Number
+  , level :: Number
+  , cc :: Int
+  }
+
+-- | **One cell, resolved.** What to set, immediately before its hit — and,
+-- | for the record afterwards, what that amounts to.
 type Step =
   { index :: Int
   , cell :: Cell
   , cv :: Array { bus :: Int, level :: Number }
   , cc :: Array { channel :: Int, cc :: Int, value :: Int }
+  , means :: Array Meaning
   }
 
 steps :: Plan -> Array Step
@@ -268,6 +298,18 @@ steps p = Array.mapWithIndex one (Encoding.cells p.encoding p.extent)
                      , value: Int.round (lerp (Int.toNumber q.ccLo) (Int.toNumber q.ccHi) (v q cell)) })
               q.cc)
             p.params
+    , means: map
+        (\q ->
+          { name: q.name
+          , at: v q cell
+          , level: case q.cv of
+              Just _ -> lerp q.cvLo q.cvHi (v q cell)
+              Nothing -> 0.0
+          , cc: case q.cc of
+              Just _ -> Int.round (lerp (Int.toNumber q.ccLo) (Int.toNumber q.ccHi) (v q cell))
+              Nothing -> -1
+          })
+        p.params
     }
   -- Each parameter reads the cell's position on ITS axis. That is the whole of
   -- what makes a grid legible: a column shares one axis's value, a row the
@@ -326,6 +368,23 @@ type Plain =
 
 foreign import savePlain :: Plain -> Effect Unit
 foreign import loadPlain :: Plain -> Effect Plain
+
+-- | **A stored spec, made into a plan** — field-wise over the current default,
+-- | so a set written by an older build opens rather than half-opening.
+-- |
+-- | The same merge `loadPlain` uses, because a plan reaches this page from two
+-- | places that must agree: `localStorage`, where it survives a reload, and a
+-- | stored sample set, where it survives everything. One merge, so a field
+-- | added later cannot arrive as a default down one path and as `undefined`
+-- | down the other.
+-- |
+-- | This is the whole of "re-runnable": what comes back is a plan like any
+-- | other, so changing the extent and pressing Run records the same transect
+-- | at a resolution nobody chose at the time.
+foreign import adoptPlain :: Plain -> Plain -> Plain
+
+adopt :: Plan -> Plain -> Plan
+adopt dflt stored = unflatten (adoptPlain (flatten dflt) stored)
 
 remember :: Plan -> Effect Unit
 remember = savePlain <<< flatten

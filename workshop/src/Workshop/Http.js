@@ -67,3 +67,42 @@ const post = (url, body) =>
 
 export const addToCard = (req) => () => post("/api/card/add", req);
 export const writeToCard = (dest) => () => post("/api/card/write", { dest });
+
+// The stored sets. See `writeSet` in server.mjs for what one holds and why it
+// lives in the sample directory rather than beside it.
+export const storedSets = () =>
+  fetch("/api/sets").then(j).then((d) => ({
+    ok: !!d.ok,
+    sets: (d.sets ?? []).map((s) => ({
+      name: String(s.name ?? ""),
+      count: Number(s.count ?? 0),
+      made: String(s.made ?? ""),
+      take: String(s.take ?? ""),
+      described: !!s.described,
+      runnable: !!s.runnable,
+      moved: (s.moved ?? []).map(String),
+      extent: (s.extent ?? []).map(Number),
+      encoding: String(s.encoding ?? ""),
+    })),
+  })).catch(() => ({ ok: false, sets: [] }));
+
+// One set's spec, raw. The merge over the current default belongs to
+// `Workshop.Sweep`, which owns the shape — and an FFI module cannot import
+// another module's FFI, because spago writes each one to its own directory in
+// `output/`. So this fetches and `Sweep.adopt` merges.
+export const loadSpec = (name) => () =>
+  fetch("/api/sets/" + encodeURIComponent(name))
+    .then(j)
+    .then((d) => {
+      if (!d.ok) return { ok: false, output: String(d.output ?? "no such set"), spec: {} };
+      if (!d.set?.spec) {
+        return {
+          ok: false,
+          spec: {},
+          output: `${name} was cut from a take that was played, not run — `
+            + `there is no spec to run again`,
+        };
+      }
+      return { ok: true, output: "", spec: d.set.spec };
+    })
+    .catch((e) => ({ ok: false, output: String(e.message ?? e), spec: {} }));

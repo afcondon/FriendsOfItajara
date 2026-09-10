@@ -24,6 +24,7 @@ import Data.Int as Int
 import Data.Either (Either(..))
 import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Data.Maybe as Maybe
+import Data.Nullable as Nullable
 import Data.Number as Number
 import Data.String as String
 import Data.String.Common (joinWith)
@@ -157,6 +158,10 @@ type State =
   -- | `Workshop.Schedule` for why that difference matters more at 192 hits
   -- | than at twelve.
   , schedule :: Array Number
+  -- | **The sets already on disk**, newest first. Read from the server rather
+  -- | than remembered here: a set outlives the page by a long way, which is
+  -- | the entire point of storing it.
+  , sets :: Array Http.SetRow
   }
 
 data Action
@@ -190,6 +195,8 @@ data Action
   | RunSweep Int
   | StopSweep
   | SetLead String
+  | RefreshSets
+  | RunAgain String
 
 component :: forall q i o m. MonadAff m => H.Component q i o m
 component = H.mkComponent
@@ -202,7 +209,7 @@ component = H.mkComponent
       , cardView: Nothing, bank: "WORKSHOP", kit: "", voice: 1, cardBusy: false
       , sweep: Sweep.emptyPlan, sweepOpen: false, sweepAt: Nothing
       , sweepFork: Nothing, midiPorts: [], swept: false, sweepEdit: Nothing
-      , schedule: [] }
+      , schedule: [], sets: [] }
   , render
   , eval: H.mkEval H.defaultEval { handleAction = handleAction, initialize = Just Init }
   }
@@ -306,6 +313,32 @@ handleAction = case _ of
     case r of
       Left e -> H.modify_ (note ("could not read the card: " <> Aff.message e))
       Right v -> H.modify_ _ { cardView = Just v }
+    handleAction RefreshSets
+  RefreshSets -> do
+    r <- H.liftAff (attempt (toAffE Http.storedSets))
+    case r of
+      Left _ -> pure unit
+      Right v -> H.modify_ _ { sets = v.sets }
+  -- | **Run this set again**, at whatever resolution you like.
+  -- |
+  -- | The whole of what makes a set a stored object rather than a folder: the
+  -- | spec comes back as a plan like any other, so changing the extent and
+  -- | pressing Run records the same transect at a resolution nobody chose at
+  -- | the time. Nothing here remembers how the set was made — it is read off
+  -- | the disk, which is the test.
+  RunAgain nm -> do
+    r <- H.liftAff (attempt (toAffE (Http.loadSpec nm)))
+    case r of
+      Left e -> H.modify_ (note ("could not read " <> nm <> ": " <> Aff.message e))
+      Right v
+        | not v.ok -> H.modify_ (note v.output)
+        | otherwise -> do
+            H.modify_ \st -> st { sweep = Sweep.adopt Sweep.emptyPlan v.spec }
+            st <- H.get
+            liftEffect (Sweep.remember st.sweep)
+            H.modify_ (note ("loaded the spec from " <> nm
+                        <> " — change the extent and run it again"))
+            handleAction (OpenSweep true)
   SetBank v -> H.modify_ _ { bank = v }
   SetKit v -> H.modify_ _ { kit = v, kitMine = v /= "" }
   SetVoice v -> H.modify_ \s -> s { voice = clamp 1 4 (fromMaybe s.voice (Int.fromString v)) }
@@ -330,6 +363,28 @@ handleAction = case _ of
           (Array.mapWithIndex
             (\i r -> if Set.member i st.keep then Just r else Nothing)
             st.regions)
+        -- **What each kept sample is, and what it meant.**
+        --
+        -- Zipped by index against the run's own steps, before the keep filter
+        -- rather than after: the run's cell 7 is the take's seventh hit
+        -- whether or not you kept the first six, and pairing them up after
+        -- the filter would relabel every sample past a discard.
+        --
+        -- Empty for a take played by hand. The measurements are still worth
+        -- storing; what is missing is a description of an instrument that was
+        -- never driven.
+        runSteps = if Array.null st.schedule then [] else Sweep.steps st.sweep
+        kept = Array.catMaybes
+          (Array.mapWithIndex
+            (\i r ->
+              if not (Set.member i st.keep) then Nothing
+              else Just
+                { cell: maybe [] _.cell (Array.index runSteps i)
+                , start: r.start, end: r.end
+                , peak: r.peak, rms: r.rms, zcr: r.zcr, tilt: r.tilt
+                , means: maybe [] _.means (Array.index runSteps i)
+                })
+            st.regions)
     if Array.null keptRegions
       then H.modify_ (note "nothing kept, so there is nothing to send")
       else do
@@ -353,7 +408,20 @@ handleAction = case _ of
               , join: Kind.joins st.kind || isEqual st.divider
               , append
               , layerMode: st.layerMode
-              , regions: keptRegions })))
+              , regions: keptRegions
+              -- The spec, so the set can be run again; `Plain` because that is
+              -- already the form a plan survives in, and a second codec for
+              -- the same object is a second thing to keep in step.
+              --
+              -- Null unless this take was actually run. The plan is sitting
+              -- right there and it would be easy to send regardless — and then
+              -- every hand-played set would carry a description of a sweep
+              -- that never touched it.
+              , spec: if Array.null st.schedule
+                        then Nullable.null
+                        else Nullable.notNull (Sweep.flatten st.sweep)
+              , schedule: st.schedule
+              , samples: kept })))
         case r of
           Left e -> H.modify_ (note (Aff.message e) <<< _ { cardBusy = false })
           -- **A send establishes the kit, and later takes join it.**
@@ -776,6 +844,7 @@ render st =
     , if st.sweepOpen then HH.text "" else recordBox
     , if st.sweepOpen then HH.text "" else caught
     , if st.sweepOpen then HH.text "" else cardView
+    , if st.sweepOpen then HH.text "" else setsView
     , HH.section [ HP.class_ (HH.ClassName "ws-log") ]
         (map (\l -> HH.div_ [ HH.text l ]) st.log)
     ]
@@ -901,6 +970,50 @@ render st =
                       \same gesture as recording by hand. The take closes itself \
                       \when the last position has sounded." ]
         ]
+
+  -- | **The sets on disk**, which are the artefact this page exists to make.
+  -- |
+  -- | A card is a projection: it says which set is on which voice, in the
+  -- | terms one module can address. The set is the thing itself — the samples
+  -- | at capture fidelity, the measurements, what each one meant, and the spec
+  -- | that produced them. Sets outlive cards, and a set can go somewhere the
+  -- | Rample cannot reach.
+  -- |
+  -- | So the useful verb here is not "load" but **"run it again"**: the spec
+  -- | comes back as a plan, and the resolution is chosen now rather than then.
+  -- | Twelve positions today, sixteen tomorrow, from the same description.
+  setsView
+    | Array.null st.sets = HH.text ""
+    | otherwise =
+        HH.section [ HP.class_ (HH.ClassName "ws-sets") ]
+          [ HH.h2_ [ HH.text "Sets on disk" ]
+          , HH.table [ HP.class_ (HH.ClassName "ws-table") ]
+              [ HH.tbody_ (map setRow st.sets) ]
+          ]
+
+  setRow r =
+    HH.tr_
+      [ HH.td_ [ HH.text r.name ]
+      , HH.td_ [ HH.text (show r.count <> " samples") ]
+      , HH.td [ HP.class_ (HH.ClassName "ws-muted") ]
+          [ HH.text
+              (if not r.described then "no description — cut before sets were stored"
+               else if Array.null r.moved then "played by hand"
+               else joinWith ", " r.moved
+                    <> " over " <> joinWith " x " (map show r.extent)
+                    <> (if r.encoding == "" then "" else " (" <> r.encoding <> ")")) ]
+      , HH.td_
+          [ if r.runnable
+              then HH.button
+                     [ HP.class_ (HH.ClassName "ws-plain")
+                     , HP.title "load the spec that made this set, so it can be \
+                                \recorded again at a different resolution"
+                     , HE.onClick \_ -> RunAgain r.name
+                     ]
+                     [ HH.text "Sweep again\x2026" ]
+              else HH.text ""
+          ]
+      ]
 
   recordBox =
     HH.section [ HP.class_ (HH.ClassName "ws-rec") ]

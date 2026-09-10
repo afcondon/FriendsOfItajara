@@ -19,12 +19,23 @@ export const loadPlain = (dflt) => () => {
     const s = localStorage.getItem(KEY);
     stored = s ? JSON.parse(s) : null;
   } catch (_) {}
-  if (!stored || typeof stored !== "object") return dflt;
+  return adoptPlain(dflt)(stored);
+};
 
-  // Field-wise over the default, and the same one level down for a parameter,
-  // so a field added since the plan was written arrives with its default rather
-  // than as undefined — which PureScript would carry as a Number and render as
-  // an empty box nobody could explain.
+// **A stored plan, over the current default.**
+//
+// Field-wise, and the same one level down for a parameter, so a field added
+// since the plan was written arrives with its default rather than as undefined
+// — which PureScript would carry as a Number and render as an empty box nobody
+// could explain.
+//
+// Exported (as `Sweep.adopt`) because a plan reaches this page from two places
+// and they must agree: `localStorage`, where it survives a reload, and a
+// **stored sample set**, where it survives everything. One merge, so a field
+// added later cannot arrive as a default down one path and as undefined down
+// the other.
+export const adoptPlain = (dflt) => (stored) => {
+  if (!stored || typeof stored !== "object") return dflt;
   const params = Array.isArray(stored.params) && stored.params.length
     ? stored.params.map((q) => ({ ...dflt.params[0], ...q,
         values: Array.isArray(q.values) ? q.values.map(Number) : dflt.params[0].values }))

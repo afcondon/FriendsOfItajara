@@ -28,6 +28,7 @@ package:
     - integers
     - itajara-client
     - maybe
+    - nullable
     - numbers
     - ordered-collections
     - prelude

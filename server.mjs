@@ -19,6 +19,9 @@
 //                                    as, overwrite, allLayers, dryRun }
 //                                  → runs msm harvest,
 //                                    answers { ok, output }
+//   GET  /api/sets                 every stored sample set, newest first
+//   GET  /api/sets/:name           one set whole: spec, schedule, measurements,
+//                                  and what each sample meant
 //   POST /api/cv                   { set: [{bus, level}] } | { pulse: {bus, level, ms} }
 //                                  → OSC to es9-daemon. See the note above it:
 //                                    this reports what was SENT, never what
@@ -236,6 +239,127 @@ function run(args) {
   });
 }
 
+// ===========================================================================
+// **A sample set is a stored object**, not a folder of WAVs.
+//
+// `Triggerfish.Clips` already holds the pattern one level down: a `MidiClip`
+// stores full-fidelity events and bakes in no tempo, key or quantisation, so
+// every lossy projection happens at playback. A sample set is that argument
+// applied to audio — keep the samples and **the spec that made them**, and
+// flatten to whatever the destination can address only at the end.
+//
+// So `set.json` sits IN the sample directory, not beside it. The set is the
+// directory: copy it and you have copied the whole thing, description
+// included, and there is no way to end up holding audio whose meaning lived
+// somewhere else. `msm cut --overwrite` empties that directory first, which
+// is why this is written after the cut and never before.
+//
+// Four things, and the plan's own list:
+//
+//   the samples      at capture fidelity, never normalised — `cut` writes them
+//   the spec         curves, ranges, routing, schedule; reproducible at a
+//                    DIFFERENT resolution, which is the whole point of storing
+//                    it rather than the values it happened to produce
+//   the measurements peak, rms, zcr, tilt — what says whether the set is any
+//                    good, and the only thing an unattended run can be judged by
+//   the meanings     what the instrument was DOING, in its own terms
+//
+// Samples are output: regenerable, discardable, improvable. The spec is what
+// you keep.
+const SET_JSON = "set.json";
+
+// **How many volts a level of 1.0 is worth**, stated once for the whole set
+// rather than multiplied into every sample.
+//
+// Measured on the ES-9 2026-09-10, closed loop out-to-in: the round trip is
+// linear and unity (`measured = 0.9928 x sent - 0.0008`, worst residual
+// 0.00001), and the rig documents the panel as +/-10 V. It is a fact about the
+// interface, not about the music, so a set recorded through something else
+// would carry a different number here and its labels would still read right.
+const VOLTS_PER_LEVEL = 10;
+
+function writeSet(dir, meta) {
+  // **The files on disk, in the order the module will read them** — read back
+  // rather than predicted. `cut` names them `<set>-01.wav` and skips a region
+  // that came out empty, so a predicted list can silently be one longer than
+  // the real one and every meaning after the gap would describe the wrong
+  // audio. Byte order is also exactly how the Rample stacks a voice.
+  let files = [];
+  try {
+    files = fs.readdirSync(dir).filter((f) => f.toLowerCase().endsWith(".wav")).sort();
+  } catch { /* the cut failed; there is nothing to describe */ }
+
+  const given = Array.isArray(meta.samples) ? meta.samples : [];
+  const samples = files.map((file, i) => ({ file, ...(given[i] || {}) }));
+
+  const set = {
+    version: 1,
+    name: meta.name,
+    take: meta.take,
+    made: new Date().toISOString(),
+    kind: meta.kind || "",
+    stereo: !!meta.stereo,
+    sliced: !!meta.sliced,
+    slots: meta.slots || 0,
+    slotSecs: meta.slotSecs || 0,
+    voltsPerLevel: VOLTS_PER_LEVEL,
+    // Null for a take played by hand. The samples and their measurements are
+    // still worth keeping; what is missing is the ability to run it again.
+    spec: meta.spec ?? null,
+    schedule: Array.isArray(meta.schedule) ? meta.schedule : [],
+    samples,
+  };
+  try {
+    fs.writeFileSync(path.join(dir, SET_JSON), JSON.stringify(set, null, 2) + "\n");
+  } catch (e) {
+    return `the samples are written but their description is not: ${e.message}`;
+  }
+  return files.length === given.length || !given.length
+    ? null
+    : `${files.length} files written and ${given.length} described — the description is `
+      + `keyed to the files on disk, so check the set before sending it anywhere`;
+}
+
+// Every stored set, newest first, with just enough to choose one by.
+function storedSets() {
+  if (!fs.existsSync(SAMPLES)) return [];
+  const out = [];
+  for (const d of fs.readdirSync(SAMPLES, { withFileTypes: true })) {
+    if (!d.isDirectory()) continue;
+    const dir = path.join(SAMPLES, d.name);
+    let set = null;
+    try { set = JSON.parse(fs.readFileSync(path.join(dir, SET_JSON), "utf8")); } catch {}
+    const files = fs.readdirSync(dir).filter((f) => f.toLowerCase().endsWith(".wav"));
+    out.push({
+      name: d.name,
+      count: files.length,
+      // A set written before this existed, or one cut from a hand-played
+      // take. Listed either way — what is on disk is what is on disk — and
+      // the page says which is which, because they are not the same thing:
+      // one has no description, the other has one and no spec inside it.
+      described: !!set,
+      made: set?.made ?? "",
+      take: set?.take ?? "",
+      runnable: !!set?.spec,
+      // The parameters that were moved, by name, so a list of sets reads as a
+      // list of experiments rather than a list of folders.
+      moved: (set?.spec?.params ?? []).map((q) => q.name),
+      extent: set?.spec?.extent ?? [],
+      encoding: set?.spec?.encoding ?? "",
+    });
+  }
+  return out.sort((a, b) => String(b.made).localeCompare(String(a.made)));
+}
+
+function storedSet(name) {
+  const dir = path.join(SAMPLES, safe(name));
+  try {
+    return { ok: true, set: JSON.parse(fs.readFileSync(path.join(dir, SET_JSON), "utf8")) };
+  } catch (e) {
+    return { ok: false, output: `${name} has no ${SET_JSON} — it was cut before sets were stored` };
+  }
+}
+
 // Cut the kept regions into a set, and put that set on a voice.
 async function addToCard(body) {
   const take = safe(body.take || "");
@@ -298,6 +422,22 @@ async function addToCard(body) {
       `${regions.length} pieces, and the biggest division SLICER offers is 128. ` +
       `Keep fewer, or put them on more than one voice.` };
   }
+
+  // **The description, written with the audio and into the same directory.**
+  //
+  // Here rather than in a second call from the page, so that a set cannot
+  // exist without it: an interruption between "cut" and "describe" would
+  // leave exactly the folder of anonymous WAVs this is meant to abolish.
+  const described = writeSet(path.join(SAMPLES, set), {
+    name: set,
+    take,
+    kind: body.kind,
+    stereo: !!body.stereo,
+    sliced, slots, slotSecs,
+    spec: body.spec ?? null,
+    schedule: body.schedule ?? [],
+    samples: body.samples ?? [],
+  });
 
   const card = readCard();
   const bankName = String(body.bank || "WORKSHOP").toUpperCase().replace(/[^A-Z0-9 ]/g, "").trim() || "WORKSHOP";
@@ -384,7 +524,12 @@ async function addToCard(body) {
   if (slots) bank.slicer = slots;
   writeCard(card);
 
-  return { ok: true, output: cut.output, card, sets: sets() };
+  return {
+    ok: true,
+    output: described ? `${cut.output}\n${described}` : cut.output,
+    card,
+    sets: sets(),
+  };
 }
 
 // **Where the detector thinks things begin, over a take the daemon just wrote.**
@@ -836,6 +981,14 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === "/api/harvest" && req.method === "POST") {
       const body = await readBody(req);
       return json(res, 200, await harvest(body));
+    }
+    // The stored sets: the list, and one whole. See `writeSet` — the object
+    // is what makes a set re-runnable at a resolution nobody chose at the time.
+    if (url.pathname === "/api/sets" && req.method === "GET") {
+      return json(res, 200, { ok: true, sets: storedSets() });
+    }
+    if (url.pathname.startsWith("/api/sets/") && req.method === "GET") {
+      return json(res, 200, storedSet(decodeURIComponent(url.pathname.slice("/api/sets/".length))));
     }
     if (url.pathname === "/api/library" && req.method === "GET") return json(res, 200, shelves());
     if (url.pathname === "/api/scene" && req.method === "GET") {
