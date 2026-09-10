@@ -20,10 +20,21 @@ body {
   font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
-/* Wide throughout. This is a data page; the old 940px column was a reading
-   measure, which is the wrong measure for small multiples. */
-.q { max-width: 1440px; margin: 0 auto; padding: 30px 32px 80px; }
-.q-head { display: flex; align-items: baseline; gap: 18px; border-bottom: 2px solid var(--ink); padding-bottom: 10px; margin-bottom: 26px; }
+/* **Edge to edge. There is no frame.**
+   
+   This is a data page on a landscape screen, and every pixel spent on a
+   margin is a tile that could have been on the same row as the one you are
+   comparing it to. So the page IS the window — the same call Triggerfish
+   makes, where the shell is a thin bar and the surfaces fill what is left.
+   
+   The measure is controlled locally instead, on the prose, which is the only
+   thing that needs one. */
+.q { margin: 0; padding: 0 18px 60px; }
+
+/* The masthead as a bar: thin, full width, and the only horizontal rule the
+   page needs above the spread. */
+.q-head { display: flex; align-items: baseline; gap: 18px; border-bottom: 2px solid var(--ink);
+  padding: 16px 0 9px; margin-bottom: 22px; }
 .q-head h1 { margin: 0; font-size: 26px; font-weight: 600; letter-spacing: -0.01em; }
 .q-sub { color: var(--muted); font-size: 13px; flex: 1; }
 .q-ok { color: var(--live); font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; }
@@ -48,6 +59,7 @@ body {
 .q-kind { padding: 8px 14px; border: 1px solid var(--rule); background: #fff; border-radius: 3px; cursor: pointer; font: inherit; }
 .q-kind:hover { border-color: var(--ink); }
 .q-kind.on { border-color: var(--ink); background: var(--ink); color: #fff; }
+/* Prose carries its own measure, since the page no longer does. */
 .q-blurb { color: var(--muted); font-size: 13px; margin: 10px 0 16px; max-width: 62ch; }
 .q-field { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; font-size: 13px; }
 .q-field span { color: var(--muted); min-width: 96px; }
@@ -70,6 +82,10 @@ body {
    An entry rather than a row: the fields are heterogeneous (a name and a
    date, a count, a sentence, a line of code) and columns of one width made
    every one of them cramped. */
+/* The library runs the width too. A set's name at one end and its verbs at
+   the other is a long track for the eye — so the `what` column takes the
+   slack and the verbs stay at a fixed distance from the right edge, rather
+   than the row keeping a measure the rest of the page has given up. */
 .q-sets { margin-bottom: 0; }
 .q-set-id { min-width: 0; }
 .q-sechead { display: flex; align-items: baseline; gap: 14px; margin-bottom: 6px; }
@@ -112,7 +128,17 @@ body {
 
 /* Auto-fill rather than a fixed count: ten hits and a hundred slices should
    both look deliberate, and the tile is the unit that stays constant. */
+/* **A grid of two axes is drawn as those axes**, not as however many tiles
+   happen to fit.
+   
+   `auto-fill` is right for a line of N — a hand-played take of eleven hits
+   has no shape to respect and should use the width. It is wrong for a
+   transect of 4 × 8: drawn seven across, a row of the grid is not a row on
+   the screen and the one thing the grid was for is gone. So a two-axis set
+   sets its own column count inline, from the inner axis — the one that
+   varies fastest, which is what makes it the row. */
 .q-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
+.q-grid.is-shaped { grid-template-columns: var(--cols); }
 .q-tile { border: 1px solid var(--rule); border-radius: 3px; background: #fff; overflow: hidden; transition: border-color .12s; }
 .q-tile:hover { border-color: var(--ink); }
 .q-tile.is-playing { border-color: var(--hot); }
@@ -202,8 +228,17 @@ body {
    Recto and verso. The right page is given the extra width because it holds
    the small multiples, and the left is floored at a measure the curve rail
    and its routing fit on without wrapping. */
-.q-spread { display: grid; grid-template-columns: minmax(430px, 6fr) 7fr; gap: 34px; align-items: start; }
-.q-recto { border-right: 1px solid var(--rule); padding-right: 34px; }
+/* **The left page is a form; the right page is data.**
+   
+   A form does not get better with width — past about 600px the routing fields
+   are simply further apart — so the left page is fixed within a range and
+   every pixel the window gains goes to the right. */
+/* `stretch`, not `start`: the rule between the pages runs the height of the
+   taller one, which is what makes it a spread rather than two stacked boxes
+   that happen to be side by side. */
+.q-spread { display: grid; grid-template-columns: minmax(400px, 600px) 1fr;
+  gap: clamp(20px, 2vw, 36px); align-items: stretch; }
+.q-recto { border-right: 1px solid var(--rule); padding-right: clamp(20px, 2vw, 36px); }
 .q-recto, .q-verso { margin-bottom: 30px; }
 @media (max-width: 1180px) {
   .q-spread { grid-template-columns: 1fr; gap: 0; }
@@ -241,6 +276,7 @@ body {
    size and in the same place. A smaller placeholder would have made the shape
    of the run unreadable and then jumped. */
 .q-grid.is-planned { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); }
+.q-grid.is-planned.is-shaped { grid-template-columns: var(--cols); }
 .q-cell { display: flex; align-items: center; justify-content: center;
   height: 74px; border: 1px dashed var(--rule); border-radius: 3px;
   font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; background: #fff; }
@@ -275,7 +311,10 @@ body {
 
 .q-curveparam { display: flex; flex-direction: column; gap: 6px; padding-top: 2px; }
 .q-swname { padding: 5px 8px; border: 1px solid var(--rule); border-radius: 3px; font: inherit; font-size: 13px; width: 220px; }
-.q-swwhere { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.q-swwhere { display: flex; align-items: center; gap: 5px 12px; flex-wrap: wrap; }
+/* The CV half and the MIDI half, each unbreakable, so the row wraps at the
+   one point where a break says something. */
+.q-swgroup { display: inline-flex; align-items: center; gap: 5px; }
 .q-swtiny { display: inline-flex; align-items: center; gap: 3px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
 .q-swtiny input { padding: 3px 5px; border: 1px solid var(--rule); border-radius: 3px; font: inherit; font-size: 11px; font-variant-numeric: tabular-nums; }
 .q-swtiny select { padding: 2px 4px; border: 1px solid var(--rule); border-radius: 3px; font: inherit; font-size: 11px; }

@@ -173,18 +173,30 @@ body h =
             [ cls "q-swname", HP.type_ HP.InputText, HP.value q.name
             , HP.title "what this parameter is called on the instrument"
             , HE.onValueInput (h.msg <<< SetName i) ]
+        -- | **Where it is reached, in two groups that wrap as units.**
+        -- |
+        -- | Nine small fields in one flex row wrapped wherever it ran out, so
+        -- | `ch 1 ×` would end up alone on a second line under a gap and the
+        -- | CV and MIDI halves of one parameter read as one run of numbers.
+        -- | Grouped, the break falls between them — which is the only place it
+        -- | could mean anything — and a rig that uses one and not the other
+        -- | still reads as two halves rather than as a wrapped sentence.
         , HH.div [ cls "q-swwhere" ]
-            [ tiny "cv" 3 (maybe "" show q.cv) (SetCv i)
-                "es9-daemon bus — 8 is ES-9 panel jack 1, 15 is jack 8; blank for none"
-            , tiny "" 4 (num q.cvLo) (SetCvLo i)
-                "what 0 means on that bus, -1 to 1 (1.0 is FULL output: this path is not halved)"
-            , arrow
-            , tiny "" 4 (num q.cvHi) (SetCvHi i) "what 1 means on that bus"
-            , tiny "cc" 3 (maybe "" show q.cc) (SetCc i) "controller number; blank for none"
-            , tiny "" 3 (show q.ccLo) (SetCcLo i) "controller value at 0"
-            , arrow
-            , tiny "" 3 (show q.ccHi) (SetCcHi i) "controller value at 1"
-            , tiny "ch" 2 (show q.channel) (SetChannel i) "MIDI channel"
+            [ HH.span [ cls "q-swgroup" ]
+                [ tiny "cv" 3 (maybe "" show q.cv) (SetCv i)
+                    "es9-daemon bus — 8 is ES-9 panel jack 1, 15 is jack 8; blank for none"
+                , tiny "" 4 (num q.cvLo) (SetCvLo i)
+                    "what 0 means on that bus, -1 to 1 (1.0 is FULL output: this path is not halved)"
+                , arrow
+                , tiny "" 4 (num q.cvHi) (SetCvHi i) "what 1 means on that bus"
+                ]
+            , HH.span [ cls "q-swgroup" ]
+                [ tiny "cc" 3 (maybe "" show q.cc) (SetCc i) "controller number; blank for none"
+                , tiny "" 3 (show q.ccLo) (SetCcLo i) "controller value at 0"
+                , arrow
+                , tiny "" 3 (show q.ccHi) (SetCcHi i) "controller value at 1"
+                , tiny "ch" 2 (show q.channel) (SetChannel i) "MIDI channel"
+                ]
             , axisPick i q
             , HH.button
                 [ cls "q-swmini is-drop", HP.title "remove this parameter"

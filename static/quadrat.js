@@ -8309,6 +8309,7 @@
   var attr2 = /* @__PURE__ */ (function() {
     return attr(Nothing.value);
   })();
+  var style = /* @__PURE__ */ attr2("style");
 
   // output/Control.Monad.Fork.Class/index.js
   var monadForkAff = {
@@ -11870,7 +11871,7 @@
   var append13 = /* @__PURE__ */ append(semigroupArray);
   var eq22 = /* @__PURE__ */ eq(eqEncoding);
   var identity10 = /* @__PURE__ */ identity(categoryFn);
-  var style2 = /* @__PURE__ */ attr2("style");
+  var style3 = /* @__PURE__ */ attr2("style");
   var num = function(n) {
     return show8(toNumber(round2(n * 1e3)) / 1e3);
   };
@@ -11938,7 +11939,7 @@
                 }
                 ;
                 return span_([text5(lbl)]);
-              })(), input2([type_19(InputText.value), value13(v), style2("width: " + (show12((w * 9 | 0) + 14 | 0) + "px")), onValueInput(function($49) {
+              })(), input2([type_19(InputText.value), value13(v), style3("width: " + (show12((w * 9 | 0) + 14 | 0) + "px")), onValueInput(function($49) {
                 return h.msg(act($49));
               })])]);
             };
@@ -11970,7 +11971,7 @@
         return function(act) {
           return function(w) {
             return function(title4) {
-              return label4([cls("q-field is-tight"), title2(title4)])([span_([text5(lbl)]), input2([type_19(InputText.value), value13(v), style2("width: " + (show12((w * 11 | 0) + 18 | 0) + "px")), onValueInput(function($50) {
+              return label4([cls("q-field is-tight"), title2(title4)])([span_([text5(lbl)]), input2([type_19(InputText.value), value13(v), style3("width: " + (show12((w * 11 | 0) + 18 | 0) + "px")), onValueInput(function($50) {
                 return h.msg(act($50));
               })])]);
             };
@@ -12056,7 +12057,7 @@
           })(axs))]);
         }
         ;
-        throw new Error("Failed pattern match at Quadrat.SweepView (line 200, column 3 - line 211, column 12): " + [i2.constructor.name, q2.constructor.name]);
+        throw new Error("Failed pattern match at Quadrat.SweepView (line 212, column 3 - line 223, column 12): " + [i2.constructor.name, q2.constructor.name]);
       };
     };
     var arrow = span3([cls("q-swarrow")])([text5("\u2192")]);
@@ -12097,7 +12098,7 @@
           return function($60) {
             return h.msg($59($60));
           };
-        })())]), div3([cls("q-swwhere")])([tiny("cv")(3)(maybe("")(show12)(q2.cv))(SetCv.create(i2))("es9-daemon bus \u2014 8 is ES-9 panel jack 1, 15 is jack 8; blank for none"), tiny("")(4)(num(q2.cvLo))(SetCvLo.create(i2))("what 0 means on that bus, -1 to 1 (1.0 is FULL output: this path is not halved)"), arrow, tiny("")(4)(num(q2.cvHi))(SetCvHi.create(i2))("what 1 means on that bus"), tiny("cc")(3)(maybe("")(show12)(q2.cc))(SetCc.create(i2))("controller number; blank for none"), tiny("")(3)(show12(q2.ccLo))(SetCcLo.create(i2))("controller value at 0"), arrow, tiny("")(3)(show12(q2.ccHi))(SetCcHi.create(i2))("controller value at 1"), tiny("ch")(2)(show12(q2.channel))(SetChannel.create(i2))("MIDI channel"), axisPick(i2)(q2), button([cls("q-swmini is-drop"), title2("remove this parameter"), onClick(function(v) {
+        })())]), div3([cls("q-swwhere")])([span3([cls("q-swgroup")])([tiny("cv")(3)(maybe("")(show12)(q2.cv))(SetCv.create(i2))("es9-daemon bus \u2014 8 is ES-9 panel jack 1, 15 is jack 8; blank for none"), tiny("")(4)(num(q2.cvLo))(SetCvLo.create(i2))("what 0 means on that bus, -1 to 1 (1.0 is FULL output: this path is not halved)"), arrow, tiny("")(4)(num(q2.cvHi))(SetCvHi.create(i2))("what 1 means on that bus")]), span3([cls("q-swgroup")])([tiny("cc")(3)(maybe("")(show12)(q2.cc))(SetCc.create(i2))("controller number; blank for none"), tiny("")(3)(show12(q2.ccLo))(SetCcLo.create(i2))("controller value at 0"), arrow, tiny("")(3)(show12(q2.ccHi))(SetCcHi.create(i2))("controller value at 1"), tiny("ch")(2)(show12(q2.channel))(SetChannel.create(i2))("MIDI channel")]), axisPick(i2)(q2), button([cls("q-swmini is-drop"), title2("remove this parameter"), onClick(function(v) {
           return h.msg(new DropParam(i2));
         })])([text5("\xD7")])])])])((function() {
           var $47 = eq12(h.open)(new Just(i2));
@@ -12798,15 +12799,15 @@
                   });
                 })))(function() {
                   return modify_3((function() {
-                    var $514 = note((function() {
+                    var $520 = note((function() {
                       if (trimHead) {
                         return prompt(st.kind);
                       }
                       ;
                       return "recording \u2014 the run starts in a moment";
                     })());
-                    return function($515) {
-                      return $514((function(v) {
+                    return function($521) {
+                      return $520((function(v) {
                         return {
                           looper: v.looper,
                           kind: v.kind,
@@ -12846,7 +12847,7 @@
                           schedule: [],
                           overran: false
                         };
-                      })($515));
+                      })($521));
                     };
                   })());
                 });
@@ -12935,7 +12936,7 @@
         })())]);
       }
       ;
-      throw new Error("Failed pattern match at Quadrat.Main (line 1615, column 3 - line 1637, column 77): ");
+      throw new Error("Failed pattern match at Quadrat.Main (line 1637, column 3 - line 1659, column 77): ");
     })();
     var small2 = function(lbl) {
       return function(v) {
@@ -12944,6 +12945,20 @@
         };
       };
     };
+    var shaped = (function() {
+      if (st.sweep.extent.length === 2 && st["sweep"]["extent"][1] > 1) {
+        return [class_("q-grid is-shaped"), style("--cols: repeat(" + (show13(st["sweep"]["extent"][1]) + ", minmax(0, 1fr))"))];
+      }
+      ;
+      return [class_("q-grid")];
+    })();
+    var shapedPlan = (function() {
+      if (shaped.length === 2) {
+        return [class_("q-grid is-planned is-shaped"), shaped[1]];
+      }
+      ;
+      return [class_("q-grid is-planned")];
+    })();
     var scheduled = div3([class_("q-dividers")])([span3([class_("q-arm-label")])([text5("Divide")]), span3([class_("q-chips")])([span3([class_("q-chip on")])([text5("by the schedule")])]), label4([class_("q-field is-tight")])([span_([text5("lead ms")]), input2([type_20(InputNumber.value), value14(show13(st.sweep.leadMs)), min5(-500), max6(2e3), title2("how long after a trigger its sound is in the take"), onValueChange(SetLead2.create)])]), span3([class_("q-muted")])([text5(show13(length3(st.schedule)) + " triggers, timed by the daemon as it recorded them \u2014 nothing was detected, so nothing could be missed")])]);
     var running = isJust(st.sweepFork);
     var runChip = function(n) {
@@ -12974,7 +12989,7 @@
         })(st.looper)), span3([class_("q-muted")])([text5("pressing an input arms the take and starts the run, the same gesture as recording by hand. The take closes itself when the last position has sounded.")])];
       }
       ;
-      throw new Error("Failed pattern match at Quadrat.Main (line 1135, column 3 - line 1155, column 10): ");
+      throw new Error("Failed pattern match at Quadrat.Main (line 1157, column 3 - line 1177, column 10): ");
     })();
     var row = function(r) {
       return tr_([td_([text5(r.bank)]), td_([text5(r.kit)]), td_([text5(show13(r.voice) + (function() {
@@ -12984,14 +12999,14 @@
         ;
         return "";
       })())]), td_([text5(r.set + (" \u2014 " + ((function() {
-        var $247 = r.slicer > 0;
-        if ($247) {
+        var $253 = r.slicer > 0;
+        if ($253) {
           return "one file, SLICER " + show13(r.slicer);
         }
         ;
         return show13(r.count) + (function() {
-          var $248 = r.count === 1;
-          if ($248) {
+          var $254 = r.count === 1;
+          if ($254) {
             return " sample";
           }
           ;
@@ -13009,8 +13024,8 @@
       return function(label9) {
         return function(why) {
           return button([class_("q-tab" + (function() {
-            var $250 = eq6(st.page)(pg);
-            if ($250) {
+            var $256 = eq6(st.page)(pg);
+            if ($256) {
               return " on";
             }
             ;
@@ -13023,16 +13038,16 @@
     };
     var occupant = (function() {
       var setName14 = (function() {
-        var $251 = st.name === "";
-        if ($251) {
+        var $257 = st.name === "";
+        if ($257) {
           return "set";
         }
         ;
         return st.name;
       })();
       var kitName = (function() {
-        var $252 = st.kit === "";
-        if ($252) {
+        var $258 = st.kit === "";
+        if ($258) {
           return st.name;
         }
         ;
@@ -13056,16 +13071,16 @@
             append: false
           });
         })])([text5("Save as a set")]), span3([class_("q-arm-label")])([text5("or send to")]), small2("bank")(st.bank)(SetBank.create), small2("kit")((function() {
-          var $253 = st.kit === "";
-          if ($253) {
+          var $259 = st.kit === "";
+          if ($259) {
             return st.name;
           }
           ;
           return st.kit;
         })())(SetKit.create), label4([class_("q-field is-tight")])([span_([text5("voice")]), select3([onValueChange(SetVoice.create)])(map30(function(n) {
           return option([value14(show13(n)), selected2(n === st.voice)])([text5(show13(n) + (function() {
-            var $254 = notEq1(foldsTo(st.kind))(ToMono.value);
-            if ($254) {
+            var $260 = notEq1(foldsTo(st.kind))(ToMono.value);
+            if ($260) {
               return " + " + show13(n + 1 | 0);
             }
             ;
@@ -13095,13 +13110,13 @@
             })])([text5("replace")])]);
           }
           ;
-          throw new Error("Failed pattern match at Quadrat.Main (line 1519, column 13 - line 1543, column 20): " + [occupant.constructor.name]);
+          throw new Error("Failed pattern match at Quadrat.Main (line 1541, column 13 - line 1565, column 20): " + [occupant.constructor.name]);
         })(), (function() {
           if (occupant instanceof Just && length3(occupant.value0.sets) >= 1) {
             return label4([class_("q-field is-tight")])([span_([text5("picked by")]), select3([onValueChange(SetLayerMode.create)])(map30(function(m) {
               return option([value14(m), selected2(m === (function() {
-                var $258 = st.layerMode === "";
-                if ($258) {
+                var $264 = st.layerMode === "";
+                if ($264) {
                   return occupant.value0.mode;
                 }
                 ;
@@ -13118,8 +13133,8 @@
           ;
           if (occupant instanceof Just) {
             return span3([class_("q-warn")])([text5("voice " + (show13(st.voice) + (" holds " + (joinWith(", ")(occupant.value0.sets) + ((function() {
-              var $261 = occupant.value0.slicer > 0;
-              if ($261) {
+              var $267 = occupant.value0.slicer > 0;
+              if ($267) {
                 return " in " + (show13(occupant.value0.slicer) + " slots");
               }
               ;
@@ -13127,11 +13142,11 @@
             })() + " \u2014 add stands beside them, replace puts this in their place")))))]);
           }
           ;
-          throw new Error("Failed pattern match at Quadrat.Main (line 1569, column 13 - line 1576, column 90): " + [occupant.constructor.name]);
+          throw new Error("Failed pattern match at Quadrat.Main (line 1591, column 13 - line 1598, column 90): " + [occupant.constructor.name]);
         })()]);
       }
       ;
-      throw new Error("Failed pattern match at Quadrat.Main (line 1479, column 3 - line 1577, column 12): ");
+      throw new Error("Failed pattern match at Quadrat.Main (line 1501, column 3 - line 1599, column 12): ");
     })();
     var loudest = fromMaybe(0)(last2(sort3(map30(function(v) {
       return v.peak;
@@ -13140,8 +13155,8 @@
       var cells3 = cells2(st.sweep.encoding)(st.sweep.extent);
       var at3 = fromMaybe(-1 | 0)(st.sweepAt);
       return div_([div3([class_("q-gridhead")])([span_([text5(show13(length3(cells3)) + (" samples" + ((function() {
-        var $263 = length3(st.sweep.extent) > 1;
-        if ($263) {
+        var $269 = length3(st.sweep.extent) > 1;
+        if ($269) {
           return ", " + joinWith(" \xD7 ")(map30(show13)(st.sweep.extent));
         }
         ;
@@ -13152,17 +13167,17 @@
         }
         ;
         return " to record";
-      })())))])]), div3([class_("q-grid is-planned")])(mapWithIndex2(function(i2) {
+      })())))])]), div3(shapedPlan)(mapWithIndex2(function(i2) {
         return function(c) {
           return div3([class_("q-cell" + (function() {
-            var $265 = running && i2 <= at3;
-            if ($265) {
+            var $271 = running && i2 <= at3;
+            if ($271) {
               return " is-done";
             }
             ;
             return "" + (function() {
-              var $266 = running && i2 === at3;
-              if ($266) {
+              var $272 = running && i2 === at3;
+              if ($272) {
                 return " is-now";
               }
               ;
@@ -13184,8 +13199,8 @@
     })();
     var dividerBtn = function(dv) {
       return button([class_("q-chip" + (function() {
-        var $268 = eq3(dv)(st.divider);
-        if ($268) {
+        var $274 = eq3(dv)(st.divider);
+        if ($274) {
           return " on";
         }
         ;
@@ -13207,37 +13222,37 @@
         return 's "' + (r.name + ('" # n "0..' + (show13(r.count - 1 | 0) + '"')));
       }
       ;
-      throw new Error("Failed pattern match at Quadrat.Main (line 1193, column 3 - line 1199, column 78): " + [r.constructor.name]);
+      throw new Error("Failed pattern match at Quadrat.Main (line 1215, column 3 - line 1221, column 78): " + [r.constructor.name]);
     };
     var setRow = function(r) {
       return article([class_("q-set")])([div3([class_("q-set-id")])([div3([class_("q-set-name")])([text5(r.name)]), div3([class_("q-set-when")])([text5(take3(10)(r.made) + (function() {
-        var $273 = r.take === "";
-        if ($273) {
+        var $279 = r.take === "";
+        if ($279) {
           return "";
         }
         ;
         return " \xB7 from " + r.take;
       })())])]), div3([class_("q-set-n")])([text5(show13(r.count)), span_([text5(" samples")])]), div3([class_("q-set-what")])([div3([title2((function() {
-        var $274 = !r.described;
-        if ($274) {
+        var $280 = !r.described;
+        if ($280) {
           return "cut before sets were stored, so nothing here knows how it was made";
         }
         ;
         return "";
       })())])([text5((function() {
-        var $275 = !r.described;
-        if ($275) {
+        var $281 = !r.described;
+        if ($281) {
           return "no description";
         }
         ;
-        var $276 = $$null2(r.moved);
-        if ($276) {
+        var $282 = $$null2(r.moved);
+        if ($282) {
           return "played by hand";
         }
         ;
         return joinWith(", ")(r.moved) + (" over " + (joinWith(" \xD7 ")(map30(show13)(r.extent)) + (function() {
-          var $277 = r.encoding === "";
-          if ($277) {
+          var $283 = r.encoding === "";
+          if ($283) {
             return "";
           }
           ;
@@ -13252,8 +13267,8 @@
         ;
         return text5("");
       })(), (function() {
-        var $279 = r.described && r.count > 0;
-        if ($279) {
+        var $285 = r.described && r.count > 0;
+        if ($285) {
           return button([class_("q-plain"), disabled10(st.cardBusy), title2("put this set on the card, at the bank and voice chosen on the card below \u2014 nothing is cut or measured again"), onClick(function(v) {
             return new PlaceSet(r.name);
           })])([text5("Onto the card")]);
@@ -13273,7 +13288,7 @@
         })(st.sets))) + " re-runnable")))])])])(map30(setRow)(st.sets)));
       }
       ;
-      throw new Error("Failed pattern match at Quadrat.Main (line 1168, column 3 - line 1189, column 12): ");
+      throw new Error("Failed pattern match at Quadrat.Main (line 1190, column 3 - line 1211, column 12): ");
     })();
     var declaredVsFound = (function() {
       if (!st.swept) {
@@ -13285,8 +13300,8 @@
       }
       ;
       if (!$$null2(st.schedule)) {
-        var $280 = length3(st.regions) === length3(st.schedule);
-        if ($280) {
+        var $286 = length3(st.regions) === length3(st.schedule);
+        if ($286) {
           return text5("");
         }
         ;
@@ -13301,7 +13316,7 @@
         return span3([class_("q-warn")])([text5("you swept " + (show13(total(st.sweep.extent)) + (" samples and this divided into " + (show13(length3(st.regions)) + " \u2014 try another divider, or a wider gap, before sending it"))))]);
       }
       ;
-      throw new Error("Failed pattern match at Quadrat.Main (line 1642, column 3 - line 1659, column 80): ");
+      throw new Error("Failed pattern match at Quadrat.Main (line 1664, column 3 - line 1681, column 80): ");
     })();
     var cp = cap(st);
     var elapsed = maybe("0")(function(c) {
@@ -13321,8 +13336,8 @@
       ;
       if (otherwise) {
         return div3([class_("q-dividers")])([span3([class_("q-arm-label")])([text5("Divide")]), div3([class_("q-chips")])(map30(dividerBtn)(all4(st.equalN))), (function() {
-          var $281 = needsCount(st.divider);
-          if ($281) {
+          var $287 = needsCount(st.divider);
+          if ($287) {
             return label4([class_("q-field is-tight")])([span_([text5("pieces")]), input2([type_20(InputNumber.value), value14(show13(st.equalN)), min5(2), max6(128), onValueInput(SetEqualN.create)])]);
           }
           ;
@@ -13330,7 +13345,7 @@
         })(), span3([class_("q-muted")])([text5(blurb2(st.divider))])]);
       }
       ;
-      throw new Error("Failed pattern match at Quadrat.Main (line 1421, column 3 - line 1441, column 12): ");
+      throw new Error("Failed pattern match at Quadrat.Main (line 1443, column 3 - line 1463, column 12): ");
     })();
     var srcNow = maybe(0)(function(v) {
       return v.src;
@@ -13347,8 +13362,8 @@
       return function(label9) {
         return function(why) {
           return button([class_("q-filltab" + (function() {
-            var $282 = eq7(st.fill)(f);
-            if ($282) {
+            var $288 = eq7(st.fill)(f);
+            if ($288) {
               return " on";
             }
             ;
@@ -13362,8 +13377,8 @@
     var fillRow = div3([class_("q-fill")])([fillTab(Swept.value)("Transect")("the rig plays a schedule of positions and records the lot as one take"), fillTab(Played.value)("By hand")("you play it; the detector finds where the sounds are afterwards")]);
     var kindBtn = function(k) {
       return button([class_("q-kind" + (function() {
-        var $283 = name15(k) === name15(st.kind);
-        if ($283) {
+        var $289 = name15(k) === name15(st.kind);
+        if ($289) {
           return " on";
         }
         ;
@@ -13385,15 +13400,15 @@
       ;
       return text5("");
     })(), p([class_("q-blurb")])([text5(blurb(st.kind)), text5(" Captured from " + (srcName + (" as it comes" + (", and folded to " + ((function() {
-      var $288 = eq4(foldsTo(st.kind))(ToMono.value);
-      if ($288) {
+      var $294 = eq4(foldsTo(st.kind))(ToMono.value);
+      if ($294) {
         return "mono";
       }
       ;
       return "stereo";
     })() + (" on the way to a card" + (function() {
-      var $289 = voicesOn(st.kind) === 2;
-      if ($289) {
+      var $295 = voicesOn(st.kind) === 2;
+      if ($295) {
         return " \u2014 where it takes two of the four voices.";
       }
       ;
@@ -13409,13 +13424,13 @@
         return span3([class_("q-ok")])([text5("daemon")]);
       }
       ;
-      throw new Error("Failed pattern match at Quadrat.Main (line 1063, column 16 - line 1065, column 79): " + [st.looper.constructor.name]);
+      throw new Error("Failed pattern match at Quadrat.Main (line 1085, column 16 - line 1087, column 79): " + [st.looper.constructor.name]);
     })();
     var chip = function(n) {
       return function(s) {
         return button([class_("q-chip is-arm" + ((function() {
-          var $292 = srcNow === (n + 1 | 0);
-          if ($292) {
+          var $298 = srcNow === (n + 1 | 0);
+          if ($298) {
             return " on";
           }
           ;
@@ -13451,8 +13466,8 @@
           return div_([table([class_("q-table")])([thead_([tr_(map30(function(h) {
             return th_([text5(h)]);
           })(["bank", "kit", "voice", "holds"]))]), tbody_(map30(row)(st.cardView.value0.rows))]), writeRow(st.cardView.value0), (function() {
-            var $296 = st.cardView.value0.plan === "";
-            if ($296) {
+            var $302 = st.cardView.value0.plan === "";
+            if ($302) {
               return text5("");
             }
             ;
@@ -13468,7 +13483,7 @@
         ;
       }
       ;
-      throw new Error("Failed pattern match at Quadrat.Main (line 1733, column 9 - line 1752, column 20): " + [st.cardView.constructor.name]);
+      throw new Error("Failed pattern match at Quadrat.Main (line 1755, column 9 - line 1774, column 20): " + [st.cardView.constructor.name]);
     })()]);
     var brightest = fromMaybe(0)(last2(sort3(map30(function(v) {
       return v.tilt;
@@ -13488,10 +13503,10 @@
         var total2 = maybe(1)(function(v) {
           return v.secs;
         })(cap(st));
-        var n = maybe(0)(function($516) {
+        var n = maybe(0)(function($522) {
           return length3((function(v) {
             return v.hi;
-          })($516));
+          })($522));
         })(st.peaks);
         var kept = member3(i2)(st.keep);
         var b2 = bucketsFor(n)(total2)(r.start)(r.end);
@@ -13505,8 +13520,8 @@
           ;
           return " is-dropped";
         })() + (function() {
-          var $300 = eq52(st.playing)(new Just(i2));
-          if ($300) {
+          var $306 = eq52(st.playing)(new Just(i2));
+          if ($306) {
             return " is-playing";
           }
           ;
@@ -13515,14 +13530,14 @@
           return new HoverPlay(i2);
         })])([button([class_("q-tile-face"), title2(fmt(r.end - r.start) + (" s at " + (fmt(r.start) + " s"))), onClick(function(v) {
           return new Play(i2);
-        })])([svg(maybe([])(function($517) {
+        })])([svg(maybe([])(function($523) {
           return cut2((function(v) {
             return v.lo;
-          })($517));
-        })(st.peaks))(maybe([])(function($518) {
+          })($523));
+        })(st.peaks))(maybe([])(function($524) {
           return cut2((function(v) {
             return v.hi;
-          })($518));
+          })($524));
         })(st.peaks))([klass("q-tile-svg")])]), div3([class_("q-tile-foot")])([span3([class_("q-tile-n")])([text5(show13(i2 + 1 | 0))]), span3([class_("q-tile-len")])([text5(fmt(r.end - r.start))]), button([class_("q-tile-keep"), title2((function() {
           if (kept) {
             return "drop this one";
@@ -13553,8 +13568,8 @@
             return "dividing\u2026";
           }
           ;
-          var $306 = $$null2(st.regions);
-          if ($306) {
+          var $312 = $$null2(st.regions);
+          if ($312) {
             return maybe("")(function(c) {
               return fmt(c.secs) + " s recorded, not divided yet";
             })(cap(st));
@@ -13562,8 +13577,8 @@
           ;
           return show13(size2(st.keep)) + (" of " + (show13(length3(st.regions)) + " kept"));
         })())]), spread, declaredVsFound, (function() {
-          var $307 = $$null2(st.regions) && (hasTake && !st.busy);
-          if ($307) {
+          var $313 = $$null2(st.regions) && (hasTake && !st.busy);
+          if ($313) {
             return button([class_("q-plain"), onClick(function(v) {
               return Analyse.value;
             })])([text5("Divide it")]);
@@ -13575,23 +13590,23 @@
         })])([text5("Keep all")]), button([class_("q-plain"), onClick(function(v) {
           return new KeepAll(false);
         })])([text5("Keep none")]), (function() {
-          var $308 = !$$null2(st.schedule);
-          if ($308) {
+          var $314 = !$$null2(st.schedule);
+          if ($314) {
             return text5("");
           }
           ;
           return label4([class_("q-quiet")])([span_([text5("more")]), input2([type_20(InputRange.value), min5(25), max6(1200), step3(new Step(25)), value14(show10(st.minGap)), onValueChange(SetGap.create), title2("how close two sounds can be and still be two, in milliseconds")]), span_([text5("fewer")]), span3([class_("q-gapval")])([text5(show13(round2(st.minGap)) + " ms")])]);
-        })(), label4([class_("q-hover")])([input2([type_20(InputCheckbox.value), checked2(st.hoverPlays), onChecked(SetHoverPlays.create)]), span_([text5("hover plays")])])]), dividerRow, div3([class_("q-grid")])(mapWithIndex2(tile)(st.regions)), sendRow]);
+        })(), label4([class_("q-hover")])([input2([type_20(InputCheckbox.value), checked2(st.hoverPlays), onChecked(SetHoverPlays.create)]), span_([text5("hover plays")])])]), dividerRow, div3(shaped)(mapWithIndex2(tile)(st.regions)), sendRow]);
       }
       ;
-      throw new Error("Failed pattern match at Quadrat.Main (line 1360, column 3 - line 1413, column 12): ");
+      throw new Error("Failed pattern match at Quadrat.Main (line 1382, column 3 - line 1435, column 12): ");
     })();
     var armRow = div3([class_("q-arm")])([span3([class_("q-arm-label")])([text5("Arm on")]), div3([class_("q-chips")])(maybe([text5("no daemon")])(function(top3) {
       return mapWithIndex2(chip)(top3.sources);
     })(st.looper))]);
     var goRow = div3([class_("q-go")])((function() {
-      var $309 = st.armed || writing;
-      if ($309) {
+      var $315 = st.armed || writing;
+      if ($315) {
         return [button([class_("q-big is-stop"), onClick(function(v) {
           return Close.value;
         })])([text5((function() {
@@ -13638,8 +13653,8 @@
           ;
           throw new Error("Failed pattern match at Quadrat.Main (line 951, column 19 - line 953, column 40): " + [st.fill.constructor.name]);
         })(), goRow]), section([class_("q-verso")])([h2_([text5("The record")]), (function() {
-          var $316 = !$$null2(st.regions) || (st.busy || hasTake);
-          if ($316) {
+          var $322 = !$$null2(st.regions) || (st.busy || hasTake);
+          if ($322) {
             return caught;
           }
           ;
@@ -13670,18 +13685,18 @@
     return function(write3) {
       var divide = function(st) {
         return discard12(modify_3(function(v) {
-          var $318 = {};
-          for (var $319 in v) {
-            if ({}.hasOwnProperty.call(v, $319)) {
-              $318[$319] = v[$319];
+          var $324 = {};
+          for (var $325 in v) {
+            if ({}.hasOwnProperty.call(v, $325)) {
+              $324[$325] = v[$325];
             }
             ;
           }
           ;
-          $318.busy = true;
-          $318.regions = [];
-          $318.keep = empty3;
-          return $318;
+          $324.busy = true;
+          $324.regions = [];
+          $324.keep = empty3;
+          return $324;
         }))(function() {
           return discard12(when5(write3)(discard12(send1(new CapturePeaks(900)))(function() {
             return discard12(send1(new WriteCapture(st.name)))(function() {
@@ -13705,9 +13720,9 @@
             })))))(function(r) {
               if (r instanceof Left) {
                 return modify_3((function() {
-                  var $519 = note("could not analyse: " + message(r.value0));
-                  return function($520) {
-                    return $519((function(v) {
+                  var $525 = note("could not analyse: " + message(r.value0));
+                  return function($526) {
+                    return $525((function(v) {
                       return {
                         looper: v.looper,
                         kind: v.kind,
@@ -13747,7 +13762,7 @@
                         fill: v.fill,
                         busy: false
                       };
-                    })($520));
+                    })($526));
                   };
                 })());
               }
@@ -13755,9 +13770,9 @@
               if (r instanceof Right) {
                 if (!r.value0.ok) {
                   return modify_3((function() {
-                    var $521 = note(r.value0.output);
-                    return function($522) {
-                      return $521((function(v) {
+                    var $527 = note(r.value0.output);
+                    return function($528) {
+                      return $527((function(v) {
                         return {
                           looper: v.looper,
                           kind: v.kind,
@@ -13797,7 +13812,7 @@
                           fill: v.fill,
                           busy: false
                         };
-                      })($522));
+                      })($528));
                     };
                   })());
                 }
@@ -13805,23 +13820,23 @@
                 if (otherwise) {
                   var n = length3(r.value0.regions);
                   return discard12(modify_3(function(v) {
-                    var $324 = {};
-                    for (var $325 in v) {
-                      if ({}.hasOwnProperty.call(v, $325)) {
-                        $324[$325] = v[$325];
+                    var $330 = {};
+                    for (var $331 in v) {
+                      if ({}.hasOwnProperty.call(v, $331)) {
+                        $330[$331] = v[$331];
                       }
                       ;
                     }
                     ;
-                    $324.regions = r.value0.regions;
-                    $324.keep = fromFoldable4(range2(0)(n - 1 | 0));
-                    $324.busy = false;
-                    $324.showing = takeName;
-                    return $324;
+                    $330.regions = r.value0.regions;
+                    $330.keep = fromFoldable4(range2(0)(n - 1 | 0));
+                    $330.busy = false;
+                    $330.showing = takeName;
+                    return $330;
                   }))(function() {
                     return discard12(modify_3(function(s) {
-                      var $327 = couldLayer(s);
-                      if ($327) {
+                      var $333 = couldLayer(s);
+                      if ($333) {
                         return s;
                       }
                       ;
@@ -13913,8 +13928,8 @@
                       throw new Error("Failed pattern match at Quadrat.Main (line 840, column 22 - line 844, column 61): " + [v.constructor.name]);
                     }))(function() {
                       return modify_3(note(show13(n) + ((function() {
-                        var $330 = n === 1;
-                        if ($330) {
+                        var $336 = n === 1;
+                        if ($336) {
                           return " division";
                         }
                         ;
@@ -13955,16 +13970,16 @@
       return discard12(liftAff2(delay(400)))(function() {
         return discard12(for_1(steps(st.sweep))(function(s) {
           return discard12(modify_3(function(v) {
-            var $335 = {};
-            for (var $336 in v) {
-              if ({}.hasOwnProperty.call(v, $336)) {
-                $335[$336] = v[$336];
+            var $341 = {};
+            for (var $342 in v) {
+              if ({}.hasOwnProperty.call(v, $342)) {
+                $341[$342] = v[$342];
               }
               ;
             }
             ;
-            $335.sweepAt = new Just(s.index);
-            return $335;
+            $341.sweepAt = new Just(s.index);
+            return $341;
           }))(function() {
             return discard12(unless2($$null2(s.cv))($$void8(liftAff2(attempt(toAffE(setCv({
               set: s.cv
@@ -13981,16 +13996,16 @@
                   return bind7(liftEffect12(at))(function(mk) {
                     return discard12(for_32(mk)(function(t) {
                       return modify_3(function(s0) {
-                        var $338 = {};
-                        for (var $339 in s0) {
-                          if ({}.hasOwnProperty.call(s0, $339)) {
-                            $338[$339] = s0[$339];
+                        var $344 = {};
+                        for (var $345 in s0) {
+                          if ({}.hasOwnProperty.call(s0, $345)) {
+                            $344[$345] = s0[$345];
                           }
                           ;
                         }
                         ;
-                        $338.schedule = snoc2(s0.schedule)(t);
-                        return $338;
+                        $344.schedule = snoc2(s0.schedule)(t);
+                        return $344;
                       });
                     }))(function() {
                       return discard12(for_32(st.sweep.trigger.gate)(function(b2) {
@@ -14022,9 +14037,9 @@
           return discard12(liftAff2(delay(300)))(function() {
             return discard12(restCv1)(function() {
               return discard12(modify_3((function() {
-                var $523 = note("swept " + (show13(total(st.sweep.extent)) + " samples"));
-                return function($524) {
-                  return $523((function(v) {
+                var $529 = note("swept " + (show13(total(st.sweep.extent)) + " samples"));
+                return function($530) {
+                  return $529((function(v) {
                     return {
                       looper: v.looper,
                       kind: v.kind,
@@ -14064,7 +14079,7 @@
                       sweepOpen: false,
                       swept: true
                     };
-                  })($524));
+                  })($530));
                 };
               })()))(function() {
                 return handleAction(dictMonadAff)(Close.value);
@@ -14087,17 +14102,17 @@
         return bind7(liftEffect12(slugFor(DrumHits.value)))(function(n) {
           return bind7(liftEffect12(restore(emptyPlan)))(function(pl) {
             return discard12(modify_3(function(v1) {
-              var $342 = {};
-              for (var $343 in v1) {
-                if ({}.hasOwnProperty.call(v1, $343)) {
-                  $342[$343] = v1[$343];
+              var $348 = {};
+              for (var $349 in v1) {
+                if ({}.hasOwnProperty.call(v1, $349)) {
+                  $348[$349] = v1[$349];
                 }
                 ;
               }
               ;
-              $342.name = n;
-              $342.sweep = pl;
-              return $342;
+              $348.name = n;
+              $348.sweep = pl;
+              return $348;
             }))(function() {
               return discard12(handleAction(dictMonadAff)(RefreshCard.value))(function() {
                 return discard12(liftEffect12(connect2(defaultUrl)))(function() {
@@ -14121,17 +14136,17 @@
           return bind7(liftEffect12(latest))(function(snap) {
             return bind7(liftEffect12(latestPeaks))(function(pk) {
               return discard12(modify_3(function(v1) {
-                var $345 = {};
-                for (var $346 in v1) {
-                  if ({}.hasOwnProperty.call(v1, $346)) {
-                    $345[$346] = v1[$346];
+                var $351 = {};
+                for (var $352 in v1) {
+                  if ({}.hasOwnProperty.call(v1, $352)) {
+                    $351[$352] = v1[$352];
                   }
                   ;
                 }
                 ;
-                $345.looper = snap;
-                $345.peaks = pk;
-                return $345;
+                $351.looper = snap;
+                $351.peaks = pk;
+                return $351;
               }))(function() {
                 return bind7(get2)(function(now) {
                   var has = maybe(false)(function(v1) {
@@ -14144,9 +14159,9 @@
                     return bind7(get2)(function(st) {
                       return discard12(for_32(cap(st))(function(c) {
                         return when5(st.armed && !c.on)(modify_3((function() {
-                          var $525 = note("closed itself: " + (fmt(c.secs) + " s"));
-                          return function($526) {
-                            return $525((function(v1) {
+                          var $531 = note("closed itself: " + (fmt(c.secs) + " s"));
+                          return function($532) {
+                            return $531((function(v1) {
                               return {
                                 looper: v1.looper,
                                 kind: v1.kind,
@@ -14186,23 +14201,23 @@
                                 armed: false,
                                 waiting: true
                               };
-                            })($526));
+                            })($532));
                           };
                         })()));
                       }))(function() {
                         return bind7(get2)(function(st2) {
                           return discard12(for_32(cap(st2))(function(c) {
                             return when5(st2.waiting && c.holds)(discard12(modify_3(function(v1) {
-                              var $348 = {};
-                              for (var $349 in v1) {
-                                if ({}.hasOwnProperty.call(v1, $349)) {
-                                  $348[$349] = v1[$349];
+                              var $354 = {};
+                              for (var $355 in v1) {
+                                if ({}.hasOwnProperty.call(v1, $355)) {
+                                  $354[$355] = v1[$355];
                                 }
                                 ;
                               }
                               ;
-                              $348.waiting = false;
-                              return $348;
+                              $354.waiting = false;
+                              return $354;
                             }))(function() {
                               return handleAction(dictMonadAff)(Analyse.value);
                             }));
@@ -14210,9 +14225,9 @@
                             return bind7(get2)(function(filled) {
                               return discard12(for_32(cap(filled))(function(c) {
                                 return when5(c.full && !filled.overran)(modify_3((function() {
-                                  var $527 = note("the capture filled at " + (fmt(c.capSecs) + " s and stopped \u2014 raise --capture-secs on the daemon"));
-                                  return function($528) {
-                                    return $527((function(v1) {
+                                  var $533 = note("the capture filled at " + (fmt(c.capSecs) + " s and stopped \u2014 raise --capture-secs on the daemon"));
+                                  return function($534) {
+                                    return $533((function(v1) {
                                       return {
                                         looper: v1.looper,
                                         kind: v1.kind,
@@ -14252,23 +14267,23 @@
                                         fill: v1.fill,
                                         overran: true
                                       };
-                                    })($528));
+                                    })($534));
                                   };
                                 })()));
                               }))(function() {
                                 return bind7(get2)(function(st3) {
                                   return when5(st3.sweepOpen)(bind7(liftEffect12(ports))(function(ps) {
                                     return when5(notEq22(ps)(st3.midiPorts))(discard12(modify_3(function(v1) {
-                                      var $351 = {};
-                                      for (var $352 in v1) {
-                                        if ({}.hasOwnProperty.call(v1, $352)) {
-                                          $351[$352] = v1[$352];
+                                      var $357 = {};
+                                      for (var $358 in v1) {
+                                        if ({}.hasOwnProperty.call(v1, $358)) {
+                                          $357[$358] = v1[$358];
                                         }
                                         ;
                                       }
                                       ;
-                                      $351.midiPorts = ps;
-                                      return $351;
+                                      $357.midiPorts = ps;
+                                      return $357;
                                     }))(function() {
                                       return unless2($$null2(ps))(modify_3(note(show13(length3(ps)) + " MIDI ports")));
                                     }));
@@ -14290,31 +14305,31 @@
       ;
       if (v instanceof PickKind) {
         return discard12(modify_3(function(v1) {
-          var $354 = {};
-          for (var $355 in v1) {
-            if ({}.hasOwnProperty.call(v1, $355)) {
-              $354[$355] = v1[$355];
+          var $360 = {};
+          for (var $361 in v1) {
+            if ({}.hasOwnProperty.call(v1, $361)) {
+              $360[$361] = v1[$361];
             }
             ;
           }
           ;
-          $354.kind = v.value0;
-          $354.divider = defaultFor(v.value0);
-          return $354;
+          $360.kind = v.value0;
+          $360.divider = defaultFor(v.value0);
+          return $360;
         }))(function() {
           return bind7(get2)(function(st) {
             return when5(wantsAName(st))(bind7(liftEffect12(slugFor(v.value0)))(function(n) {
               return modify_3(function(v1) {
-                var $357 = {};
-                for (var $358 in v1) {
-                  if ({}.hasOwnProperty.call(v1, $358)) {
-                    $357[$358] = v1[$358];
+                var $363 = {};
+                for (var $364 in v1) {
+                  if ({}.hasOwnProperty.call(v1, $364)) {
+                    $363[$364] = v1[$364];
                   }
                   ;
                 }
                 ;
-                $357.name = n;
-                return $357;
+                $363.name = n;
+                return $363;
               });
             }));
           });
@@ -14324,39 +14339,39 @@
       if (v instanceof SetBars) {
         return modify_3(function(s) {
           var n = clamp12(1)(64)(fromMaybe(s.bars)(fromString2(v.value0)));
-          var $363 = {};
-          for (var $364 in s) {
-            if ({}.hasOwnProperty.call(s, $364)) {
-              $363[$364] = s[$364];
+          var $369 = {};
+          for (var $370 in s) {
+            if ({}.hasOwnProperty.call(s, $370)) {
+              $369[$370] = s[$370];
             }
             ;
           }
           ;
-          $363.bars = n;
-          $363.kind = (function() {
+          $369.bars = n;
+          $369.kind = (function() {
             if (s.kind instanceof Bars2) {
               return new Bars2(n);
             }
             ;
             return s.kind;
           })();
-          return $363;
+          return $369;
         });
       }
       ;
       if (v instanceof SetName2) {
         return modify_3(function(v2) {
-          var $367 = {};
-          for (var $368 in v2) {
-            if ({}.hasOwnProperty.call(v2, $368)) {
-              $367[$368] = v2[$368];
+          var $373 = {};
+          for (var $374 in v2) {
+            if ({}.hasOwnProperty.call(v2, $374)) {
+              $373[$374] = v2[$374];
             }
             ;
           }
           ;
-          $367.name = v.value0;
-          $367.mine = v.value0 !== "";
-          return $367;
+          $373.name = v.value0;
+          $373.mine = v.value0 !== "";
+          return $373;
         });
       }
       ;
@@ -14369,16 +14384,16 @@
             ;
             if (r instanceof Right) {
               return modify_3(function(v2) {
-                var $373 = {};
-                for (var $374 in v2) {
-                  if ({}.hasOwnProperty.call(v2, $374)) {
-                    $373[$374] = v2[$374];
+                var $379 = {};
+                for (var $380 in v2) {
+                  if ({}.hasOwnProperty.call(v2, $380)) {
+                    $379[$380] = v2[$380];
                   }
                   ;
                 }
                 ;
-                $373.cardView = new Just(r.value0);
-                return $373;
+                $379.cardView = new Just(r.value0);
+                return $379;
               });
             }
             ;
@@ -14397,16 +14412,16 @@
           ;
           if (r instanceof Right) {
             return modify_3(function(v2) {
-              var $379 = {};
-              for (var $380 in v2) {
-                if ({}.hasOwnProperty.call(v2, $380)) {
-                  $379[$380] = v2[$380];
+              var $385 = {};
+              for (var $386 in v2) {
+                if ({}.hasOwnProperty.call(v2, $386)) {
+                  $385[$386] = v2[$386];
                 }
                 ;
               }
               ;
-              $379.sets = r.value0.sets;
-              return $379;
+              $385.sets = r.value0.sets;
+              return $385;
             });
           }
           ;
@@ -14417,16 +14432,16 @@
       if (v instanceof PlaceSet) {
         return bind7(get2)(function(st) {
           return discard12(modify_3(function(v1) {
-            var $383 = {};
-            for (var $384 in v1) {
-              if ({}.hasOwnProperty.call(v1, $384)) {
-                $383[$384] = v1[$384];
+            var $389 = {};
+            for (var $390 in v1) {
+              if ({}.hasOwnProperty.call(v1, $390)) {
+                $389[$390] = v1[$390];
               }
               ;
             }
             ;
-            $383.cardBusy = true;
-            return $383;
+            $389.cardBusy = true;
+            return $389;
           }))(function() {
             return bind7(liftAff2(attempt(toAffE(placeSet({
               set: v.value0,
@@ -14439,9 +14454,9 @@
               return discard12((function() {
                 if (r instanceof Left) {
                   return modify_3((function() {
-                    var $529 = note(message(r.value0));
-                    return function($530) {
-                      return $529((function(v1) {
+                    var $535 = note(message(r.value0));
+                    return function($536) {
+                      return $535((function(v1) {
                         return {
                           looper: v1.looper,
                           kind: v1.kind,
@@ -14481,394 +14496,14 @@
                           fill: v1.fill,
                           cardBusy: false
                         };
-                      })($530));
+                      })($536));
                     };
                   })());
                 }
                 ;
                 if (r instanceof Right) {
                   return modify_3((function() {
-                    var $531 = note(lastLine(r.value0.output));
-                    return function($532) {
-                      return $531((function(v1) {
-                        return {
-                          looper: v1.looper,
-                          kind: v1.kind,
-                          bars: v1.bars,
-                          armed: v1.armed,
-                          name: v1.name,
-                          log: v1.log,
-                          peaks: v1.peaks,
-                          regions: v1.regions,
-                          keep: v1.keep,
-                          busy: v1.busy,
-                          hoverPlays: v1.hoverPlays,
-                          playing: v1.playing,
-                          showing: v1.showing,
-                          waiting: v1.waiting,
-                          minGap: v1.minGap,
-                          divider: v1.divider,
-                          mine: v1.mine,
-                          kitMine: v1.kitMine,
-                          layerMode: v1.layerMode,
-                          equalN: v1.equalN,
-                          cardView: v1.cardView,
-                          bank: v1.bank,
-                          kit: v1.kit,
-                          voice: v1.voice,
-                          sweep: v1.sweep,
-                          sweepOpen: v1.sweepOpen,
-                          sweepAt: v1.sweepAt,
-                          sweepFork: v1.sweepFork,
-                          midiPorts: v1.midiPorts,
-                          sweepEdit: v1.sweepEdit,
-                          swept: v1.swept,
-                          schedule: v1.schedule,
-                          sets: v1.sets,
-                          overran: v1.overran,
-                          page: v1.page,
-                          fill: v1.fill,
-                          cardBusy: false
-                        };
-                      })($532));
-                    };
-                  })());
-                }
-                ;
-                throw new Error("Failed pattern match at Quadrat.Main (line 399, column 5 - line 401, column 81): " + [r.constructor.name]);
-              })())(function() {
-                return handleAction(dictMonadAff)(RefreshCard.value);
-              });
-            });
-          });
-        });
-      }
-      ;
-      if (v instanceof RunAgain) {
-        return bind7(liftAff2(attempt(toAffE(loadSpec(v.value0)))))(function(r) {
-          if (r instanceof Left) {
-            return modify_3(note("could not read " + (v.value0 + (": " + message(r.value0)))));
-          }
-          ;
-          if (r instanceof Right) {
-            if (!r.value0.ok) {
-              return modify_3(note(r.value0.output));
-            }
-            ;
-            if (otherwise) {
-              return discard12(modify_3(function(st) {
-                var $392 = {};
-                for (var $393 in st) {
-                  if ({}.hasOwnProperty.call(st, $393)) {
-                    $392[$393] = st[$393];
-                  }
-                  ;
-                }
-                ;
-                $392.sweep = adopt(emptyPlan)(r.value0.spec);
-                return $392;
-              }))(function() {
-                return bind7(get2)(function(st) {
-                  return discard12(liftEffect12(remember(st.sweep)))(function() {
-                    return discard12(modify_3(note("loaded the spec from " + (v.value0 + " \u2014 change the extent and run it again"))))(function() {
-                      return handleAction(dictMonadAff)(new OpenSweep(true));
-                    });
-                  });
-                });
-              });
-            }
-            ;
-          }
-          ;
-          throw new Error("Failed pattern match at Quadrat.Main (line 412, column 5 - line 422, column 42): " + [r.constructor.name]);
-        });
-      }
-      ;
-      if (v instanceof SetBank) {
-        return modify_3(function(v2) {
-          var $397 = {};
-          for (var $398 in v2) {
-            if ({}.hasOwnProperty.call(v2, $398)) {
-              $397[$398] = v2[$398];
-            }
-            ;
-          }
-          ;
-          $397.bank = v.value0;
-          return $397;
-        });
-      }
-      ;
-      if (v instanceof SetKit) {
-        return modify_3(function(v2) {
-          var $401 = {};
-          for (var $402 in v2) {
-            if ({}.hasOwnProperty.call(v2, $402)) {
-              $401[$402] = v2[$402];
-            }
-            ;
-          }
-          ;
-          $401.kit = v.value0;
-          $401.kitMine = v.value0 !== "";
-          return $401;
-        });
-      }
-      ;
-      if (v instanceof SetVoice) {
-        return modify_3(function(s) {
-          var $405 = {};
-          for (var $406 in s) {
-            if ({}.hasOwnProperty.call(s, $406)) {
-              $405[$406] = s[$406];
-            }
-            ;
-          }
-          ;
-          $405.voice = clamp12(1)(4)(fromMaybe(s.voice)(fromString2(v.value0)));
-          return $405;
-        });
-      }
-      ;
-      if (v instanceof WriteCard) {
-        return discard12(modify_3(function(v1) {
-          var $409 = {};
-          for (var $410 in v1) {
-            if ({}.hasOwnProperty.call(v1, $410)) {
-              $409[$410] = v1[$410];
-            }
-            ;
-          }
-          ;
-          $409.cardBusy = true;
-          return $409;
-        }))(function() {
-          return bind7(liftAff2(attempt(toAffE(writeToCard(v.value0)))))(function(r) {
-            return discard12((function() {
-              if (r instanceof Left) {
-                return modify_3((function() {
-                  var $533 = note(message(r.value0));
-                  return function($534) {
-                    return $533((function(v1) {
-                      return {
-                        looper: v1.looper,
-                        kind: v1.kind,
-                        bars: v1.bars,
-                        armed: v1.armed,
-                        name: v1.name,
-                        log: v1.log,
-                        peaks: v1.peaks,
-                        regions: v1.regions,
-                        keep: v1.keep,
-                        busy: v1.busy,
-                        hoverPlays: v1.hoverPlays,
-                        playing: v1.playing,
-                        showing: v1.showing,
-                        waiting: v1.waiting,
-                        minGap: v1.minGap,
-                        divider: v1.divider,
-                        mine: v1.mine,
-                        kitMine: v1.kitMine,
-                        layerMode: v1.layerMode,
-                        equalN: v1.equalN,
-                        cardView: v1.cardView,
-                        bank: v1.bank,
-                        kit: v1.kit,
-                        voice: v1.voice,
-                        sweep: v1.sweep,
-                        sweepOpen: v1.sweepOpen,
-                        sweepAt: v1.sweepAt,
-                        sweepFork: v1.sweepFork,
-                        midiPorts: v1.midiPorts,
-                        sweepEdit: v1.sweepEdit,
-                        swept: v1.swept,
-                        schedule: v1.schedule,
-                        sets: v1.sets,
-                        overran: v1.overran,
-                        page: v1.page,
-                        fill: v1.fill,
-                        cardBusy: false
-                      };
-                    })($534));
-                  };
-                })());
-              }
-              ;
-              if (r instanceof Right) {
-                return modify_3((function() {
-                  var $535 = note(lastLine(r.value0.output));
-                  return function($536) {
-                    return $535((function(v1) {
-                      return {
-                        looper: v1.looper,
-                        kind: v1.kind,
-                        bars: v1.bars,
-                        armed: v1.armed,
-                        name: v1.name,
-                        log: v1.log,
-                        peaks: v1.peaks,
-                        regions: v1.regions,
-                        keep: v1.keep,
-                        busy: v1.busy,
-                        hoverPlays: v1.hoverPlays,
-                        playing: v1.playing,
-                        showing: v1.showing,
-                        waiting: v1.waiting,
-                        minGap: v1.minGap,
-                        divider: v1.divider,
-                        mine: v1.mine,
-                        kitMine: v1.kitMine,
-                        layerMode: v1.layerMode,
-                        equalN: v1.equalN,
-                        cardView: v1.cardView,
-                        bank: v1.bank,
-                        kit: v1.kit,
-                        voice: v1.voice,
-                        sweep: v1.sweep,
-                        sweepOpen: v1.sweepOpen,
-                        sweepAt: v1.sweepAt,
-                        sweepFork: v1.sweepFork,
-                        midiPorts: v1.midiPorts,
-                        sweepEdit: v1.sweepEdit,
-                        swept: v1.swept,
-                        schedule: v1.schedule,
-                        sets: v1.sets,
-                        overran: v1.overran,
-                        page: v1.page,
-                        fill: v1.fill,
-                        cardBusy: false
-                      };
-                    })($536));
-                  };
-                })());
-              }
-              ;
-              throw new Error("Failed pattern match at Quadrat.Main (line 429, column 5 - line 431, column 81): " + [r.constructor.name]);
-            })())(function() {
-              return handleAction(dictMonadAff)(RefreshCard.value);
-            });
-          });
-        });
-      }
-      ;
-      if (v instanceof SetLayerMode) {
-        return modify_3(function(v1) {
-          var $416 = {};
-          for (var $417 in v1) {
-            if ({}.hasOwnProperty.call(v1, $417)) {
-              $416[$417] = v1[$417];
-            }
-            ;
-          }
-          ;
-          $416.layerMode = v.value0;
-          return $416;
-        });
-      }
-      ;
-      if (v instanceof SendToCard) {
-        return bind7(get2)(function(st) {
-          var runSteps = (function() {
-            var $420 = $$null2(st.schedule);
-            if ($420) {
-              return [];
-            }
-            ;
-            return steps(st.sweep);
-          })();
-          var keptRegions = catMaybes2(mapWithIndex2(function(i2) {
-            return function(r) {
-              var $421 = member3(i2)(st.keep);
-              if ($421) {
-                return new Just(r);
-              }
-              ;
-              return Nothing.value;
-            };
-          })(st.regions));
-          var kept = catMaybes2(mapWithIndex2(function(i2) {
-            return function(r) {
-              var $422 = !member3(i2)(st.keep);
-              if ($422) {
-                return Nothing.value;
-              }
-              ;
-              return new Just({
-                cell: maybe([])(function(v1) {
-                  return v1.cell;
-                })(index2(runSteps)(i2)),
-                start: r.start,
-                end: r.end,
-                peak: r.peak,
-                rms: r.rms,
-                zcr: r.zcr,
-                tilt: r.tilt,
-                means: maybe([])(function(v1) {
-                  return v1.means;
-                })(index2(runSteps)(i2))
-              });
-            };
-          })(st.regions));
-          var $423 = $$null2(keptRegions);
-          if ($423) {
-            return modify_3(note("nothing kept, so there is nothing to send"));
-          }
-          ;
-          return discard12(modify_3(function(v1) {
-            var $424 = {};
-            for (var $425 in v1) {
-              if ({}.hasOwnProperty.call(v1, $425)) {
-                $424[$425] = v1[$425];
-              }
-              ;
-            }
-            ;
-            $424.cardBusy = true;
-            return $424;
-          }))(function() {
-            var setName14 = (function() {
-              var $427 = st.name === "";
-              if ($427) {
-                return "set";
-              }
-              ;
-              return st.name;
-            })();
-            return bind7(liftAff2(attempt(toAffE(addToCard({
-              take: st.showing,
-              set: setName14,
-              bank: st.bank,
-              kit: (function() {
-                var $428 = st.kit === "";
-                if ($428) {
-                  return setName14;
-                }
-                ;
-                return st.kit;
-              })(),
-              voice: st.voice,
-              kind: name15(st.kind),
-              stereo: notEq1(foldsTo(st.kind))(ToMono.value),
-              join: joins(st.kind) || isEqual(st.divider),
-              append: v.value0.append,
-              place: v.value0.place,
-              layerMode: st.layerMode,
-              regions: keptRegions,
-              spec: (function() {
-                var $429 = $$null2(st.schedule);
-                if ($429) {
-                  return nullImpl;
-                }
-                ;
-                return notNull(flatten(st.sweep));
-              })(),
-              schedule: st.schedule,
-              samples: kept
-            })))))(function(r) {
-              return discard12((function() {
-                if (r instanceof Left) {
-                  return modify_3((function() {
-                    var $537 = note(message(r.value0));
+                    var $537 = note(lastLine(r.value0.output));
                     return function($538) {
                       return $537((function(v1) {
                         return {
@@ -14915,6 +14550,386 @@
                   })());
                 }
                 ;
+                throw new Error("Failed pattern match at Quadrat.Main (line 399, column 5 - line 401, column 81): " + [r.constructor.name]);
+              })())(function() {
+                return handleAction(dictMonadAff)(RefreshCard.value);
+              });
+            });
+          });
+        });
+      }
+      ;
+      if (v instanceof RunAgain) {
+        return bind7(liftAff2(attempt(toAffE(loadSpec(v.value0)))))(function(r) {
+          if (r instanceof Left) {
+            return modify_3(note("could not read " + (v.value0 + (": " + message(r.value0)))));
+          }
+          ;
+          if (r instanceof Right) {
+            if (!r.value0.ok) {
+              return modify_3(note(r.value0.output));
+            }
+            ;
+            if (otherwise) {
+              return discard12(modify_3(function(st) {
+                var $398 = {};
+                for (var $399 in st) {
+                  if ({}.hasOwnProperty.call(st, $399)) {
+                    $398[$399] = st[$399];
+                  }
+                  ;
+                }
+                ;
+                $398.sweep = adopt(emptyPlan)(r.value0.spec);
+                return $398;
+              }))(function() {
+                return bind7(get2)(function(st) {
+                  return discard12(liftEffect12(remember(st.sweep)))(function() {
+                    return discard12(modify_3(note("loaded the spec from " + (v.value0 + " \u2014 change the extent and run it again"))))(function() {
+                      return handleAction(dictMonadAff)(new OpenSweep(true));
+                    });
+                  });
+                });
+              });
+            }
+            ;
+          }
+          ;
+          throw new Error("Failed pattern match at Quadrat.Main (line 412, column 5 - line 422, column 42): " + [r.constructor.name]);
+        });
+      }
+      ;
+      if (v instanceof SetBank) {
+        return modify_3(function(v2) {
+          var $403 = {};
+          for (var $404 in v2) {
+            if ({}.hasOwnProperty.call(v2, $404)) {
+              $403[$404] = v2[$404];
+            }
+            ;
+          }
+          ;
+          $403.bank = v.value0;
+          return $403;
+        });
+      }
+      ;
+      if (v instanceof SetKit) {
+        return modify_3(function(v2) {
+          var $407 = {};
+          for (var $408 in v2) {
+            if ({}.hasOwnProperty.call(v2, $408)) {
+              $407[$408] = v2[$408];
+            }
+            ;
+          }
+          ;
+          $407.kit = v.value0;
+          $407.kitMine = v.value0 !== "";
+          return $407;
+        });
+      }
+      ;
+      if (v instanceof SetVoice) {
+        return modify_3(function(s) {
+          var $411 = {};
+          for (var $412 in s) {
+            if ({}.hasOwnProperty.call(s, $412)) {
+              $411[$412] = s[$412];
+            }
+            ;
+          }
+          ;
+          $411.voice = clamp12(1)(4)(fromMaybe(s.voice)(fromString2(v.value0)));
+          return $411;
+        });
+      }
+      ;
+      if (v instanceof WriteCard) {
+        return discard12(modify_3(function(v1) {
+          var $415 = {};
+          for (var $416 in v1) {
+            if ({}.hasOwnProperty.call(v1, $416)) {
+              $415[$416] = v1[$416];
+            }
+            ;
+          }
+          ;
+          $415.cardBusy = true;
+          return $415;
+        }))(function() {
+          return bind7(liftAff2(attempt(toAffE(writeToCard(v.value0)))))(function(r) {
+            return discard12((function() {
+              if (r instanceof Left) {
+                return modify_3((function() {
+                  var $539 = note(message(r.value0));
+                  return function($540) {
+                    return $539((function(v1) {
+                      return {
+                        looper: v1.looper,
+                        kind: v1.kind,
+                        bars: v1.bars,
+                        armed: v1.armed,
+                        name: v1.name,
+                        log: v1.log,
+                        peaks: v1.peaks,
+                        regions: v1.regions,
+                        keep: v1.keep,
+                        busy: v1.busy,
+                        hoverPlays: v1.hoverPlays,
+                        playing: v1.playing,
+                        showing: v1.showing,
+                        waiting: v1.waiting,
+                        minGap: v1.minGap,
+                        divider: v1.divider,
+                        mine: v1.mine,
+                        kitMine: v1.kitMine,
+                        layerMode: v1.layerMode,
+                        equalN: v1.equalN,
+                        cardView: v1.cardView,
+                        bank: v1.bank,
+                        kit: v1.kit,
+                        voice: v1.voice,
+                        sweep: v1.sweep,
+                        sweepOpen: v1.sweepOpen,
+                        sweepAt: v1.sweepAt,
+                        sweepFork: v1.sweepFork,
+                        midiPorts: v1.midiPorts,
+                        sweepEdit: v1.sweepEdit,
+                        swept: v1.swept,
+                        schedule: v1.schedule,
+                        sets: v1.sets,
+                        overran: v1.overran,
+                        page: v1.page,
+                        fill: v1.fill,
+                        cardBusy: false
+                      };
+                    })($540));
+                  };
+                })());
+              }
+              ;
+              if (r instanceof Right) {
+                return modify_3((function() {
+                  var $541 = note(lastLine(r.value0.output));
+                  return function($542) {
+                    return $541((function(v1) {
+                      return {
+                        looper: v1.looper,
+                        kind: v1.kind,
+                        bars: v1.bars,
+                        armed: v1.armed,
+                        name: v1.name,
+                        log: v1.log,
+                        peaks: v1.peaks,
+                        regions: v1.regions,
+                        keep: v1.keep,
+                        busy: v1.busy,
+                        hoverPlays: v1.hoverPlays,
+                        playing: v1.playing,
+                        showing: v1.showing,
+                        waiting: v1.waiting,
+                        minGap: v1.minGap,
+                        divider: v1.divider,
+                        mine: v1.mine,
+                        kitMine: v1.kitMine,
+                        layerMode: v1.layerMode,
+                        equalN: v1.equalN,
+                        cardView: v1.cardView,
+                        bank: v1.bank,
+                        kit: v1.kit,
+                        voice: v1.voice,
+                        sweep: v1.sweep,
+                        sweepOpen: v1.sweepOpen,
+                        sweepAt: v1.sweepAt,
+                        sweepFork: v1.sweepFork,
+                        midiPorts: v1.midiPorts,
+                        sweepEdit: v1.sweepEdit,
+                        swept: v1.swept,
+                        schedule: v1.schedule,
+                        sets: v1.sets,
+                        overran: v1.overran,
+                        page: v1.page,
+                        fill: v1.fill,
+                        cardBusy: false
+                      };
+                    })($542));
+                  };
+                })());
+              }
+              ;
+              throw new Error("Failed pattern match at Quadrat.Main (line 429, column 5 - line 431, column 81): " + [r.constructor.name]);
+            })())(function() {
+              return handleAction(dictMonadAff)(RefreshCard.value);
+            });
+          });
+        });
+      }
+      ;
+      if (v instanceof SetLayerMode) {
+        return modify_3(function(v1) {
+          var $422 = {};
+          for (var $423 in v1) {
+            if ({}.hasOwnProperty.call(v1, $423)) {
+              $422[$423] = v1[$423];
+            }
+            ;
+          }
+          ;
+          $422.layerMode = v.value0;
+          return $422;
+        });
+      }
+      ;
+      if (v instanceof SendToCard) {
+        return bind7(get2)(function(st) {
+          var runSteps = (function() {
+            var $426 = $$null2(st.schedule);
+            if ($426) {
+              return [];
+            }
+            ;
+            return steps(st.sweep);
+          })();
+          var keptRegions = catMaybes2(mapWithIndex2(function(i2) {
+            return function(r) {
+              var $427 = member3(i2)(st.keep);
+              if ($427) {
+                return new Just(r);
+              }
+              ;
+              return Nothing.value;
+            };
+          })(st.regions));
+          var kept = catMaybes2(mapWithIndex2(function(i2) {
+            return function(r) {
+              var $428 = !member3(i2)(st.keep);
+              if ($428) {
+                return Nothing.value;
+              }
+              ;
+              return new Just({
+                cell: maybe([])(function(v1) {
+                  return v1.cell;
+                })(index2(runSteps)(i2)),
+                start: r.start,
+                end: r.end,
+                peak: r.peak,
+                rms: r.rms,
+                zcr: r.zcr,
+                tilt: r.tilt,
+                means: maybe([])(function(v1) {
+                  return v1.means;
+                })(index2(runSteps)(i2))
+              });
+            };
+          })(st.regions));
+          var $429 = $$null2(keptRegions);
+          if ($429) {
+            return modify_3(note("nothing kept, so there is nothing to send"));
+          }
+          ;
+          return discard12(modify_3(function(v1) {
+            var $430 = {};
+            for (var $431 in v1) {
+              if ({}.hasOwnProperty.call(v1, $431)) {
+                $430[$431] = v1[$431];
+              }
+              ;
+            }
+            ;
+            $430.cardBusy = true;
+            return $430;
+          }))(function() {
+            var setName14 = (function() {
+              var $433 = st.name === "";
+              if ($433) {
+                return "set";
+              }
+              ;
+              return st.name;
+            })();
+            return bind7(liftAff2(attempt(toAffE(addToCard({
+              take: st.showing,
+              set: setName14,
+              bank: st.bank,
+              kit: (function() {
+                var $434 = st.kit === "";
+                if ($434) {
+                  return setName14;
+                }
+                ;
+                return st.kit;
+              })(),
+              voice: st.voice,
+              kind: name15(st.kind),
+              stereo: notEq1(foldsTo(st.kind))(ToMono.value),
+              join: joins(st.kind) || isEqual(st.divider),
+              append: v.value0.append,
+              place: v.value0.place,
+              layerMode: st.layerMode,
+              regions: keptRegions,
+              spec: (function() {
+                var $435 = $$null2(st.schedule);
+                if ($435) {
+                  return nullImpl;
+                }
+                ;
+                return notNull(flatten(st.sweep));
+              })(),
+              schedule: st.schedule,
+              samples: kept
+            })))))(function(r) {
+              return discard12((function() {
+                if (r instanceof Left) {
+                  return modify_3((function() {
+                    var $543 = note(message(r.value0));
+                    return function($544) {
+                      return $543((function(v1) {
+                        return {
+                          looper: v1.looper,
+                          kind: v1.kind,
+                          bars: v1.bars,
+                          armed: v1.armed,
+                          name: v1.name,
+                          log: v1.log,
+                          peaks: v1.peaks,
+                          regions: v1.regions,
+                          keep: v1.keep,
+                          busy: v1.busy,
+                          hoverPlays: v1.hoverPlays,
+                          playing: v1.playing,
+                          showing: v1.showing,
+                          waiting: v1.waiting,
+                          minGap: v1.minGap,
+                          divider: v1.divider,
+                          mine: v1.mine,
+                          kitMine: v1.kitMine,
+                          layerMode: v1.layerMode,
+                          equalN: v1.equalN,
+                          cardView: v1.cardView,
+                          bank: v1.bank,
+                          kit: v1.kit,
+                          voice: v1.voice,
+                          sweep: v1.sweep,
+                          sweepOpen: v1.sweepOpen,
+                          sweepAt: v1.sweepAt,
+                          sweepFork: v1.sweepFork,
+                          midiPorts: v1.midiPorts,
+                          sweepEdit: v1.sweepEdit,
+                          swept: v1.swept,
+                          schedule: v1.schedule,
+                          sets: v1.sets,
+                          overran: v1.overran,
+                          page: v1.page,
+                          fill: v1.fill,
+                          cardBusy: false
+                        };
+                      })($544));
+                    };
+                  })());
+                }
+                ;
                 if (r instanceof Right) {
                   return modify_3(function(s) {
                     var v1 = note(lastLine(r.value0.output))(s);
@@ -14955,8 +14970,8 @@
                       waiting: v1.waiting,
                       cardBusy: false,
                       kit: (function() {
-                        var $432 = s.kit === "";
-                        if ($432) {
+                        var $438 = s.kit === "";
+                        if ($438) {
                           return setName14;
                         }
                         ;
@@ -14986,16 +15001,16 @@
       ;
       if (v instanceof SetGap) {
         return discard12(modify_3(function(s) {
-          var $437 = {};
-          for (var $438 in s) {
-            if ({}.hasOwnProperty.call(s, $438)) {
-              $437[$438] = s[$438];
+          var $443 = {};
+          for (var $444 in s) {
+            if ({}.hasOwnProperty.call(s, $444)) {
+              $443[$444] = s[$444];
             }
             ;
           }
           ;
-          $437.minGap = fromMaybe(s.minGap)(fromString(v.value0));
-          return $437;
+          $443.minGap = fromMaybe(s.minGap)(fromString(v.value0));
+          return $443;
         }))(function() {
           return bind7(get2)(function(st) {
             return when5(st.showing !== "")(analyse1(false));
@@ -15005,16 +15020,16 @@
       ;
       if (v instanceof SetLead2) {
         return discard12(modify_3(function(s) {
-          var $441 = {};
-          for (var $442 in s) {
-            if ({}.hasOwnProperty.call(s, $442)) {
-              $441[$442] = s[$442];
+          var $447 = {};
+          for (var $448 in s) {
+            if ({}.hasOwnProperty.call(s, $448)) {
+              $447[$448] = s[$448];
             }
             ;
           }
           ;
-          $441.sweep = update(new SetLead(v.value0))(s.sweep);
-          return $441;
+          $447.sweep = update(new SetLead(v.value0))(s.sweep);
+          return $447;
         }))(function() {
           return bind7(get2)(function(st) {
             return discard12(liftEffect12(remember(st.sweep)))(function() {
@@ -15026,16 +15041,16 @@
       ;
       if (v instanceof PickDivider) {
         return discard12(modify_3(function(v1) {
-          var $445 = {};
-          for (var $446 in v1) {
-            if ({}.hasOwnProperty.call(v1, $446)) {
-              $445[$446] = v1[$446];
+          var $451 = {};
+          for (var $452 in v1) {
+            if ({}.hasOwnProperty.call(v1, $452)) {
+              $451[$452] = v1[$452];
             }
             ;
           }
           ;
-          $445.divider = v.value0;
-          return $445;
+          $451.divider = v.value0;
+          return $451;
         }))(function() {
           return bind7(get2)(function(st) {
             return when5(st.showing !== "")(analyse1(false));
@@ -15046,23 +15061,23 @@
       if (v instanceof SetEqualN) {
         return discard12(modify_3(function(s) {
           var n = clamp12(2)(128)(fromMaybe(s.equalN)(fromString2(v.value0)));
-          var $451 = {};
-          for (var $452 in s) {
-            if ({}.hasOwnProperty.call(s, $452)) {
-              $451[$452] = s[$452];
+          var $457 = {};
+          for (var $458 in s) {
+            if ({}.hasOwnProperty.call(s, $458)) {
+              $457[$458] = s[$458];
             }
             ;
           }
           ;
-          $451.equalN = n;
-          $451.divider = (function() {
+          $457.equalN = n;
+          $457.divider = (function() {
             if (s.divider instanceof Equal) {
               return new Equal(n);
             }
             ;
             return s.divider;
           })();
-          return $451;
+          return $457;
         }))(function() {
           return bind7(get2)(function(st) {
             return when5(st.showing !== "" && needsCount(st.divider))(analyse1(false));
@@ -15073,16 +15088,16 @@
       if (v instanceof SetHoverPlays) {
         return discard12(unless2(v.value0)(liftEffect12(stop)))(function() {
           return modify_3(function(v1) {
-            var $455 = {};
-            for (var $456 in v1) {
-              if ({}.hasOwnProperty.call(v1, $456)) {
-                $455[$456] = v1[$456];
+            var $461 = {};
+            for (var $462 in v1) {
+              if ({}.hasOwnProperty.call(v1, $462)) {
+                $461[$462] = v1[$462];
               }
               ;
             }
             ;
-            $455.hoverPlays = v.value0;
-            return $455;
+            $461.hoverPlays = v.value0;
+            return $461;
           });
         });
       }
@@ -15098,16 +15113,16 @@
           return for_32(index2(st.regions)(v.value0))(function(r) {
             return discard12(liftEffect12(playRange("/api/take-audio?take=" + st.showing)(r.start)(r.end)))(function() {
               return modify_3(function(v1) {
-                var $460 = {};
-                for (var $461 in v1) {
-                  if ({}.hasOwnProperty.call(v1, $461)) {
-                    $460[$461] = v1[$461];
+                var $466 = {};
+                for (var $467 in v1) {
+                  if ({}.hasOwnProperty.call(v1, $467)) {
+                    $466[$467] = v1[$467];
                   }
                   ;
                 }
                 ;
-                $460.playing = new Just(v.value0);
-                return $460;
+                $466.playing = new Just(v.value0);
+                return $466;
               });
             });
           });
@@ -15116,44 +15131,44 @@
       ;
       if (v instanceof ToggleKeep) {
         return modify_3(function(s) {
-          var $465 = {};
-          for (var $466 in s) {
-            if ({}.hasOwnProperty.call(s, $466)) {
-              $465[$466] = s[$466];
+          var $471 = {};
+          for (var $472 in s) {
+            if ({}.hasOwnProperty.call(s, $472)) {
+              $471[$472] = s[$472];
             }
             ;
           }
           ;
-          $465.keep = (function() {
-            var $464 = member3(v.value0)(s.keep);
-            if ($464) {
+          $471.keep = (function() {
+            var $470 = member3(v.value0)(s.keep);
+            if ($470) {
               return $$delete4(v.value0)(s.keep);
             }
             ;
             return insert5(v.value0)(s.keep);
           })();
-          return $465;
+          return $471;
         });
       }
       ;
       if (v instanceof KeepAll) {
         return modify_3(function(s) {
-          var $470 = {};
-          for (var $471 in s) {
-            if ({}.hasOwnProperty.call(s, $471)) {
-              $470[$471] = s[$471];
+          var $476 = {};
+          for (var $477 in s) {
+            if ({}.hasOwnProperty.call(s, $477)) {
+              $476[$477] = s[$477];
             }
             ;
           }
           ;
-          $470.keep = (function() {
+          $476.keep = (function() {
             if (v.value0) {
               return fromFoldable4(range2(0)(length3(s.regions) - 1 | 0));
             }
             ;
             return empty3;
           })();
-          return $470;
+          return $476;
         });
       }
       ;
@@ -15163,31 +15178,31 @@
       ;
       if (v instanceof GoTo) {
         return modify_3(function(v1) {
-          var $475 = {};
-          for (var $476 in v1) {
-            if ({}.hasOwnProperty.call(v1, $476)) {
-              $475[$476] = v1[$476];
+          var $481 = {};
+          for (var $482 in v1) {
+            if ({}.hasOwnProperty.call(v1, $482)) {
+              $481[$482] = v1[$482];
             }
             ;
           }
           ;
-          $475.page = v.value0;
-          return $475;
+          $481.page = v.value0;
+          return $481;
         });
       }
       ;
       if (v instanceof FillBy) {
         return discard12(modify_3(function(v1) {
-          var $479 = {};
-          for (var $480 in v1) {
-            if ({}.hasOwnProperty.call(v1, $480)) {
-              $479[$480] = v1[$480];
+          var $485 = {};
+          for (var $486 in v1) {
+            if ({}.hasOwnProperty.call(v1, $486)) {
+              $485[$486] = v1[$486];
             }
             ;
           }
           ;
-          $479.fill = v.value0;
-          return $479;
+          $485.fill = v.value0;
+          return $485;
         }))(function() {
           return handleAction(dictMonadAff)(new OpenSweep(eq7(v.value0)(Swept.value)));
         });
@@ -15195,16 +15210,16 @@
       ;
       if (v instanceof OpenSweep) {
         return discard12(modify_3(function(v1) {
-          var $483 = {};
-          for (var $484 in v1) {
-            if ({}.hasOwnProperty.call(v1, $484)) {
-              $483[$484] = v1[$484];
+          var $489 = {};
+          for (var $490 in v1) {
+            if ({}.hasOwnProperty.call(v1, $490)) {
+              $489[$490] = v1[$490];
             }
             ;
           }
           ;
-          $483.sweepOpen = v.value0;
-          return $483;
+          $489.sweepOpen = v.value0;
+          return $489;
         }))(function() {
           return when5(v.value0)(bind7(liftAff2(attempt(toAffE(openMidi))))(function(r) {
             if (r instanceof Left) {
@@ -15213,16 +15228,16 @@
             ;
             if (r instanceof Right) {
               return discard12(modify_3(function(v1) {
-                var $488 = {};
-                for (var $489 in v1) {
-                  if ({}.hasOwnProperty.call(v1, $489)) {
-                    $488[$489] = v1[$489];
+                var $494 = {};
+                for (var $495 in v1) {
+                  if ({}.hasOwnProperty.call(v1, $495)) {
+                    $494[$495] = v1[$495];
                   }
                   ;
                 }
                 ;
-                $488.midiPorts = r.value0;
-                return $488;
+                $494.midiPorts = r.value0;
+                return $494;
               }))(function() {
                 return when5($$null2(r.value0))(modify_3(note("no MIDI ports yet \u2014 allow MIDI if Chrome asks; CV is unaffected")));
               });
@@ -15235,31 +15250,31 @@
       ;
       if (v instanceof OpenParam) {
         return modify_3(function(v1) {
-          var $493 = {};
-          for (var $494 in v1) {
-            if ({}.hasOwnProperty.call(v1, $494)) {
-              $493[$494] = v1[$494];
+          var $499 = {};
+          for (var $500 in v1) {
+            if ({}.hasOwnProperty.call(v1, $500)) {
+              $499[$500] = v1[$500];
             }
             ;
           }
           ;
-          $493.sweepEdit = v.value0;
-          return $493;
+          $499.sweepEdit = v.value0;
+          return $499;
         });
       }
       ;
       if (v instanceof SweepMsg) {
         return discard12(modify_3(function(s) {
-          var $497 = {};
-          for (var $498 in s) {
-            if ({}.hasOwnProperty.call(s, $498)) {
-              $497[$498] = s[$498];
+          var $503 = {};
+          for (var $504 in s) {
+            if ({}.hasOwnProperty.call(s, $504)) {
+              $503[$504] = s[$504];
             }
             ;
           }
           ;
-          $497.sweep = update(v.value0)(s.sweep);
-          return $497;
+          $503.sweep = update(v.value0)(s.sweep);
+          return $503;
         }))(function() {
           return bind7(get2)(function(st) {
             return liftEffect12(remember(st.sweep));
@@ -15276,31 +15291,31 @@
           if (st.sweepFork instanceof Nothing) {
             return discard12(captureOn1(false)(v.value0))(function() {
               return discard12(modify_3(function(v1) {
-                var $503 = {};
-                for (var $504 in v1) {
-                  if ({}.hasOwnProperty.call(v1, $504)) {
-                    $503[$504] = v1[$504];
+                var $509 = {};
+                for (var $510 in v1) {
+                  if ({}.hasOwnProperty.call(v1, $510)) {
+                    $509[$510] = v1[$510];
                   }
                   ;
                 }
                 ;
-                $503.swept = false;
-                $503.sweepAt = Nothing.value;
-                $503.schedule = [];
-                return $503;
+                $509.swept = false;
+                $509.sweepAt = Nothing.value;
+                $509.schedule = [];
+                return $509;
               }))(function() {
                 return bind7(fork(runSweep(dictMonadAff)))(function(fid) {
                   return modify_3(function(v1) {
-                    var $506 = {};
-                    for (var $507 in v1) {
-                      if ({}.hasOwnProperty.call(v1, $507)) {
-                        $506[$507] = v1[$507];
+                    var $512 = {};
+                    for (var $513 in v1) {
+                      if ({}.hasOwnProperty.call(v1, $513)) {
+                        $512[$513] = v1[$513];
                       }
                       ;
                     }
                     ;
-                    $506.sweepFork = new Just(fid);
-                    return $506;
+                    $512.sweepFork = new Just(fid);
+                    return $512;
                   });
                 });
               });
@@ -15316,9 +15331,9 @@
           return discard12(for_32(st.sweepFork)(kill))(function() {
             return discard12(restCv1)(function() {
               return discard12(modify_3((function() {
-                var $539 = note("sweep stopped");
-                return function($540) {
-                  return $539((function(v1) {
+                var $545 = note("sweep stopped");
+                return function($546) {
+                  return $545((function(v1) {
                     return {
                       looper: v1.looper,
                       kind: v1.kind,
@@ -15358,7 +15373,7 @@
                       sweepFork: Nothing.value,
                       sweepAt: Nothing.value
                     };
-                  })($540));
+                  })($546));
                 };
               })()))(function() {
                 return handleAction(dictMonadAff)(Close.value);
@@ -15380,17 +15395,17 @@
             return modify_3(note("nothing is recording"));
           }))(function() {
             return modify_3(function(s) {
-              var $511 = {};
-              for (var $512 in s) {
-                if ({}.hasOwnProperty.call(s, $512)) {
-                  $511[$512] = s[$512];
+              var $517 = {};
+              for (var $518 in s) {
+                if ({}.hasOwnProperty.call(s, $518)) {
+                  $517[$518] = s[$518];
                 }
                 ;
               }
               ;
-              $511.armed = false;
-              $511.waiting = true;
-              return $511;
+              $517.armed = false;
+              $517.waiting = true;
+              return $517;
             });
           });
         });

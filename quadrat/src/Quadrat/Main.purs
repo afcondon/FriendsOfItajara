@@ -1060,6 +1060,28 @@ render st =
               ]
       )
 
+  -- | **A grid of two axes is drawn as those axes.**
+  -- |
+  -- | The inner axis varies fastest — see `Encoding.cells` — so it is the one
+  -- | that makes a row. Given as a custom property rather than a class,
+  -- | because the count is data (2…128) and a class per count would be a
+  -- | stylesheet that had to know the encodings.
+  -- |
+  -- | Empty for one axis, where `auto-fill` is right: a line of N has no shape
+  -- | to respect and should use whatever width there is.
+  shaped =
+    case st.sweep.extent of
+      [ _, inner ] | inner > 1 ->
+        [ HP.class_ (HH.ClassName "q-grid is-shaped")
+        , HP.style ("--cols: repeat(" <> show inner <> ", minmax(0, 1fr))")
+        ]
+      _ -> [ HP.class_ (HH.ClassName "q-grid") ]
+
+  -- The same, for the cells drawn before there is anything to draw.
+  shapedPlan = case shaped of
+    [ _, sty ] -> [ HP.class_ (HH.ClassName "q-grid is-planned is-shaped"), sty ]
+    _ -> [ HP.class_ (HH.ClassName "q-grid is-planned") ]
+
   connection = case st.looper of
     Nothing -> HH.span [ HP.class_ (HH.ClassName "q-warn") ] [ HH.text "no daemon" ]
     Just _ -> HH.span [ HP.class_ (HH.ClassName "q-ok") ] [ HH.text "daemon" ]
@@ -1324,7 +1346,7 @@ render st =
                     <> (if running then " — position " <> show (at + 1)
                         else " to record")) ]
             ]
-        , HH.div [ HP.class_ (HH.ClassName "q-grid is-planned") ]
+        , HH.div shapedPlan
             (Array.mapWithIndex
               (\i c ->
                 HH.div
@@ -1407,7 +1429,7 @@ render st =
                   ]
               ]
           , dividerRow
-          , HH.div [ HP.class_ (HH.ClassName "q-grid") ]
+          , HH.div shaped
               (Array.mapWithIndex tile st.regions)
           , sendRow
           ]
