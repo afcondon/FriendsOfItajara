@@ -124,7 +124,11 @@ type Meant =
   , rms :: Number
   , zcr :: Number
   , tilt :: Number
-  , means :: Array { name :: String, at :: Number, level :: Number, cc :: Int }
+  -- `note` is the MIDI note a pitch parameter landed on, `-1` otherwise. It
+  -- rides with the measurements rather than being derivable from `level`,
+  -- because deriving it needs the calibration table and a stored set has to be
+  -- readable without one.
+  , means :: Array { name :: String, at :: Number, level :: Number, cc :: Int, note :: Int }
   }
 
 -- | Cut the kept regions into a named set and put that set on a voice — and

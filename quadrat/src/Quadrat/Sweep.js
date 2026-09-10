@@ -38,7 +38,18 @@ export const adoptPlain = (dflt) => (stored) => {
   if (!stored || typeof stored !== "object") return dflt;
   const params = Array.isArray(stored.params) && stored.params.length
     ? stored.params.map((q) => ({ ...dflt.params[0], ...q,
-        values: Array.isArray(q.values) ? q.values.map(Number) : dflt.params[0].values }))
+        values: Array.isArray(q.values) ? q.values.map(Number) : dflt.params[0].values,
+        // A calibration table gets the same guard as `values`, and needs it
+        // more: PureScript will read these as `{ volts :: Number, hz :: Number }`
+        // and a malformed entry becomes a NaN voltage sent to a module. Each
+        // point is rebuilt rather than trusted, so a half-written table is
+        // dropped entirely — `unflatten` then restores the parameter as an
+        // ordinary one, losing the label rather than the tuning.
+        pitchTable: Array.isArray(q.pitchTable)
+          ? q.pitchTable
+              .filter((r) => r && Number.isFinite(Number(r.volts)) && Number.isFinite(Number(r.hz)))
+              .map((r) => ({ volts: Number(r.volts), hz: Number(r.hz) }))
+          : [] }))
     : dflt.params;
   return { ...dflt, ...stored, params };
 };

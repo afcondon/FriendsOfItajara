@@ -704,6 +704,22 @@ function osc(msgs) {
 // morph; coarse for a V/oct, where it is about a sixteenth of a semitone.
 const slot = (n) => Math.max(0, Math.min(7, Number(n) | 0));
 
+// DeepStar's HTTP API. Its port is its own `DefaultAPIPort` constant; override
+// with DEEPSTAR_URL if it ever moves. Failure is REPORTED, never silently an
+// empty list — "no calibration tables" and "the rig doctor is not running" look
+// identical in a dropdown and are completely different problems.
+const DEEPSTAR_URL = process.env.DEEPSTAR_URL || "http://127.0.0.1:3027";
+
+async function deepstar(path) {
+  try {
+    const r = await fetch(DEEPSTAR_URL + path, { signal: AbortSignal.timeout(8000) });
+    if (!r.ok) return { ok: false, error: `deepstar ${path}: HTTP ${r.status}` };
+    return { ok: true, body: await r.json() };
+  } catch (e) {
+    return { ok: false, error: `deepstar ${path}: ${e.message} (is \`deepstar serve\` up on ${DEEPSTAR_URL}?)` };
+  }
+}
+
 function cv(body) {
   const msgs = [];
   const said = [];
@@ -1121,6 +1137,39 @@ const server = http.createServer(async (req, res) => {
     }
     if (url.pathname.startsWith("/api/sets/") && req.method === "GET") {
       return json(res, 200, storedSet(decodeURIComponent(url.pathname.slice("/api/sets/".length))));
+    }
+    // Calibration tables, relayed from `deepstar serve` (:3027).
+    //
+    // Relayed rather than fetched by the page, and not only because of CORS: it
+    // keeps the ONE address of the rig doctor in this file beside the others,
+    // so a Quadrat served from anywhere reaches whatever this machine calls
+    // DeepStar. The page gets a table once, carries it in the plan, and does
+    // its own inversion (Quadrat.Pitch) — verified to agree with /realise to
+    // 2e-15 V — so a 192-hit transect makes ONE call here, not 192.
+    if (url.pathname === "/api/calibrations" && req.method === "GET") {
+      const r = await deepstar("/calibrations");
+      if (!r.ok) return json(res, 502, { error: r.error });
+      // Summaries only: the list is for choosing, and the tables behind it are
+      // ~21 points each — no reason to ship all 28 to fill a dropdown.
+      return json(res, 200, { ok: true, tables: (r.body ?? []).map((t) => ({
+        label: t.label, module: t.module ?? "", points: t.points ?? 0,
+        loHz: t.lo_hz ?? 0, hiHz: t.hi_hz ?? 0, voltsPerOctave: t.volts_per_octave ?? 0,
+      })) });
+    }
+    if (url.pathname.startsWith("/api/calibrations/") && req.method === "GET") {
+      const label = decodeURIComponent(url.pathname.slice("/api/calibrations/".length));
+      const r = await deepstar("/calibrations/" + encodeURIComponent(label));
+      if (!r.ok) return json(res, 502, { error: r.error });
+      const t = r.body?.table ?? r.body ?? {};
+      const points = (t.points ?? [])
+        .filter((q) => Number.isFinite(Number(q.volts)) && Number.isFinite(Number(q.hz)))
+        .map((q) => ({ volts: Number(q.volts), hz: Number(q.hz) }));
+      // An empty table is reported as an error rather than returned. A pitch
+      // parameter holding no points realises every note as 0 V — one flat
+      // transect, and nothing on the page to say why.
+      if (!points.length) return json(res, 502, { error: `calibration "${label}" has no usable points` });
+      return json(res, 200, { ok: true, label, module: t.module ?? "",
+        coarse: t.coarse_setting ?? "", measuredAt: t.measured_at ?? "", points });
     }
     if (url.pathname === "/api/library" && req.method === "GET") return json(res, 200, shelves());
     if (url.pathname === "/api/scene" && req.method === "GET") {

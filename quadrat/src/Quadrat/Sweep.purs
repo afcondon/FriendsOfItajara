@@ -21,6 +21,7 @@
 -- | what is in it.
 module Quadrat.Sweep
   ( Param
+  , PitchSpec
   , Trigger
   , Plan
   , emptyPlan
@@ -43,9 +44,10 @@ import Prelude
 
 import Data.Array as Array
 import Data.Int as Int
-import Data.Maybe (Maybe(..), fromMaybe)
+import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Data.Number as Number
 import Effect (Effect)
+import Quadrat.Pitch as Pitch
 import Quadrat.Curve (Curve(..), Shape(..), shapeName, shapeOf)
 import Quadrat.Curve as Curve
 import Quadrat.Encoding (Cell, Encoding(..))
@@ -89,6 +91,26 @@ type Param =
   -- | for a second to be a function of. That is also what makes a grid legible:
   -- | a column shares its value on one axis, a row on the other.
   , axis :: Int
+  -- | **Set when this parameter is PITCH**, in which case its range is read in
+  -- | semitones and its level comes from a measured table rather than from
+  -- | `cvLo`/`cvHi`. See `Quadrat.Pitch` for why that is not a refinement but a
+  -- | different kind of answer.
+  , pitch :: Maybe PitchSpec
+  }
+
+-- | A pitch parameter's range and the measurement that realises it.
+-- |
+-- | The table is CARRIED, not fetched per step. Three reasons, and each would
+-- | be sufficient: `steps` stays pure; a transect of 192 hits does not make 192
+-- | HTTP calls to compute voltages it could have computed once; and the table
+-- | ends up in `set.json` beside the samples, which is where provenance has to
+-- | live because a label names a SIGNAL PATH, not a module — re-patch the
+-- | module to a different jack and the same label is the wrong answer.
+type PitchSpec =
+  { label :: String
+  , noteLo :: Int
+  , noteHi :: Int
+  , table :: Array Pitch.Point
   }
 
 -- | **What actually makes the sound happen**, once the parameters have settled.
@@ -158,6 +180,7 @@ param nm bus =
   , channel: 1
   , curve: Named Linear false
   , axis: 0
+  , pitch: Nothing
   }
 
 -- | How many points this parameter's curve is sampled at: the size of the axis
@@ -297,6 +320,10 @@ type Meaning =
   , at :: Number
   , level :: Number
   , cc :: Int
+  -- | The MIDI note this step landed on, or `-1` when the parameter is not a
+  -- | pitch. Recorded because "level 0.372" is not something anyone can check
+  -- | a sample against, and "F#3" is.
+  , note :: Int
   }
 
 -- | **One cell, resolved.** What to set, immediately before its hit — and,
@@ -316,8 +343,8 @@ steps p = Array.mapWithIndex one (Encoding.cells p.encoding p.extent)
   one i cell =
     { index: i
     , cell
-    , cv: Array.mapMaybe (\q -> map (\b -> { bus: b, level: lerp q.cvLo q.cvHi (v q cell) }) q.cv) p.params
-    , esx: Array.mapMaybe (\q -> map (\k -> { slot: k, level: lerp q.cvLo q.cvHi (v q cell) }) q.esx) p.params
+    , cv: Array.mapMaybe (\q -> map (\b -> { bus: b, level: levelOf q cell }) q.cv) p.params
+    , esx: Array.mapMaybe (\q -> map (\k -> { slot: k, level: levelOf q cell }) q.esx) p.params
     , cc: Array.mapMaybe
             (\q -> map
               (\c -> { channel: q.channel, cc: c
@@ -330,10 +357,11 @@ steps p = Array.mapWithIndex one (Encoding.cells p.encoding p.extent)
           , at: v q cell
           , level: case q.cv, q.esx of
               Nothing, Nothing -> 0.0
-              _, _ -> lerp q.cvLo q.cvHi (v q cell)
+              _, _ -> levelOf q cell
           , cc: case q.cc of
               Just _ -> Int.round (lerp (Int.toNumber q.ccLo) (Int.toNumber q.ccHi) (v q cell))
               Nothing -> -1
+          , note: noteOf q cell
           })
         p.params
     }
@@ -342,6 +370,21 @@ steps p = Array.mapWithIndex one (Encoding.cells p.encoding p.extent)
   -- other's.
   v q cell =
     fromMaybe 0.0 (Array.index (valuesFor p q) (fromMaybe 0 (Array.index cell q.axis)))
+
+  -- | A pitch parameter ignores `cvLo`/`cvHi` entirely. That is deliberate and
+  -- | not a special case bolted on: for every other parameter the range IS the
+  -- | answer, and for pitch the range is a question the module has already been
+  -- | asked. Silently blending the two would produce a voltage that is neither.
+  levelOf q cell = case q.pitch of
+    Just ps -> (Pitch.levelForNote { label: ps.label, points: ps.table } (noteFor ps q cell)).volts
+    Nothing -> lerp q.cvLo q.cvHi (v q cell)
+
+  noteFor ps q cell = Pitch.noteAt ps.noteLo ps.noteHi (v q cell)
+
+  noteOf q cell = case q.pitch of
+    Just ps -> noteFor ps q cell
+    Nothing -> -1
+
   lerp a b t = a + (b - a) * t
 
 -- ---------------------------------------------------------------------------
@@ -375,6 +418,16 @@ type PlainParam =
   , shape :: String
   , flipped :: Boolean
   , values :: Array Number
+  -- | Pitch, flattened the same way: `""` for "not a pitch parameter", which
+  -- | cannot collide with a real calibration label. The TABLE rides along
+  -- | rather than only its label, because a label is a pointer into Amphora and
+  -- | a stored set has to stay readable when Amphora is not running, when the
+  -- | label has been re-pointed at a later sweep, or on a machine that never
+  -- | had either. The samples are the record; so is what was aimed at.
+  , pitchLabel :: String
+  , noteLo :: Int
+  , noteHi :: Int
+  , pitchTable :: Array { volts :: Number, hz :: Number }
   }
 
 type Plain =
@@ -445,6 +498,10 @@ flatten p =
     , cc: fromMaybe (-1) q.cc, ccLo: q.ccLo, ccHi: q.ccHi
     , channel: q.channel
     , axis: q.axis
+    , pitchLabel: maybe "" _.label q.pitch
+    , noteLo: maybe 0 _.noteLo q.pitch
+    , noteHi: maybe 0 _.noteHi q.pitch
+    , pitchTable: maybe [] _.table q.pitch
     , kind: if Curve.isDrawn q.curve then "drawn" else "named"
     , shape: case q.curve of
         Named sh _ -> shapeName sh
@@ -490,6 +547,19 @@ unflatten p =
     , cc: some q.cc, ccLo: clamp 0 127 q.ccLo, ccHi: clamp 0 127 q.ccHi
     , channel: clamp 1 16 q.channel
     , axis: clamp 0 (nAxes - 1) q.axis
+    -- An empty label means "not a pitch parameter"; a label with an EMPTY
+    -- TABLE means one whose measurement did not come back, and that is not the
+    -- same thing. Restoring it as a pitch parameter with nothing to invert
+    -- would silently realise every note as 0 V, so it comes back as an ordinary
+    -- parameter and the label is lost rather than the tuning.
+    , pitch:
+        if q.pitchLabel == "" || Array.null q.pitchTable then Nothing
+        else Just
+          { label: q.pitchLabel
+          , noteLo: clamp 0 127 q.noteLo
+          , noteHi: clamp 0 127 q.noteHi
+          , table: q.pitchTable
+          }
     , curve:
         if q.kind == "drawn" then Drawn (map (clamp 0.0 1.0) q.values)
         else Named (fromMaybe Linear (shapeOf q.shape)) q.flipped
