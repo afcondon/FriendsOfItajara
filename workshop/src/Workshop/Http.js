@@ -22,6 +22,7 @@ export const divisions = (req) => () =>
         peak: Number(r.peak ?? 0),
         rms: Number(r.rms ?? 0),
         zcr: Number(r.zcr ?? 0),
+        tilt: Number(r.tilt ?? 0),
       })),
     }))
     .catch((e) => ({ ok: false, output: String(e.message ?? e), secs: 0, divides: false, regions: [] }));

@@ -1130,13 +1130,16 @@ render st =
 
   -- | **Did anything actually change across these?**
   -- |
-  -- | Two ratios, largest over smallest, on the two witnesses `msm` measures:
-  -- | level, and zero-crossing rate standing in for brightness. Both are
-  -- | needed. A sweep through a timbre holds its loudness still, so level alone
-  -- | reads a perfect run and a run that never reached the instrument as the
-  -- | same thing — and on Andrew's own hand-made BIA set, measured, level moved
-  -- | ×1.6 while brightness moved ×2.7. Brightness is the more sensitive
-  -- | witness for exactly the material this feature is for.
+  -- | Two ratios, largest over smallest, on level and on **spectral tilt** —
+  -- | harmonic richness, the RMS surviving a high-pass over the RMS of the
+  -- | whole.
+  -- |
+  -- | Not zero-crossing rate, which was here first and was the wrong witness.
+  -- | `zcr` reads the fundamental: a Basimilus morph blends sine to square and
+  -- | every one of those crosses zero twice a cycle, so measured across the
+  -- | whole of that parameter `zcr` moved **17%** while the sound changed
+  -- | completely. `tilt` moved **3.03x** over the same sweep and showed the
+  -- | parameter's actual shape — a wrap at 3.3 V and a hard ceiling at 5 V.
   -- |
   -- | Ratios rather than a verdict, except at the one end where a verdict is
   -- | safe: if BOTH are flat then nothing moved, and that is worth saying
@@ -1154,7 +1157,7 @@ render st =
             in
               if lo <= 0.0 then 0.0 else hi / lo
           rp = rng _.peak
-          rz = rng _.zcr
+          rz = rng _.tilt
           flat = rp > 0.0 && rz > 0.0 && rp < 1.1 && rz < 1.1
         in
           HH.span [ HP.class_ (HH.ClassName (if flat then "ws-warn" else "ws-muted")) ]
@@ -1182,14 +1185,15 @@ render st =
   -- The loudest and the brightest in this take, so a tile is read against its
   -- own neighbours rather than against an absolute nobody carries in their head.
   loudest = fromMaybe 0.0 (Array.last (Array.sort (map _.peak st.regions)))
-  brightest = fromMaybe 0.0 (Array.last (Array.sort (map _.zcr st.regions)))
+  brightest = fromMaybe 0.0 (Array.last (Array.sort (map _.tilt st.regions)))
 
   meter r =
     HH.div [ HP.class_ (HH.ClassName "ws-meter") ]
       [ bar "level" (r.peak / max 1.0e-9 loudest)
           (fmt (r.peak * 100.0) <> "% of the loudest here")
-      , bar "bright" (r.zcr / max 1.0e-9 brightest)
-          (show (Int.round r.zcr) <> " zero crossings a second")
+      , bar "bright" (r.tilt / max 1.0e-9 brightest)
+          (fmt (r.tilt * 100.0) <> "% of its energy above the high-pass; "
+             <> show (Int.round r.zcr) <> " zero crossings a second")
       ]
 
   bar k v title =

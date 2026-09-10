@@ -26,17 +26,18 @@ import Effect (Effect)
 -- | answer is asked of the same objects: *is this division the sound I meant,
 -- | and are these twelve actually different from each other?*
 -- |
--- | `zcr` is zero crossings per second, which is a coarse brightness. It is
--- | here beside `peak` rather than instead of it because a sweep through a
--- | timbre can hold its loudness perfectly still, and a run that never reached
--- | the instrument looks identical to one that did if level is the only
--- | witness.
+-- | Three witnesses, because each is blind to something. `peak` misses a sweep
+-- | that changes timbre at constant loudness. `zcr` reads the *fundamental*, so
+-- | it misses a morph from sine to square — measured on a Basimilus, it moved
+-- | 17% while the sound changed completely. `tilt` is harmonic richness, and on
+-- | that same morph it moved 3.03x and resolved the parameter's whole shape.
 type Region =
   { start :: Number
   , end :: Number
   , peak :: Number
   , rms :: Number
   , zcr :: Number
+  , tilt :: Number
   }
 
 type Divisions =

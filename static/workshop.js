@@ -9649,7 +9649,8 @@
       // set of zeroes reads as "no measurement", not as "silence".
       peak: Number(r.peak ?? 0),
       rms: Number(r.rms ?? 0),
-      zcr: Number(r.zcr ?? 0)
+      zcr: Number(r.zcr ?? 0),
+      tilt: Number(r.tilt ?? 0)
     }))
   })).catch((e) => ({ ok: false, output: String(e.message ?? e), secs: 0, divides: false, regions: [] }));
   var j = (r) => r.json();
@@ -12154,7 +12155,7 @@
           return v.peak;
         });
         var rz = rng(function(v) {
-          return v.zcr;
+          return v.tilt;
         });
         var flat = rp2 > 0 && (rz > 0 && (rp2 < 1.1 && rz < 1.1));
         return span3([class_((function() {
@@ -12172,7 +12173,7 @@
         })())]);
       }
       ;
-      throw new Error("Failed pattern match at Workshop.Main (line 1145, column 3 - line 1167, column 77): ");
+      throw new Error("Failed pattern match at Workshop.Main (line 1148, column 3 - line 1170, column 77): ");
     })();
     var small2 = function(lbl) {
       return function(v) {
@@ -12446,7 +12447,7 @@
         return span3([class_("ws-warn")])([text5("you swept " + (show13(total(st.sweep.extent)) + (" samples and this divided into " + (show13(length3(st.regions)) + " \u2014 try another divider, or a wider gap, before sending it"))))]);
       }
       ;
-      throw new Error("Failed pattern match at Workshop.Main (line 1172, column 3 - line 1180, column 80): ");
+      throw new Error("Failed pattern match at Workshop.Main (line 1175, column 3 - line 1183, column 80): ");
     })();
     var connection = (function() {
       if (st.looper instanceof Nothing) {
@@ -12516,10 +12517,10 @@
         ;
       }
       ;
-      throw new Error("Failed pattern match at Workshop.Main (line 1253, column 9 - line 1272, column 20): " + [st.cardView.constructor.name]);
+      throw new Error("Failed pattern match at Workshop.Main (line 1257, column 9 - line 1276, column 20): " + [st.cardView.constructor.name]);
     })()]);
     var brightest = fromMaybe(0)(last2(sort2(map29(function(v) {
-      return v.zcr;
+      return v.tilt;
     })(st.regions))));
     var bar = function(k) {
       return function(v) {
@@ -12529,7 +12530,7 @@
       };
     };
     var meter2 = function(r) {
-      return div2([class_("ws-meter")])([bar("level")(r.peak / max11(1e-9)(loudest))(fmt(r.peak * 100) + "% of the loudest here"), bar("bright")(r.zcr / max11(1e-9)(brightest))(show13(round2(r.zcr)) + " zero crossings a second")]);
+      return div2([class_("ws-meter")])([bar("level")(r.peak / max11(1e-9)(loudest))(fmt(r.peak * 100) + "% of the loudest here"), bar("bright")(r.tilt / max11(1e-9)(brightest))(fmt(r.tilt * 100) + ("% of its energy above the high-pass; " + (show13(round2(r.zcr)) + " zero crossings a second")))]);
     };
     var tile = function(i2) {
       return function(r) {
