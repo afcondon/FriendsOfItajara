@@ -67,6 +67,7 @@ const post = (url, body) =>
 
 export const addToCard = (req) => () => post("/api/card/add", req);
 export const writeToCard = (dest) => () => post("/api/card/write", { dest });
+export const placeSet = (req) => () => post("/api/card/place", req);
 
 // The stored sets. See `writeSet` in server.mjs for what one holds and why it
 // lives in the sample directory rather than beside it.

@@ -21,7 +21,7 @@ import Prelude
 
 import Data.Array as Array
 import Data.Int as Int
-import Data.Maybe (Maybe(..), maybe)
+import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Halogen (AttrName(..), ElemName(..), Namespace(..))
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
@@ -99,15 +99,29 @@ body h =
              ]
       )
 
+  -- | **A chooser where the destination enumerates, a box where it does not.**
+  -- |
+  -- | SLICER's eight divisions are the whole of what a slice axis can be, and
+  -- | a dropdown says so at a glance. SuperDirt's `n` has no such list, and a
+  -- | five-hundred-entry dropdown would be a set of choices pretending to be a
+  -- | constraint. Same `Axis`, one flag, two controls.
   extentField i ax =
     HH.label [ cls "ws-field is-tight", HP.title (ax.name <> " — picked by " <> ax.picked) ]
       [ HH.span_ [ HH.text (ax.name <> "s") ]
-      , HH.select [ HE.onValueChange (h.msg <<< SetExtent i) ]
-          (map (\n -> HH.option
-                  [ HP.value (show n)
-                  , HP.selected (Array.index p.extent i == Just n) ]
-                  [ HH.text (show n) ])
-              ax.sizes)
+      , if ax.free
+          then HH.input
+                 [ HP.type_ HP.InputNumber
+                 , HP.value (show (fromMaybe 1 (Array.index p.extent i)))
+                 , HP.min (Int.toNumber (fromMaybe 1 (Array.head ax.sizes)))
+                 , HP.max (Int.toNumber (fromMaybe 1 (Array.last ax.sizes)))
+                 , HE.onValueInput (h.msg <<< SetExtent i)
+                 ]
+          else HH.select [ HE.onValueChange (h.msg <<< SetExtent i) ]
+                 (map (\n -> HH.option
+                         [ HP.value (show n)
+                         , HP.selected (Array.index p.extent i == Just n) ]
+                         [ HH.text (show n) ])
+                     ax.sizes)
       ]
 
   -- | **What the destination will refuse, said before anything is recorded.**

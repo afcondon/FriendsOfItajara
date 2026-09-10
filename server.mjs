@@ -19,6 +19,8 @@
 //                                    as, overwrite, allLayers, dryRun }
 //                                  → runs msm harvest,
 //                                    answers { ok, output }
+//   POST /api/card/place           { set, bank, kit, voice, append, layerMode }
+//                                  → put a set ALREADY ON DISK onto a voice
 //   GET  /api/sets                 every stored sample set, newest first
 //   GET  /api/sets/:name           one set whole: spec, schedule, measurements,
 //                                  and what each sample meant
@@ -360,6 +362,154 @@ function storedSet(name) {
   }
 }
 
+// ===========================================================================
+// **Put a set on a voice.** The card half, and nothing else.
+//
+// Split out of `addToCard` when SuperDirt arrived. Until then a set was cut
+// and placed in one act, because a set had exactly one destination and the
+// fusion cost nothing. It costs something now: **the card is a projection of
+// the library**, so putting a set on a card has to be possible for a set that
+// already exists, without going back to the take it came from. Re-cutting
+// would be re-deriving, and a projection that re-derives is not one.
+//
+// `shape` is what the voice has to agree about — the module's rules, all of
+// which it enforces silently on its own.
+function placeOnCard({ set, bank: bankIn, kit: kitIn, voice: voiceIn, append,
+                       layerMode, kind, shape }) {
+  const { sliced, slots, slotSecs } = shape;
+  const card = readCard();
+  const bankName = String(bankIn || "WORKSHOP").toUpperCase().replace(/[^A-Z0-9 ]/g, "").trim() || "WORKSHOP";
+  const kitName = String(kitIn || set);
+  const voice = Math.min(4, Math.max(1, Number(voiceIn) || 1));
+
+  let bank = (card.banks ||= []).find((b) => b.name === bankName);
+  if (!bank) { bank = { name: bankName, kits: [] }; card.banks.push(bank); }
+  let kit = (bank.kits ||= []).find((k) => k.name === kitName);
+  if (!kit) { kit = { name: kitName, voices: {} }; bank.kits.push(kit); }
+  // Velocity for a stack of hits, manual for anything chosen deliberately.
+  const at = String(voice);
+  const there = asStack(kit.voices[at]);
+  // `shape` came in; `there` is what is already on the voice.
+
+  if (append && there) {
+    // **A layer has to be the same shape as the ones beside it.**
+    //
+    // SLICER divides whatever is playing, so every layer on a voice is cut by
+    // the same division — two layers wanting different ones cannot both be
+    // right, and the module would not say which was wrong. Same for stereo,
+    // which claims the next voice as well.
+    const differs =
+      there.kind !== shape.kind ||
+      !!there.stereo !== shape.stereo ||
+      !!there.sliced !== shape.sliced ||
+      (there.slots || 0) !== shape.slots;
+    if (differs) {
+      return { ok: false, output:
+        `voice ${voice} holds ${there.kind || "material"} in ${there.slots || 0} slots` +
+        `${there.stereo ? ", stereo" : ""} — a layer beside it has to match, because ` +
+        `SLICER divides whatever is playing and one voice cannot have two divisions.` };
+    }
+    if (there.layers.length >= 12 && !there.layers.some((l) => l.set === set)) {
+      return { ok: false, output:
+        "twelve layers is the module's ceiling, and it drops the rest without saying so." };
+    }
+    // Re-sending a set already here is a recut, not a thirteenth layer.
+    const known = there.layers.findIndex((l) => l.set === set);
+    if (known >= 0) there.layers[known] = { ...there.layers[known], set };
+    else there.layers.push({ set });
+    // The slot has to hold the longest piece of ANY layer.
+    there.slotSecs = Math.max(there.slotSecs || 0, slotSecs);
+    kit.voices[at] = there;
+  } else {
+    kit.voices[at] = { layers: [{ set }], ...shape };
+  }
+
+  // **Softest first, spread across the range.**
+  //
+  // With layer mode VELOCITY the module picks by how hard you played, and a
+  // layer that does not say which dynamic it stands for cannot be picked
+  // deliberately. Assigned by position because position is what the recording
+  // order already means — the same convention the byte order carries.
+  const stack = asStack(kit.voices[at]);
+  const n = stack.layers.length;
+  if (n > 1) {
+    stack.layers.forEach((l, i) => {
+      l.velocity = Math.round(((i + 1) / n) * 127);
+    });
+  } else {
+    delete stack.layers[0].velocity;
+  }
+
+  // The layer mode is the kit's, and a stack of alternatives wants the module
+  // to choose between them. Hits are velocity by their nature; anything else
+  // stays manual until asked.
+  if (layerMode) kit.layers = String(layerMode);
+  else if (!kit.layers) kit.layers = kind === "drum-hits" ? "velocity" : "manual";
+
+  // **One bank, one division.**
+  //
+  // SLICER is a single global setting, so every sliced file in a bank is cut
+  // by the same number. A bank silently adopting whatever came last is how
+  // `WORKSHOP` ended up asking for /12 with sixteen-slice files in it — each
+  // file fine, and only their neighbours making them wrong. Refused here
+  // rather than left for the compiler, because by then the samples are cut and
+  // the card row written.
+  if (slots && bank.slicer && bank.slicer !== slots) {
+    return { ok: false, output:
+      `bank ${bankName} is cut into ${bank.slicer} and this is ${slots}. SLICER is one ` +
+      `global setting, so they cannot share a bank — put this in another one.` };
+  }
+  if (slots) bank.slicer = slots;
+  writeCard(card);
+
+  return { ok: true };
+}
+
+// **A set already on disk, onto a voice.** No take, no cut, no measuring.
+//
+// The other half of the second encoding. SuperDirt needs no projection at all
+// — a set as stored IS a bank — so the Rample projection had to become
+// something that acts on a SET rather than on a take, or "the same set reaches
+// both" would have meant "the same take was cut twice".
+//
+// Everything the card needs about the shape is in `set.json`, which is exactly
+// what it is for.
+function placeStoredSet(body) {
+  const set = safe(body.set || "");
+  const dir = path.join(SAMPLES, set);
+  if (!set || !fs.existsSync(dir)) return { ok: false, output: `no set called ${set || "(none)"}` };
+
+  const got = storedSet(set);
+  if (!got.ok) {
+    return { ok: false, output:
+      `${set} has no description, so nothing here knows whether it is sliced, ` +
+      `stereo, or into how many. Cut it again from its take.` };
+  }
+  const d = got.set;
+  const files = fs.readdirSync(dir).filter((f) => f.toLowerCase().endsWith(".wav"));
+  if (!files.length) return { ok: false, output: `${set} holds no audio` };
+
+  const placed = placeOnCard({
+    set,
+    bank: body.bank, kit: body.kit, voice: body.voice,
+    append: body.append, layerMode: body.layerMode, kind: d.kind,
+    shape: {
+      kind: d.kind || "",
+      stereo: !!d.stereo,
+      sliced: !!d.sliced,
+      slots: d.slots || 0,
+      slotSecs: d.slotSecs || 0,
+    },
+  });
+  if (!placed.ok) return placed;
+  return {
+    ok: true,
+    output: `${set} (${files.length} samples) on voice ${Math.min(4, Math.max(1, Number(body.voice) || 1))}`,
+    card: readCard(),
+    sets: sets(),
+  };
+}
+
 // Cut the kept regions into a set, and put that set on a voice.
 async function addToCard(body) {
   const take = safe(body.take || "");
@@ -369,6 +519,8 @@ async function addToCard(body) {
   if (!wav) return { ok: false, output: `${take} holds no audio` };
 
   const set = safe(body.set || take);
+  // Default true: every caller before SuperDirt meant "and put it on a voice".
+  const place = body.place !== false;
   const regions = Array.isArray(body.regions) ? body.regions : [];
   if (!regions.length) return { ok: false, output: "nothing kept, so there is nothing to send" };
 
@@ -439,90 +591,29 @@ async function addToCard(body) {
     samples: body.samples ?? [],
   });
 
-  const card = readCard();
-  const bankName = String(body.bank || "WORKSHOP").toUpperCase().replace(/[^A-Z0-9 ]/g, "").trim() || "WORKSHOP";
-  const kitName = String(body.kit || set);
-  const voice = Math.min(4, Math.max(1, Number(body.voice) || 1));
-
-  let bank = (card.banks ||= []).find((b) => b.name === bankName);
-  if (!bank) { bank = { name: bankName, kits: [] }; card.banks.push(bank); }
-  let kit = (bank.kits ||= []).find((k) => k.name === kitName);
-  if (!kit) { kit = { name: kitName, voices: {} }; bank.kits.push(kit); }
-  // Velocity for a stack of hits, manual for anything chosen deliberately.
-  const at = String(voice);
-  const there = asStack(kit.voices[at]);
-  const shape = { kind: body.kind || "", stereo: !!body.stereo, sliced, slots, slotSecs };
-
-  if (body.append && there) {
-    // **A layer has to be the same shape as the ones beside it.**
-    //
-    // SLICER divides whatever is playing, so every layer on a voice is cut by
-    // the same division — two layers wanting different ones cannot both be
-    // right, and the module would not say which was wrong. Same for stereo,
-    // which claims the next voice as well.
-    const differs =
-      there.kind !== shape.kind ||
-      !!there.stereo !== shape.stereo ||
-      !!there.sliced !== shape.sliced ||
-      (there.slots || 0) !== shape.slots;
-    if (differs) {
-      return { ok: false, output:
-        `voice ${voice} holds ${there.kind || "material"} in ${there.slots || 0} slots` +
-        `${there.stereo ? ", stereo" : ""} — a layer beside it has to match, because ` +
-        `SLICER divides whatever is playing and one voice cannot have two divisions.` };
-    }
-    if (there.layers.length >= 12 && !there.layers.some((l) => l.set === set)) {
-      return { ok: false, output:
-        "twelve layers is the module's ceiling, and it drops the rest without saying so." };
-    }
-    // Re-sending a set already here is a recut, not a thirteenth layer.
-    const known = there.layers.findIndex((l) => l.set === set);
-    if (known >= 0) there.layers[known] = { ...there.layers[known], set };
-    else there.layers.push({ set });
-    // The slot has to hold the longest piece of ANY layer.
-    there.slotSecs = Math.max(there.slotSecs || 0, slotSecs);
-    kit.voices[at] = there;
-  } else {
-    kit.voices[at] = { layers: [{ set }], ...shape };
-  }
-
-  // **Softest first, spread across the range.**
+  // **Cutting a set and placing it on a card are two acts.**
   //
-  // With layer mode VELOCITY the module picks by how hard you played, and a
-  // layer that does not say which dynamic it stands for cannot be picked
-  // deliberately. Assigned by position because position is what the recording
-  // order already means — the same convention the byte order carries.
-  const stack = asStack(kit.voices[at]);
-  const n = stack.layers.length;
-  if (n > 1) {
-    stack.layers.forEach((l, i) => {
-      l.velocity = Math.round(((i + 1) / n) * 127);
-    });
-  } else {
-    delete stack.layers[0].velocity;
+  // They were one until SuperDirt arrived, because until then every set had
+  // exactly one destination and the fusion cost nothing. SuperDirt has no
+  // voices, no kits and no banks to be placed in — the set as stored IS the
+  // bank — so a set has to be able to exist without a place on a card. Which
+  // was always true and had simply never been asked.
+  if (!place) {
+    return {
+      ok: true,
+      output: described ? `${cut.output}\n${described}` : cut.output,
+      card: readCard(),
+      sets: sets(),
+    };
   }
 
-  // The layer mode is the kit's, and a stack of alternatives wants the module
-  // to choose between them. Hits are velocity by their nature; anything else
-  // stays manual until asked.
-  if (body.layerMode) kit.layers = String(body.layerMode);
-  else if (!kit.layers) kit.layers = body.kind === "drum-hits" ? "velocity" : "manual";
-
-  // **One bank, one division.**
-  //
-  // SLICER is a single global setting, so every sliced file in a bank is cut
-  // by the same number. A bank silently adopting whatever came last is how
-  // `WORKSHOP` ended up asking for /12 with sixteen-slice files in it — each
-  // file fine, and only their neighbours making them wrong. Refused here
-  // rather than left for the compiler, because by then the samples are cut and
-  // the card row written.
-  if (slots && bank.slicer && bank.slicer !== slots) {
-    return { ok: false, output:
-      `bank ${bankName} is cut into ${bank.slicer} and this is ${slots}. SLICER is one ` +
-      `global setting, so they cannot share a bank — put this in another one.` };
-  }
-  if (slots) bank.slicer = slots;
-  writeCard(card);
+  const placed = placeOnCard({
+    set,
+    bank: body.bank, kit: body.kit, voice: body.voice,
+    append: body.append, layerMode: body.layerMode, kind: body.kind,
+    shape: { kind: body.kind || "", stereo: !!body.stereo, sliced, slots, slotSecs },
+  });
+  if (!placed.ok) return placed;
 
   return {
     ok: true,
@@ -984,6 +1075,10 @@ const server = http.createServer(async (req, res) => {
     }
     // The stored sets: the list, and one whole. See `writeSet` — the object
     // is what makes a set re-runnable at a resolution nobody chose at the time.
+    if (url.pathname === "/api/card/place" && req.method === "POST") {
+      const body = await readBody(req);
+      return json(res, 200, placeStoredSet(body));
+    }
     if (url.pathname === "/api/sets" && req.method === "GET") {
       return json(res, 200, { ok: true, sets: storedSets() });
     }

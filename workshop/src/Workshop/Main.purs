@@ -183,7 +183,7 @@ data Action
   | SetBank String
   | SetKit String
   | SetVoice String
-  | SendToCard Boolean
+  | SendToCard { place :: Boolean, append :: Boolean }
   | SetLayerMode String
   | WriteCard String
   | Play Int
@@ -197,6 +197,7 @@ data Action
   | SetLead String
   | RefreshSets
   | RunAgain String
+  | PlaceSet String
 
 component :: forall q i o m. MonadAff m => H.Component q i o m
 component = H.mkComponent
@@ -319,6 +320,27 @@ handleAction = case _ of
     case r of
       Left _ -> pure unit
       Right v -> H.modify_ _ { sets = v.sets }
+  -- | **The Rample projection of a stored set.**
+  -- |
+  -- | Beside "sweep again" because they are the two things you do with a set
+  -- | that already exists: make more of it, or send it somewhere. Nothing is
+  -- | cut and nothing is measured — the shape the card needs is in the set's
+  -- | own description, and re-deriving it from the take would make this a
+  -- | second recording rather than a projection.
+  PlaceSet nm -> do
+    st <- H.get
+    H.modify_ _ { cardBusy = true }
+    r <- H.liftAff (attempt (toAffE (Http.placeSet
+          { set: nm
+          , bank: st.bank
+          , kit: nm
+          , voice: st.voice
+          , append: false
+          , layerMode: st.layerMode })))
+    case r of
+      Left e -> H.modify_ (note (Aff.message e) <<< _ { cardBusy = false })
+      Right w -> H.modify_ (note (lastLine w.output) <<< _ { cardBusy = false })
+    handleAction RefreshCard
   -- | **Run this set again**, at whatever resolution you like.
   -- |
   -- | The whole of what makes a set a stored object rather than a folder: the
@@ -353,7 +375,7 @@ handleAction = case _ of
   -- | `append` is the whole of the two-axis change at this end: the same set,
   -- | the same voice, and a choice about whether it stands beside what is
   -- | there or in its place.
-  SendToCard append -> do
+  SendToCard { place, append } -> do
     st <- H.get
     -- Only what you kept, in the order they were played. `msm cut` numbers
     -- them zero-padded from that order, and the module reads a voice's stack
@@ -407,6 +429,7 @@ handleAction = case _ of
               -- plays twelve.
               , join: Kind.joins st.kind || isEqual st.divider
               , append
+              , place
               , layerMode: st.layerMode
               , regions: keptRegions
               -- The spec, so the set can be run again; `Plain` because that is
@@ -991,6 +1014,16 @@ render st =
               [ HH.tbody_ (map setRow st.sets) ]
           ]
 
+  -- | How to play it in a pattern. `n` counts from zero and the files from
+  -- | one, which is worth saying once here rather than being discovered.
+  dirt r
+    | r.count == 0 = ""
+    | otherwise = case r.extent of
+        [ outer, inner ] ->
+          "s \"" <> r.name <> "\" # n (o*" <> show inner <> "+i)"
+            <> "   -- o 0.." <> show (outer - 1) <> ", i 0.." <> show (inner - 1)
+        _ -> "s \"" <> r.name <> "\" # n \"0.." <> show (r.count - 1) <> "\""
+
   setRow r =
     HH.tr_
       [ HH.td_ [ HH.text r.name ]
@@ -1002,16 +1035,42 @@ render st =
                else joinWith ", " r.moved
                     <> " over " <> joinWith " x " (map show r.extent)
                     <> (if r.encoding == "" then "" else " (" <> r.encoding <> ")")) ]
+      -- | **Every set is already a SuperDirt bank**, whatever it was recorded
+      -- | for, so this is said for all of them and not only the ones whose
+      -- | encoding names SuperDirt.
+      -- |
+      -- | That is the finding of the second encoding, and it is a negative
+      -- | one: nothing had to be built. A folder of numbered files is a named,
+      -- | indexed set at both ends. `set.json` sitting in the folder shifts no
+      -- | index — SuperDirt filters on extension and skips it — and the names
+      -- | are zero-padded, which is what keeps the tenth sample from sorting
+      -- | between the first and the second.
+      , HH.td [ HP.class_ (HH.ClassName "ws-dirt") ] [ HH.code_ [ HH.text (dirt r) ] ]
+      -- | **The two things you do with a set that already exists**: make more
+      -- | of it, or send it somewhere. The SuperDirt column to the left needs
+      -- | no button at all, which is the whole finding.
       , HH.td_
-          [ if r.runnable
-              then HH.button
-                     [ HP.class_ (HH.ClassName "ws-plain")
-                     , HP.title "load the spec that made this set, so it can be \
-                                \recorded again at a different resolution"
-                     , HE.onClick \_ -> RunAgain r.name
-                     ]
-                     [ HH.text "Sweep again\x2026" ]
-              else HH.text ""
+          [ HH.div [ HP.class_ (HH.ClassName "ws-twoverbs") ]
+              [ if r.runnable
+                  then HH.button
+                         [ HP.class_ (HH.ClassName "ws-plain")
+                         , HP.title "load the spec that made this set, so it can be \
+                                    \recorded again at a different resolution"
+                         , HE.onClick \_ -> RunAgain r.name
+                         ]
+                         [ HH.text "Sweep again\x2026" ]
+                  else HH.text ""
+              , if r.described && r.count > 0
+                  then HH.button
+                         [ HP.class_ (HH.ClassName "ws-plain")
+                         , HP.disabled st.cardBusy
+                         , HP.title "put this set on the card, at the bank and voice \
+                                    \chosen above — nothing is cut or measured again"
+                         , HE.onClick \_ -> PlaceSet r.name
+                         ]
+                         [ HH.text "Onto the card" ]
+                  else HH.text ""
+              ]
           ]
       ]
 
@@ -1209,7 +1268,23 @@ render st =
     | Array.null st.regions = HH.text ""
     | otherwise =
         HH.div [ HP.class_ (HH.ClassName "ws-send") ]
-          [ HH.span [ HP.class_ (HH.ClassName "ws-arm-label") ] [ HH.text "Send to" ]
+          -- | **Cutting a set is the act; a card is one place to put it.**
+          -- |
+          -- | These were one button until SuperDirt arrived, because until
+          -- | then a set had exactly one destination and the fusion cost
+          -- | nothing. SuperDirt has no voice to be placed in — the set as
+          -- | stored is already the bank — so the set has to be able to exist
+          -- | without an address on a card. Which was always true, and had
+          -- | simply never been asked.
+          [ HH.button
+              [ HP.class_ (HH.ClassName "ws-plain")
+              , HP.disabled (st.cardBusy || Set.isEmpty st.keep)
+              , HP.title "cut the kept regions into a set and write its \
+                         \description beside them — no card, no voice"
+              , HE.onClick \_ -> SendToCard { place: false, append: false }
+              ]
+              [ HH.text "Save as a set" ]
+          , HH.span [ HP.class_ (HH.ClassName "ws-arm-label") ] [ HH.text "or send to" ]
           , small "bank" st.bank SetBank
           , small "kit" (if st.kit == "" then st.name else st.kit) SetKit
           , HH.label [ HP.class_ (HH.ClassName "ws-field is-tight") ]
@@ -1234,7 +1309,7 @@ render st =
                 HH.button
                   [ HP.class_ (HH.ClassName "ws-plain is-go")
                   , HP.disabled (st.cardBusy || Set.isEmpty st.keep)
-                  , HE.onClick \_ -> SendToCard false
+                  , HE.onClick \_ -> SendToCard { place: true, append: false }
                   ]
                   [ HH.text (show (Set.size st.keep) <> " to the kit") ]
               Just r ->
@@ -1243,14 +1318,14 @@ render st =
                       [ HP.class_ (HH.ClassName "ws-plain is-go")
                       , HP.disabled (st.cardBusy || Set.isEmpty st.keep)
                       , HP.title "the layer selector picks between them"
-                      , HE.onClick \_ -> SendToCard true
+                      , HE.onClick \_ -> SendToCard { place: true, append: true }
                       ]
                       [ HH.text ("add as layer "
                           <> show (Array.length r.sets + 1)) ]
                   , HH.button
                       [ HP.class_ (HH.ClassName "ws-plain is-replacing")
                       , HP.disabled (st.cardBusy || Set.isEmpty st.keep)
-                      , HE.onClick \_ -> SendToCard false
+                      , HE.onClick \_ -> SendToCard { place: true, append: false }
                       ]
                       [ HH.text "replace" ]
                   ]

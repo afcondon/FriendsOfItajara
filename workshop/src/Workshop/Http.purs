@@ -15,6 +15,7 @@ module Workshop.Http
   , addToCard
   , SetRow
   , storedSets
+  , placeSet
   , loadSpec
   , writeToCard
   ) where
@@ -137,6 +138,9 @@ foreign import addToCard
    . { take :: String, set :: String, bank :: String, kit :: String
      , voice :: Int, kind :: String, stereo :: Boolean, join :: Boolean
      , append :: Boolean, layerMode :: String, regions :: Array Region
+     -- | **Cut it, or cut it and put it on a voice.** Two acts, and they were
+     -- | one until SuperDirt arrived with no voices to be placed in.
+     , place :: Boolean
      -- | The spec that produced these samples, so the set can be run again at
      -- | a resolution nobody chose at the time. **Null for a take played by
      -- | hand**, which is what makes such a set worth keeping but not worth
@@ -168,6 +172,17 @@ type SetRow =
   }
 
 foreign import storedSets :: Effect (Promise { ok :: Boolean, sets :: Array SetRow })
+
+-- | **Put a set already on disk onto a voice** — no take, no cut, no measuring.
+-- |
+-- | The Rample projection of a stored set. It has to act on the SET rather
+-- | than on the take, or "the same set reaches both destinations" would only
+-- | mean "the same take was cut twice". Everything the card needs about the
+-- | shape is in `set.json`, which is what it is for.
+foreign import placeSet
+  :: { set :: String, bank :: String, kit :: String, voice :: Int
+     , append :: Boolean, layerMode :: String }
+  -> Effect (Promise Wrote)
 
 -- | One stored set's spec, raw. Polymorphic for the same reason `addToCard`
 -- | is: this module is the wire. `Workshop.Sweep.adopt` is what makes a plan
