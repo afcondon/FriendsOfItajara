@@ -16,9 +16,9 @@
 -- | ## The one number that is not known
 -- |
 -- | Two clocks are in play. The page issues a trigger on its own clock; the
--- | take is measured in frames by the daemon. `recFrames` joins them — the
--- | daemon says how much it has laid down, so reading it at the instant of a
--- | trigger puts that trigger *in take time* directly. The snapshot is up to a
+-- | take is measured in frames by the daemon. the capture's own frame count joins
+-- | them — the daemon says how much it has laid down, so reading it at the
+-- | instant of a trigger puts that trigger *in take time* directly. The snapshot is up to a
 -- | frame or two of its 30 Hz old, which `snapshotAge` corrects for.
 -- |
 -- | What remains is the lag from issuing a trigger to the sound arriving back:
@@ -43,34 +43,30 @@ module Workshop.Schedule
 import Prelude
 
 import Data.Array as Array
-import Data.Int as Int
 import Data.Maybe (Maybe(..))
 import Effect (Effect)
 import Foreign.LooperSocket as Socket
 
 -- | **How far into the take the recording has got, in seconds** — or nothing,
--- | if this loop is not laying a first take down right now.
+-- | if nothing is capturing right now.
 -- |
 -- | `Nothing` rather than zero, and the caller falls back to the detector.
 -- | Zero would be a lie of exactly the wrong kind: a schedule of twelve marks
 -- | all at the head of the take divides it into eleven empty regions and one
 -- | long one, which is a set of measurements that looks like a run that went
 -- | wrong rather than like a division that never happened.
-at :: Int -> Effect (Maybe Number)
-at li = do
+-- |
+-- | It read a loop's `recFrames` until 2026-09-10, with a guard for whether
+-- | that loop was laying a first take down as opposed to overdubbing, sized,
+-- | armed or empty. A capture is only ever recording or not.
+at :: Effect (Maybe Number)
+at = do
   snap <- Socket.latest
   age <- Socket.snapshotAge
   pure do
     top <- snap
-    lp <- Array.index top.loops li
-    _ <- recording lp
-    let sr = Int.toNumber top.sampleRate
-    if sr <= 0.0 then Nothing
-      else Just (Int.toNumber lp.recFrames / sr + max 0.0 age / 1000.0)
-  where
-  -- `recFrames` is frames a FIRST take has laid, and zero otherwise — so it
-  -- doubles as the test for whether there is a take to be in.
-  recording lp = if lp.recFrames > 0 then Just lp else Nothing
+    if not top.capture.on then Nothing
+      else Just (top.capture.secs + max 0.0 age / 1000.0)
 
 -- | **Trigger times into regions**, each running to the next trigger.
 -- |

@@ -11,8 +11,13 @@
 -- | that went wrong before — fixed pass lengths, alternates summing, layer
 -- | stacks — came from using loops for something that does not loop.
 -- |
--- | So the daemon is used as little as possible: one scratch loop, one open
--- | recording, level-armed. All the judgement is downstream.
+-- | So the daemon is used as little as possible — and since 2026-09-10 it is
+-- | not used as a *looper* at all. It records through `cap`, a capture beside
+-- | the engine that has a start and an end and no other state. Before that
+-- | this page drove loop 7 and spent four verbs turning the looper off to do
+-- | it: `Alternates false`, `Sounding false`, `OnGrid false`, and a `Clear`
+-- | before every take. That mismatch cost a take — see `captureOn` below —
+-- | and those four verbs are exactly what capture removed.
 module Workshop.Main where
 
 import Prelude
@@ -31,14 +36,14 @@ import Data.String.Common (joinWith)
 -- `Bars` names a thing in both vocabularies — a length in the daemon's verbs
 -- and a kind of material here — so the verbs come in by name and the kinds
 -- through `Kind.`.
-import Data.Looper.Verb (Verb(Alternates, AskPeaks, Clear, ExportLayers, LevelArm, OnGrid, Record, Sounding, Source))
+import Data.Looper.Verb (Verb(Capture, CaptureArm, CapturePeaks, CaptureStop, EndCapture, WriteCapture))
 import Data.Looper.Verb as Verb
 import Effect (Effect)
 import Effect.Aff (Milliseconds(..), attempt, delay)
 import Effect.Aff as Aff
 import Effect.Aff.Class (class MonadAff)
 import Effect.Class (liftEffect)
-import Foreign.LooperSocket (LooperState, LoopState)
+import Foreign.LooperSocket (Capture, LooperState)
 import Foreign.LooperSocket as Socket
 import Halogen as H
 import Halogen.Aff as HA
@@ -69,12 +74,6 @@ main = HA.runHalogenAff do
   body <- HA.awaitBody
   runUI component unit body
 
--- | **The scratch loop.** The Workshop records into the last loop and nothing
--- | else, so a pedalboard session on loops 1–6 is untouched by a capture and a
--- | capture is untouched by it. It is a tape head, not a loop: cleared before
--- | every take, and its contents are a take on their way to `msm`.
-scratch :: Int
-scratch = 7
 
 type State =
   { looper :: Maybe LooperState
@@ -162,6 +161,9 @@ type State =
   -- | than remembered here: a set outlives the page by a long way, which is
   -- | the entire point of storing it.
   , sets :: Array Http.SetRow
+  -- | The capture buffer filled and we have said so once. A latch, not a
+  -- | reading: the daemon goes on reporting `full` until the next capture.
+  , overran :: Boolean
   }
 
 data Action
@@ -210,29 +212,32 @@ component = H.mkComponent
       , cardView: Nothing, bank: "WORKSHOP", kit: "", voice: 1, cardBusy: false
       , sweep: Sweep.emptyPlan, sweepOpen: false, sweepAt: Nothing
       , sweepFork: Nothing, midiPorts: [], swept: false, sweepEdit: Nothing
-      , schedule: [], sets: [] }
+      , schedule: [], sets: [], overran: false }
   , render
   , eval: H.mkEval H.defaultEval { handleAction = handleAction, initialize = Just Init }
   }
 
+-- | **One sender, and no loop to address.**
+-- |
+-- | Every verb this page sends is rig-wide now: a capture is not a loop, so
+-- | there is no number in front of it. Which also means a pedalboard session
+-- | on loops 1–6 is untouched by the Workshop and the Workshop by it — the
+-- | separation the scratch loop was standing in for, without a loop.
 send :: forall o m. MonadAff m => Verb -> H.HalogenM State Action () o m Unit
 send v = do
-  let c = Verb.at scratch v
+  let c = Verb.render v
   ok <- liftEffect (Socket.send (c <> "@0"))
   unless ok $ H.modify_ (note ("no daemon — " <> c <> " went nowhere"))
-
--- | A verb for the rig rather than for a loop. `exl` is one: it writes every
--- | loop that has anything in it, so addressing it to one would be a lie.
-sendBare :: forall o m. MonadAff m => Verb -> H.HalogenM State Action () o m Unit
-sendBare v = do
-  ok <- liftEffect (Socket.send (Verb.render v <> "@0"))
-  unless ok $ H.modify_ (note "no daemon — the take was not written")
 
 note :: String -> State -> State
 note m s = s { log = Array.takeEnd 10 (Array.snoc s.log m) }
 
-loop :: State -> Maybe LoopState
-loop st = st.looper >>= \top -> Array.index top.loops scratch
+-- | **What the daemon says the capture is doing** — never a second copy of it.
+-- |
+-- | The whole of this page's view of the rig, where it used to be a loop with
+-- | thirty-odd fields of which four meant anything here.
+cap :: State -> Maybe Capture
+cap st = map _.capture st.looper
 
 handleAction :: forall o m. MonadAff m => Action -> H.HalogenM State Action () o m Unit
 handleAction = case _ of
@@ -255,28 +260,38 @@ handleAction = case _ of
     snap <- liftEffect Socket.latest
     pk <- liftEffect Socket.latestPeaks
     H.modify_ _ { looper = snap, peaks = pk }
-    -- The daemon draws; ask it to, the first time a take comes into view. That
-    -- covers a reload as well as a recording — the engine did not forget the
-    -- loop just because the page did.
+    -- The daemon draws; ask it to, the first time a capture comes into view.
+    -- That covers a reload as well as a recording — the daemon did not forget
+    -- what it is holding just because the page did.
     now <- H.get
-    let had = maybe false (\l -> l.layers > 0) (loop before)
-        has = maybe false (\l -> l.layers > 0) (loop now)
-    when (has && not had) (send (AskPeaks 900))
-    -- A take that closed itself — a bar count — leaves `armed` set here, so
-    -- the page would go on saying "listening" over a finished recording.
+    let had = maybe false _.holds (cap before)
+        has = maybe false _.holds (cap now)
+    when (has && not had) (send (CapturePeaks 900))
+    -- **A capture that closed itself at its count.** One field, where the
+    -- looper needed four read together — a loop that stopped recording could
+    -- be armed, writing, sized or empty and only the combination said which.
     st <- H.get
-    for_ (loop st) \lp ->
-      when (st.armed && not lp.armed && not Socket.isWriting lp && lp.layers > 0) $
-        H.modify_ (note ("closed itself: " <> fmt lp.loopSecs <> " s")
+    for_ (cap st) \c ->
+      when (st.armed && not c.on) $
+        H.modify_ (note ("closed itself: " <> fmt c.secs <> " s")
                      <<< _ { armed = false, waiting = true })
 
     -- The one place a take becomes something to look at, whichever way it
     -- ended — by hand, or at its own count.
     st2 <- H.get
-    for_ (loop st2) \lp ->
-      when (st2.waiting && lp.layers > 0 && not Socket.isWriting lp && not lp.armed) do
+    for_ (cap st2) \c ->
+      when (st2.waiting && c.holds) do
         H.modify_ _ { waiting = false }
         handleAction Analyse
+    -- **The buffer filled and the rest was dropped.** Loud, because a run
+    -- that quietly recorded the first six minutes of a nine-minute grid
+    -- produces a set that looks complete.
+    filled <- H.get
+    for_ (cap filled) \c ->
+      when (c.full && not filled.overran) $
+        H.modify_ (note ("the capture filled at " <> fmt c.capSecs
+                     <> " s and stopped — raise --capture-secs on the daemon")
+                     <<< _ { overran = true })
     -- The MIDI ports, while the sweep is open. Read rather than asked for: the
     -- asking is a permission prompt that may sit unanswered for as long as it
     -- likes, and this is how its answer arrives without anything waiting on it.
@@ -507,7 +522,7 @@ handleAction = case _ of
     s { keep = if Set.member i s.keep then Set.delete i s.keep else Set.insert i s.keep }
   KeepAll on -> H.modify_ \s ->
     s { keep = if on then Set.fromFoldable (Array.range 0 (Array.length s.regions - 1)) else Set.empty }
-  ArmOn src -> armOn true src
+  ArmOn src -> captureOn true src
   -- | **The sweep modal**, and asking the browser for MIDI when it opens.
   -- |
   -- | Asked once, on opening, rather than at Run: `requestMIDIAccess` prompts
@@ -540,9 +555,9 @@ handleAction = case _ of
     case st.sweepFork of
       Just _ -> H.modify_ (note "a sweep is already running")
       Nothing -> do
-        -- Open, not level-armed: see `armOn`. The schedule knows when the
-        -- first hit happens, so nothing needs to detect it.
-        armOn false src
+        -- No head trim: see `captureOn`. The schedule declares when the
+        -- first hit happens, so nothing needs to find it.
+        captureOn false src
         H.modify_ _ { swept = false, sweepAt = Nothing, schedule = [] }
         fid <- H.fork runSweep
         H.modify_ _ { sweepFork = Just fid }
@@ -554,88 +569,89 @@ handleAction = case _ of
     handleAction Close
   Close -> do
     st <- H.get
-    for_ (loop st) \lp ->
-      if Socket.isWriting lp || lp.armed
+    for_ (cap st) \c ->
+      if c.on
         then do
-          send Record
+          send EndCapture
           H.modify_ (note "closed")
         else H.modify_ (note "nothing is recording")
-    send (LevelArm false)
-    send (Sounding true)
-    -- Not `Analyse` here: the layer is not there yet. Ask for it, and let the
-    -- poll that sees it arrive do the work.
+    -- Nothing to put back. The looper needed `LevelArm false` and `Sounding
+    -- true` here because arming had changed the rig's state and leaving it
+    -- changed would have surprised the next thing to use it; a capture
+    -- changes nothing outside itself, so there is nothing to undo.
     H.modify_ \s -> s { armed = false, waiting = true }
 
--- | **Arm the scratch loop on an input, and start recording into it.**
+-- | **Start a capture on an input.**
 -- |
--- | `levelArmed` is the whole of the difference between a take you play and a
--- | take the rig plays.
+-- | Where this was nine verbs it is now three, and the difference is the whole
+-- | of plan item 6. It used to send `Source`, `Clear`, `Alternates false`,
+-- | `Sounding false`, `OnGrid false`, `Bars`, `LevelArm` and `Record` — four
+-- | of those existing only to turn the looper OFF, because the page was
+-- | driving a looper to do something that is not looping.
 -- |
--- | Playing it yourself, `r` has to wait for a sound: you cannot press Record
--- | and pick up a stick in the same instant, and the daemon reaches back past
--- | the crossing so the attack that triggered it is inside the take.
+-- | ## What `trimHead` is, and what it is not
 -- |
--- | **A sweep must not wait for a sound**, and this cost a run to learn. The
--- | first swept take held five hits out of twelve: position 1 is the bottom of
--- | the range, the BIA at Morph 0 is barely audible, and the level arm did not
--- | trip until the sweep had climbed loud enough — around position eight. The
--- | measurements say so plainly, peak 0.16 rising to 0.70 and brightness 19 to
--- | 108 across what survived.
+-- | It is **not** a level arm, and that distinction cost a take to learn. The
+-- | first swept run caught five hits of twelve: position 1 is the bottom of the
+-- | range, the BIA at Morph 0 is barely audible, and the looper's level arm did
+-- | not trip until the sweep had climbed loud enough — around position eight.
+-- | The measurements said so plainly, peak 0.16 rising to 0.70.
 -- |
--- | And the fix is the rule this whole project keeps rediscovering: **declared
--- | beats inferred.** The take's start is not something to detect, because the
--- | page is the thing about to make the sound and already knows when. Inferring
--- | it from level throws away information we hold, and throws it away in the
--- | one direction that is silent — a sweep whose quiet end is the interesting
--- | end loses exactly the part it was made for.
-armOn :: forall o m. MonadAff m => Boolean -> Int -> H.HalogenM State Action () o m Unit
-armOn levelArmed src = do
-  -- **Choosing the input is the act of arming.** Kept apart, the page had
-  -- its own idea of which input to use and asserted it at Arm — so a reload
+-- | So the capture always begins the moment you ask. `trimHead` only decides
+-- | **where the file starts**, resolved at write time over audio already in
+-- | hand. A quiet first hit can no longer be missed, because nothing waits for
+-- | it; at worst the trim lands in the wrong place and the audio it would have
+-- | cut is still there.
+-- |
+-- | Playing by hand you want it — you cannot press Record and pick up a stick
+-- | in the same instant. A run does not: the schedule declares its own start.
+-- | **Declared beats inferred**, which is the rule this project keeps
+-- | rediscovering.
+captureOn :: forall o m. MonadAff m => Boolean -> Int -> H.HalogenM State Action () o m Unit
+captureOn trimHead src = do
+  st <- H.get
+  -- **Choosing the input is the act of arming.** Kept apart, the page had its
+  -- own idea of which input to use and asserted it at Arm — so a reload
   -- silently armed on the wrong one. Together, the thing you press says what
   -- it is going to listen to, and there is no second copy to disagree.
-  send (Source src)
-  st <- H.get
-  -- Everything the take needs, set before it starts and nowhere else. The
-  -- scratch loop is emptied first: it holds one take at a time, and a take
-  -- that landed on top of another is the bug this page exists to avoid.
   --
-  -- This is also why there is no Discard button. Arming clears, so discarding
-  -- was only ever a way of doing early what the next take does anyway — and a
-  -- second button that says "throw it away" next to one that says "keep it"
-  -- invites the reading that the kept set is somehow at stake. It is not:
-  -- what has been sent to a kit is on disk and nothing here can reach it.
-  send Clear
-  -- Not the source and not mono: those are the loop's own, set when you
-  -- chose them and shown from the snapshot. Asserting them here is how the
-  -- page came to overrule a choice it had forgotten making.
-  -- Never alternates. Alternates sums a further pass into the layer that
-  -- sounds, which is right for takes of one scene and wrong for everything
-  -- here — and it is what put ten kicks in one layer on the looper page.
-  send (Alternates false)
-  -- Silent while it fills. You are playing into it, not along to it.
-  send (Sounding false)
-  send (OnGrid false)
-  case Kind.closes st.kind of
-    AtCount n -> send (Verb.Bars n)
-    ByHand -> pure unit
-  send (LevelArm levelArmed)
-  send Record
+  -- Nothing is cleared first, because starting a capture IS the clearing: a
+  -- capture holds one take and there is nothing a second could be layered
+  -- onto. That is also why there is no Discard button — starting the next one
+  -- does early what this does anyway.
+  send (CaptureArm trimHead)
+  -- **A count, in frames**, because the page is the one holding the tempo and
+  -- the daemon is the one holding the frame. Zero runs until stopped, which is
+  -- every kind but `Bars`.
+  send (CaptureStop (closeAfter st))
+  send (Capture src)
   -- A fresh name unless you gave it one that has not been used yet. This is
-  -- the whole of the overwrite fix: the export is `exl <name>`, so a name
-  -- that already belongs to a take on disk is a name that destroys it.
+  -- the whole of the overwrite fix: the write is `cw <name>`, so a name that
+  -- already belongs to a take on disk is a name that destroys it.
   when (wantsAName st) do
     n <- liftEffect (slugFor st.kind)
     H.modify_ _ { name = n, kit = if st.kitMine then st.kit else "" }
   -- Not swept until something sweeps it. Left set, the declared-against-found
   -- check would go on comparing every later take by hand against a position
   -- count that has nothing to do with it.
+  --
   -- The schedule belongs to a run, and this take is not that run until one
   -- starts. Left standing, a take played by hand would be divided at the
   -- boundaries of the sweep before it — silently, and at plausible-looking
   -- times.
-  H.modify_ (note (if levelArmed then Kind.prompt st.kind else "recording — the run starts in a moment")
-    <<< _ { armed = true, swept = false, schedule = [] })
+  H.modify_ (note (if trimHead then Kind.prompt st.kind else "recording — the run starts in a moment")
+    <<< _ { armed = true, swept = false, schedule = [], overran = false })
+
+-- | **How many frames a take of this kind runs for**, or zero for by hand.
+-- |
+-- | The bar comes from the daemon's own `barFrames`, which is Link's where
+-- | there is a clock and the anchor loop's cycle where there is not — the
+-- | field the daemon's own comment says the app should read. No clock and no
+-- | anchor means no bar, and a count of nothing is by hand.
+closeAfter :: State -> Int
+closeAfter st = case Kind.closes st.kind of
+  ByHand -> 0
+  AtCount n -> n * maybe 0 _.barFrames st.looper
 
 -- | **The run.**
 -- |
@@ -667,7 +683,7 @@ runSweep = do
     -- the trigger rather than after it: everything between here and the pulse
     -- is a few microseconds of arithmetic, where everything after it is a
     -- round trip of unknown length. See `Workshop.Schedule`.
-    mk <- liftEffect (Schedule.at scratch)
+    mk <- liftEffect Schedule.at
     for_ mk \t -> H.modify_ \s0 -> s0 { schedule = Array.snoc s0.schedule t }
     for_ p.trigger.gate \b -> void $
       H.liftAff (attempt (toAffE (Rig.pulse
@@ -712,15 +728,15 @@ restCv = do
 analyse :: forall o m. MonadAff m => Boolean -> H.HalogenM State Action () o m Unit
 analyse write = do
   st <- H.get
-  case loop st of
-    Just lp | lp.layers > 0 -> divide st
-    _ -> H.modify_ (note "nothing to divide — the scratch loop is empty")
+  case cap st of
+    Just c | c.holds -> divide st
+    _ -> H.modify_ (note "nothing to divide — nothing has been captured")
   where
   divide st = do
       H.modify_ _ { busy = true, regions = [], keep = Set.empty }
       when write do
-        send (AskPeaks 900)
-        sendBare (ExportLayers st.name)
+        send (CapturePeaks 900)
+        send (WriteCapture st.name)
         -- The daemon writes on its own thread and the ack lands in a snapshot;
         -- the folder is there a moment later.
         H.liftAff (delay (Milliseconds 900.0))
@@ -872,20 +888,24 @@ render st =
         (map (\l -> HH.div_ [ HH.text l ]) st.log)
     ]
   where
-  lp = loop st
-  -- What the daemon says this loop is doing, never a second copy of it.
-  srcNow = maybe 0 _.src lp
+  cp = cap st
+  -- What the daemon says the capture is doing, never a second copy of it.
+  --
+  -- Four booleans where the loop needed `layers`, `armed`, `isWriting` and
+  -- `sized` read together, and where the combination — not any one of them —
+  -- said which of six states a loop was in.
+  srcNow = maybe 0 _.src cp
   srcName = maybe "?" _.name
     (st.looper >>= \top -> Array.index top.sources (srcNow - 1))
-  hasTake = maybe false (\l -> l.layers > 0) lp
-  writing = maybe false Socket.isWriting lp
-  listening = maybe false _.armed lp
+  hasTake = maybe false _.holds cp
+  writing = maybe false _.on cp
+  -- Nothing listens any more: a capture records from the moment it is asked,
+  -- and the threshold only trims the head at write time. See `captureOn`.
+  listening = false
   -- How long this take has been running, from the daemon's own frame count
   -- rather than from a clock here: a page that keeps its own time drifts from
   -- the recording it is describing.
-  elapsed =
-    let sr = maybe 48000 _.sampleRate st.looper
-    in maybe "0" (\l -> fmt (Int.toNumber l.recFrames / Int.toNumber sr)) lp
+  elapsed = maybe "0" (\c -> fmt c.secs) cp
 
   connection = case st.looper of
     Nothing -> HH.span [ HP.class_ (HH.ClassName "ws-warn") ] [ HH.text "no daemon" ]
@@ -1116,9 +1136,9 @@ render st =
               [ HH.text
                   (if writing then "recording — " <> elapsed <> " s"
                    else if listening then Kind.prompt st.kind
-                   else maybe "" (\l -> if l.layers > 0
-                                          then "captured " <> fmt l.loopSecs <> " s"
-                                          else "ready") lp) ]
+                   else maybe "" (\c -> if c.holds
+                                          then "captured " <> fmt c.secs <> " s"
+                                          else "ready") cp) ]
           -- | **Playing it yourself is one way to fill a take.** This is the
           -- | other: hand the schedule to the rig, and get a set that is even
           -- | where a hand cannot be even.
@@ -1157,7 +1177,7 @@ render st =
               [ HH.span_
                   [ HH.text (if st.busy then "dividing…"
                              else if Array.null st.regions
-                               then maybe "" (\l -> fmt l.loopSecs <> " s recorded, not divided yet") (loop st)
+                               then maybe "" (\c -> fmt c.secs <> " s recorded, not divided yet") (cap st)
                                else show (Set.size st.keep) <> " of "
                                     <> show (Array.length st.regions) <> " kept") ]
               , spread
@@ -1474,7 +1494,7 @@ render st =
   -- forty tiles cost one snapshot rather than forty requests.
   tile i r =
     let
-      total = maybe 1.0 (\l -> l.loopSecs) (loop st)
+      total = maybe 1.0 _.secs (cap st)
       n = maybe 0 (Array.length <<< _.hi) st.peaks
       b = Wave.bucketsFor n total r.start r.end
       cut xs = Array.slice b.from b.to xs
