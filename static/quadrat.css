@@ -344,11 +344,20 @@ body {
 .q-swsays { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .q-swaxis { font-family: inherit; }
-.q-swname { padding: 5px 8px; border: 1px solid var(--rule); border-radius: 3px; font: inherit; font-size: 13px; width: 220px; }
-.q-swwhere { display: flex; align-items: center; gap: 5px 12px; flex-wrap: wrap; }
+.q-swtop { display: flex; align-items: center; gap: 8px; }
+.q-swname { padding: 5px 8px; border: 1px solid var(--rule); border-radius: 3px;
+  font: inherit; font-size: 13px; flex: 1; max-width: 260px; }
+/* **The routing, and then room before the sliders.**
+   
+   Opened, this sat directly on top of the slider tracks and the two read as
+   one run of boxes — the settings you rarely touch crowding the surface you
+   came here to work. A rule and some air separate them: above it is where the
+   parameter GOES, below it is what it DOES. */
+.q-swwhere { display: flex; align-items: flex-end; gap: 8px 18px; flex-wrap: wrap;
+  padding-bottom: 14px; margin-bottom: 16px; border-bottom: 1px solid var(--rule); }
 /* The CV half and the MIDI half, each unbreakable, so the row wraps at the
    one point where a break says something. */
-.q-swgroup { display: inline-flex; align-items: center; gap: 5px; }
+.q-swgroup { display: inline-flex; align-items: flex-end; gap: 6px; }
 /* **Label above value.** Beside, a row of seven fields is fourteen items wide
    and wraps at the first excuse — which it did. Stacked, each field is one
    narrow column and the labels line up across the row. */
@@ -366,7 +375,7 @@ body {
 .q-swmini.is-drop { color: #a8442a; }
 
 /* The desk: opened in place, spanning both columns, one slider per position. */
-.q-desk { grid-column: 1 / -1; border: 1px solid var(--ink); border-radius: 4px; background: #fff; padding: 12px 14px 10px; margin: 2px 0 6px; }
+.q-desk { grid-column: 1 / -1; border: 1px solid var(--ink); border-radius: 4px; background: #fff; padding: 14px 16px 12px; margin: 2px 0 6px; }
 .q-deskhead { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); font-weight: 600; margin-bottom: 10px; }
 .q-deskgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(26px, 1fr)); gap: 4px; }
 .q-swcell { display: flex; flex-direction: column; align-items: center; gap: 2px; }

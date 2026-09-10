@@ -12075,7 +12075,7 @@
         return "cv " + (show12(q2.cv.value0) + ("  " + (num(q2.cvLo) + (" \u2192 " + (num(q2.cvHi) + ("   \xB7   cc " + (show12(q2.cc.value0) + (" ch " + (show12(q2.channel) + ("  " + (show12(q2.ccLo) + (" \u2192 " + show12(q2.ccHi)))))))))))));
       }
       ;
-      throw new Error("Failed pattern match at Quadrat.SweepView (line 240, column 5 - line 249, column 57): " + [q2.cv.constructor.name, q2.cc.constructor.name]);
+      throw new Error("Failed pattern match at Quadrat.SweepView (line 250, column 5 - line 259, column 57): " + [q2.cv.constructor.name, q2.cc.constructor.name]);
     };
     var mini = function(txt) {
       return function(title4) {
@@ -12141,14 +12141,12 @@
           })(axs))]);
         }
         ;
-        throw new Error("Failed pattern match at Quadrat.SweepView (line 208, column 3 - line 219, column 12): " + [i2.constructor.name, q2.constructor.name]);
+        throw new Error("Failed pattern match at Quadrat.SweepView (line 218, column 3 - line 229, column 12): " + [i2.constructor.name, q2.constructor.name]);
       };
     };
     var where_ = function(i2) {
       return function(q2) {
-        return div3([cls("q-swwhere")])([span3([cls("q-swgroup")])([tiny("cv bus")(3)(maybe("")(show12)(q2.cv))(SetCv.create(i2))("es9-daemon bus \u2014 8 is ES-9 panel jack 1, 15 is jack 8; blank for none"), tiny("at 0")(4)(num(q2.cvLo))(SetCvLo.create(i2))("what 0 means on that bus, -1 to 1 (1.0 is FULL output: this path is not halved)"), tiny("at 1")(4)(num(q2.cvHi))(SetCvHi.create(i2))("what 1 means on that bus")]), span3([cls("q-swgroup")])([tiny("cc")(3)(maybe("")(show12)(q2.cc))(SetCc.create(i2))("controller number; blank for none"), tiny("at 0")(3)(show12(q2.ccLo))(SetCcLo.create(i2))("controller value at 0"), tiny("at 1")(3)(show12(q2.ccHi))(SetCcHi.create(i2))("controller value at 1"), tiny("ch")(2)(show12(q2.channel))(SetChannel.create(i2))("MIDI channel")]), axisPick(i2)(q2), button([cls("q-swmini is-drop"), title2("remove this parameter"), onClick(function(v) {
-          return h.msg(new DropParam(i2));
-        })])([text5("\xD7 remove")])]);
+        return div3([cls("q-swwhere")])([span3([cls("q-swgroup")])([tiny("cv bus")(3)(maybe("")(show12)(q2.cv))(SetCv.create(i2))("es9-daemon bus \u2014 8 is ES-9 panel jack 1, 15 is jack 8; blank for none"), tiny("at 0")(4)(num(q2.cvLo))(SetCvLo.create(i2))("what 0 means on that bus, -1 to 1 (1.0 is FULL output: this path is not halved)"), tiny("at 1")(4)(num(q2.cvHi))(SetCvHi.create(i2))("what 1 means on that bus")]), span3([cls("q-swgroup")])([tiny("cc")(3)(maybe("")(show12)(q2.cc))(SetCc.create(i2))("controller number; blank for none"), tiny("at 0")(3)(show12(q2.ccLo))(SetCcLo.create(i2))("controller value at 0"), tiny("at 1")(3)(show12(q2.ccHi))(SetCcHi.create(i2))("controller value at 1"), tiny("ch")(2)(show12(q2.channel))(SetChannel.create(i2))("MIDI channel")]), axisPick(i2)(q2)]);
       };
     };
     var sliders = function(i2) {
@@ -12191,12 +12189,14 @@
           }
           ;
           return text5("");
-        })()])]), div3([cls("q-curveparam")])([input2([cls("q-swname"), type_19(InputText.value), value13(q2.name), title2("what this parameter is called on the instrument"), onValueInput((function() {
+        })()])]), div3([cls("q-curveparam")])([div3([cls("q-swtop")])([input2([cls("q-swname"), type_19(InputText.value), value13(q2.name), title2("what this parameter is called on the instrument"), onValueInput((function() {
           var $66 = SetName.create(i2);
           return function($67) {
             return h.msg($66($67));
           };
-        })())]), div3([cls("q-swsays")])([text5(routing(q2)), span3([cls("q-swaxis")])([text5(" \xB7 " + maybe("")(function(v) {
+        })())]), button([cls("q-swmini is-drop"), title2("remove this parameter"), onClick(function(v) {
+          return h.msg(new DropParam(i2));
+        })])([text5("\xD7")])]), div3([cls("q-swsays")])([text5(routing(q2)), span3([cls("q-swaxis")])([text5(" \xB7 " + maybe("")(function(v) {
           return v.name;
         })(index2(axs)(q2.axis)))])])])])((function() {
           var $53 = eq3(h.open)(new Just(i2));

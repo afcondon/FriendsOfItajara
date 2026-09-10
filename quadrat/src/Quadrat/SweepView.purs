@@ -182,10 +182,20 @@ body h =
             ]
         ]
     , HH.div [ cls "q-curveparam" ]
-        [ HH.input
-            [ cls "q-swname", HP.type_ HP.InputText, HP.value q.name
-            , HP.title "what this parameter is called on the instrument"
-            , HE.onValueInput (h.msg <<< SetName i) ]
+        -- **Remove belongs where the parameter is**, not inside the drawer.
+        -- Buried in `open` it could only be reached by expanding the thing you
+        -- wanted gone, and a row of eight curves had no way to lose one
+        -- without opening it first.
+        [ HH.div [ cls "q-swtop" ]
+            [ HH.input
+                [ cls "q-swname", HP.type_ HP.InputText, HP.value q.name
+                , HP.title "what this parameter is called on the instrument"
+                , HE.onValueInput (h.msg <<< SetName i) ]
+            , HH.button
+                [ cls "q-swmini is-drop", HP.title "remove this parameter"
+                , HE.onClick \_ -> h.msg (DropParam i) ]
+                [ HH.text "×" ]
+            ]
         -- | **Where it goes, said in a phrase rather than in nine boxes.**
         -- |
         -- | The routing was always on screen and almost never touched: a bus
@@ -269,10 +279,6 @@ body h =
           , tiny "ch" 2 (show q.channel) (SetChannel i) "MIDI channel"
           ]
       , axisPick i q
-      , HH.button
-          [ cls "q-swmini is-drop", HP.title "remove this parameter"
-          , HE.onClick \_ -> h.msg (DropParam i) ]
-          [ HH.text "× remove" ]
       ]
 
   cell i j v =
