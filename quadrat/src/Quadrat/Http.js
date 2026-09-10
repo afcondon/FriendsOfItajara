@@ -107,3 +107,35 @@ export const loadSpec = (name) => () =>
       return { ok: true, output: "", spec: d.set.spec };
     })
     .catch((e) => ({ ok: false, output: String(e.message ?? e), spec: {} }));
+
+// The rig doctor's calibration tables, through this page's own server (which
+// relays :3027). A failed fetch comes back as `ok:false` with the reason rather
+// than as an empty list: "no tables" and "deepstar is not running" look the
+// same in a dropdown and are different problems.
+export const calibrations = () =>
+  fetch("/api/calibrations").then(j).then((d) => ({
+    ok: !!d.ok,
+    tables: (d.tables ?? []).map((t) => ({
+      label: String(t.label ?? ""),
+      module: String(t.module ?? ""),
+      points: Number(t.points ?? 0),
+      loHz: Number(t.loHz ?? 0),
+      hiHz: Number(t.hiHz ?? 0),
+      voltsPerOctave: Number(t.voltsPerOctave ?? 0),
+    })),
+  })).catch((e) => ({ ok: false, tables: [] }));
+
+export const calibration = (label) => () =>
+  fetch("/api/calibrations/" + encodeURIComponent(label)).then(j).then((d) => ({
+    ok: !!d.ok,
+    label: String(d.label ?? label),
+    module: String(d.module ?? ""),
+    coarse: String(d.coarse ?? ""),
+    measuredAt: String(d.measuredAt ?? ""),
+    // Rebuilt point by point rather than passed through: PureScript will read
+    // these as Numbers and a NaN here becomes a NaN voltage at the module.
+    points: (d.points ?? [])
+      .filter((p) => Number.isFinite(Number(p.volts)) && Number.isFinite(Number(p.hz)))
+      .map((p) => ({ volts: Number(p.volts), hz: Number(p.hz) })),
+    error: String(d.error ?? ""),
+  })).catch((e) => ({ ok: false, label, module: "", coarse: "", measuredAt: "", points: [], error: String(e.message ?? e) }));

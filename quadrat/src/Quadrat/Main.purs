@@ -85,6 +85,7 @@ import Quadrat.Divider as Divider
 import Quadrat.Rig as Rig
 import Quadrat.Encoding as Encoding
 import Quadrat.Schedule as Schedule
+import Quadrat.Pitch as Pitch
 import Quadrat.Sweep as Sweep
 import Quadrat.SweepView as SweepView
 
@@ -200,6 +201,12 @@ type State =
   -- | than remembered here: a set outlives the page by a long way, which is
   -- | the entire point of storing it.
   , sets :: Array Http.SetRow
+  -- | The calibration tables `deepstar serve` knows about, and why the list is
+  -- | empty when it is. Fetched once at init: they change only when someone
+  -- | runs `deepstar tune`, and re-asking on every render would be 28 rows of
+  -- | nothing new.
+  , tables :: Array Http.CalibRow
+  , tablesErr :: String
   -- | The capture buffer filled and we have said so once. A latch, not a
   -- | reading: the daemon goes on reporting `full` until the next capture.
   , overran :: Boolean
@@ -226,7 +233,11 @@ type State =
   }
 
 data Action
-  = Init
+  -- | **Make this parameter a pitch**, or (with an empty label) stop it being
+  -- | one. An Action rather than a `Sweep.Msg` because it has to FETCH the
+  -- | table: the plan carries the measurement, not a pointer to it.
+  = PickPitch Int String
+  | Init
   | Poll
   | PickKind Kind
   | SetBars String
@@ -280,7 +291,7 @@ component = H.mkComponent
       , cardView: Nothing, bank: "WORKSHOP", kit: "", voice: 1, cardBusy: false
       , sweep: Sweep.emptyPlan, sweepOpen: false, sweepAt: Nothing
       , sweepFork: Nothing, midiPorts: [], swept: false, sweepEdit: Nothing
-      , schedule: [], sets: [], overran: false
+      , schedule: [], sets: [], tables: [], tablesErr: "", overran: false
       , page: Bench, fill: Swept, source: 0, pivot: Nothing }
   , render
   , eval: H.mkEval H.defaultEval { handleAction = handleAction, initialize = Just Init }
@@ -310,6 +321,42 @@ cap st = map _.capture st.looper
 
 handleAction :: forall o m. MonadAff m => Action -> H.HalogenM State Action () o m Unit
 handleAction = case _ of
+  -- | Fetch the table and hang it on the parameter — or, with an empty label,
+  -- | take it off. The table is stored IN THE PLAN rather than fetched per
+  -- | step, so this is the only moment it is asked for, and the only moment
+  -- | that can fail.
+  PickPitch i label
+    | label == "" -> handleAction (SweepMsg (Sweep.ClearPitch i))
+    | otherwise -> do
+        r <- H.liftAff (attempt (toAffE (Http.calibration label)))
+        case r of
+          Left e -> H.modify_ (note ("calibration " <> label <> ": " <> Aff.message e))
+          Right t
+            -- An empty table would realise every note as 0 V — one flat
+            -- transect and nothing on the page to say why — so it is refused
+            -- here rather than stored and discovered later.
+            | not t.ok || Array.null t.points ->
+                H.modify_ (note ("calibration " <> label <> " has no usable points"
+                                  <> (if t.error == "" then "" else ": " <> t.error)))
+            | otherwise -> do
+                let lo = Pitch.hzNote (fromMaybe 0.0 (map _.hz (Array.head t.points)))
+                    hi = Pitch.hzNote (fromMaybe 0.0 (map _.hz (Array.last t.points)))
+                H.modify_ \st -> st
+                  { sweep = st.sweep
+                      { params = fromMaybe st.sweep.params
+                          (Array.modifyAt i
+                            (_ { pitch = Just
+                                  { label: t.label
+                                  , noteLo: lo
+                                  , noteHi: hi
+                                  , table: t.points } })
+                            st.sweep.params) } }
+                -- The default range is the table's OWN span, because a range
+                -- outside it clamps silently and the commonest mistake with a
+                -- newly-picked calibration is to be pointing at notes the sweep
+                -- never measured.
+                H.modify_ (note (label <> ": " <> Pitch.noteName lo <> "–" <> Pitch.noteName hi
+                                  <> ", " <> show (Array.length t.points) <> " points"))
   Init -> do
     n <- liftEffect (slugFor Kind.DrumHits)
     -- The sweep plan as it was left. See `Quadrat.Sweep.restore` — a run,
@@ -317,6 +364,15 @@ handleAction = case _ of
     -- runs, and reloading to pick up a fix is exactly when it forgets.
     pl <- liftEffect (Sweep.restore Sweep.emptyPlan)
     H.modify_ _ { name = n, sweep = pl }
+    -- The calibration list, once. Failure is carried as a SENTENCE rather than
+    -- as an empty array: "nothing has been measured yet" and "the rig doctor is
+    -- not running" are the same empty dropdown and different jobs for you.
+    cal <- H.liftAff (attempt (toAffE Http.calibrations))
+    H.modify_ case cal of
+      Left e -> _ { tables = [], tablesErr = "calibrations unavailable: " <> Aff.message e }
+      Right r
+        | r.ok -> _ { tables = r.tables, tablesErr = "" }
+        | otherwise -> _ { tables = [], tablesErr = "calibrations unavailable — is `deepstar serve` up on :3027?" }
     handleAction RefreshCard
     liftEffect $ Socket.connect Socket.defaultUrl
     void $ H.subscribe $ HS.makeEmitter \emit -> do
@@ -1046,7 +1102,8 @@ render st =
                 , case st.fill of
                     Swept -> SweepView.settings
                       { ports: st.midiPorts, open: st.sweepEdit, plan: st.sweep
-                      , msg: SweepMsg, openParam: OpenParam }
+                      , msg: SweepMsg, openParam: OpenParam
+                      , tables: st.tables, tablesErr: st.tablesErr, pickPitch: PickPitch }
                     Played -> handPanel
                 , inputRow
                 , goRow
@@ -1406,6 +1463,9 @@ render st =
       , plan: st.sweep
       , msg: SweepMsg
       , openParam: OpenParam
+      , tables: st.tables
+      , tablesErr: st.tablesErr
+      , pickPitch: PickPitch
       }
 
 

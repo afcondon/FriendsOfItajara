@@ -206,6 +206,15 @@ data Msg
   | SetCcHi Int String
   | SetChannel Int String
   | SetAxis Int Int
+  -- | The note range of a PITCH parameter, in MIDI numbers. Choosing the
+  -- | calibration itself is NOT here: it has to fetch a table, so it is an
+  -- | action on the page rather than a message this pure update can answer.
+  | SetPitchLo Int String
+  | SetPitchHi Int String
+  -- | Back to an ordinary parameter. Its own message because it throws away a
+  -- | measurement — inferring it from an emptied text field would discard a
+  -- | table on a typo.
+  | ClearPitch Int
   -- | Click: the next named shape. Deliberately a no-op over a drawing.
   | NextShape Int
   | FlipCurve Int
@@ -263,6 +272,9 @@ update = case _ of
   SetCcLo i v -> onParam i \q -> q { ccLo = clamp 0 127 (intOr q.ccLo v) }
   SetCcHi i v -> onParam i \q -> q { ccHi = clamp 0 127 (intOr q.ccHi v) }
   SetChannel i v -> onParam i \q -> q { channel = clamp 1 16 (intOr q.channel v) }
+  SetPitchLo i v -> onParam i \q -> q { pitch = map (\ps -> ps { noteLo = clamp 0 127 (intOr ps.noteLo v) }) q.pitch }
+  SetPitchHi i v -> onParam i \q -> q { pitch = map (\ps -> ps { noteHi = clamp 0 127 (intOr ps.noteHi v) }) q.pitch }
+  ClearPitch i -> onParam i _ { pitch = Nothing }
   SetAxis i a -> \p ->
     onParam i (\q -> q { axis = clamp 0 (Array.length (Encoding.axes p.encoding) - 1) a }) p
   NextShape i -> onParam i \q -> q { curve = Curve.nextShape q.curve }

@@ -420,6 +420,14 @@ body {
 .q-stack.is-tiny input { padding: 3px 5px; font-size: 11px; }
 .q-swtiny { display: inline-flex; align-items: center; gap: 3px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
 .q-swtiny select { padding: 2px 4px; border: 1px solid var(--rule); border-radius: 3px; font: inherit; font-size: 11px; }
+
+/* Pitch. Set apart with a rule and a tint because picking a calibration does
+   not refine the voltage range beside it — it REPLACES the question, and the
+   `at 0` / `at 1` fields stop being consulted entirely. A control that silently
+   disables its neighbours should not look like one of them. */
+.q-swpitch { border-left: 2px solid var(--hot); padding-left: 10px; margin-left: 2px; }
+.q-swsel { padding: 2px 4px; border: 1px solid var(--rule); border-radius: 3px; font: inherit; font-size: 11px; max-width: 260px; }
+.q-swhint { font-size: 10px; color: var(--muted); letter-spacing: 0.02em; margin-left: 6px; align-self: center; }
 .q-swarrow { color: var(--rule); font-size: 11px; line-height: 1; }
 .q-swmini { border: 1px solid var(--rule); background: #fff; border-radius: 3px; cursor: pointer; font: inherit; font-size: 11px; padding: 3px 7px; }
 .q-swmini:hover { border-color: var(--ink); }

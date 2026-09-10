@@ -15,6 +15,9 @@ module Quadrat.Http
   , addToCard
   , SetRow
   , storedSets
+  , CalibRow
+  , calibrations
+  , calibration
   , placeSet
   , loadSpec
   , writeToCard
@@ -176,6 +179,31 @@ type SetRow =
   }
 
 foreign import storedSets :: Effect (Promise { ok :: Boolean, sets :: Array SetRow })
+
+-- | One row of the calibration list, enough to choose by. `loHz`/`hiHz` are the
+-- | span the table actually measured, which is the fact that decides whether a
+-- | note is reachable at all — outside it the realiser clamps, and a whole
+-- | transect can come out on one pitch that way.
+type CalibRow =
+  { label :: String
+  , module :: String
+  , points :: Int
+  , loHz :: Number
+  , hiHz :: Number
+  , voltsPerOctave :: Number
+  }
+
+foreign import calibrations :: Effect (Promise { ok :: Boolean, tables :: Array CalibRow })
+
+-- | One table, whole. `coarse` is the module's front-panel state as recorded at
+-- | sweep time and it is not decoration: the BIA's pitch knob is a pure octave
+-- | OFFSET, so a table is only true for the knob position it was measured at.
+foreign import calibration
+  :: String
+  -> Effect (Promise { ok :: Boolean, label :: String, module :: String
+                     , coarse :: String, measuredAt :: String
+                     , points :: Array { volts :: Number, hz :: Number }
+                     , error :: String })
 
 -- | **Put a set already on disk onto a voice** — no take, no cut, no measuring.
 -- |

@@ -22,11 +22,13 @@ import Prelude
 
 import Data.Array as Array
 import Data.Int as Int
-import Data.Maybe (Maybe(..), fromMaybe, maybe)
+import Data.Maybe (Maybe(..), fromMaybe, isNothing, maybe)
 import Halogen (AttrName(..), ElemName(..), Namespace(..))
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
+import Quadrat.Http as Http
+import Quadrat.Pitch as Pitch
 import Quadrat.Curve (isDrawn)
 import Quadrat.Curve as Curve
 import Quadrat.Encoding as Encoding
@@ -39,6 +41,13 @@ type Handlers act =
   , plan :: Plan
   , msg :: Msg -> act
   , openParam :: Maybe Int -> act
+  -- | The calibration tables the rig doctor knows about, for the pitch picker.
+  -- | Empty means either none measured or `deepstar serve` is down — the page
+  -- | says which, because in a dropdown they look identical.
+  , tables :: Array Http.CalibRow
+  , tablesErr :: String
+  -- | Choosing one has to FETCH it, so it is an action rather than a `Msg`.
+  , pickPitch :: Int -> String -> act
   }
 
 -- | **What the take is** — the destination, the shape of the set, and the two
@@ -248,7 +257,12 @@ body h =
   -- | exactly like one that does until the take comes back flat.
   routing q =
     let
-      volts = "  " <> num q.cvLo <> " → " <> num q.cvHi
+      -- A pitch parameter's range is NOT cvLo/cvHi, and printing them would be
+      -- a lie in the one place you look to check what a curve does.
+      volts = case q.pitch of
+        Just ps -> "  " <> Pitch.noteName ps.noteLo <> " → " <> Pitch.noteName ps.noteHi
+                     <> " (" <> ps.label <> ")"
+        Nothing -> "  " <> num q.cvLo <> " → " <> num q.cvHi
       parts =
         Array.catMaybes
           [ map (\b -> "cv " <> show b <> volts) q.cv
@@ -284,8 +298,74 @@ body h =
           , tiny "at 1" 3 (show q.ccHi) (SetCcHi i) "controller value at 1"
           , tiny "ch" 2 (show q.channel) (SetChannel i) "MIDI channel"
           ]
+      , pitchPick i q
       , axisPick i q
       ]
+
+  -- | **Pitch, when this parameter is one.**
+  -- |
+  -- | A dropdown of measured tables and two note fields, and choosing a table
+  -- | is what turns an ordinary parameter into a pitch: the range then reads in
+  -- | semitones and `cvLo`/`cvHi` stop being consulted at all. That is why the
+  -- | picker sits here rather than beside them — it does not refine the
+  -- | voltage range, it replaces the question.
+  pitchPick i q =
+    HH.span [ cls "q-swgroup q-swpitch" ]
+      [ HH.label [ cls "q-swtiny" ]
+          [ HH.span_ [ HH.text "pitch" ]
+          , HH.select
+              [ cls "q-swsel"
+              , HP.title "a calibration table from `deepstar tune` — it names a SIGNAL PATH, \
+                         \not a module, so it is only true for the jack it was swept from"
+              , HE.onValueChange (h.pickPitch i)
+              ]
+              ( Array.cons
+                  (HH.option [ HP.value "", HP.selected (isNothing q.pitch) ] [ HH.text "— not pitch —" ])
+                  ( map
+                    (\t -> HH.option
+                      [ HP.value t.label
+                      , HP.selected (maybe false (\ps -> ps.label == t.label) q.pitch)
+                      ]
+                      [ HH.text (t.label <> "  " <> hzSpan t) ])
+                    h.tables
+                  )
+              )
+          ]
+      , case q.pitch of
+          Nothing ->
+            -- The empty case is not blank: an empty list has two causes and
+            -- they need different actions from you.
+            HH.span [ cls "q-swhint" ]
+              [ HH.text
+                  (if h.tablesErr /= "" then h.tablesErr
+                   else if Array.null h.tables then "no calibration tables — run `deepstar tune`"
+                   else "") ]
+          Just ps ->
+            HH.span_
+              -- The FIELDS carry numbers and the hint carries the names. A
+              -- field that displayed "C2" while expecting `36` typed back is a
+              -- box you cannot retype its own contents into.
+              [ tiny "from" 4 (show ps.noteLo) (SetPitchLo i)
+                  "lowest note as a MIDI number — 60 is C4, 12 to an octave"
+              , tiny "to" 4 (show ps.noteHi) (SetPitchHi i)
+                  "highest note as a MIDI number. Steps ROUND to whole semitones, \
+                  \so any number of positions lands in tune — fewer positions than \
+                  \semitones gives a subset of the notes, not a detuned scale."
+              , HH.span [ cls "q-swhint" ]
+                  [ HH.text (Pitch.noteName ps.noteLo <> "–" <> Pitch.noteName ps.noteHi
+                              <> " · " <> reach ps) ]
+              ]
+      ]
+
+  -- What a table can actually reach, because outside its span the realiser
+  -- clamps and a transect comes out on one pitch.
+  hzSpan t = show (Int.round t.loHz) <> "–" <> show (Int.round t.hiHz) <> " Hz"
+
+  reach ps = case Array.head ps.table, Array.last ps.table of
+    Just lo, Just hi ->
+      "table reaches " <> Pitch.noteName (Pitch.hzNote lo.hz)
+        <> "–" <> Pitch.noteName (Pitch.hzNote hi.hz)
+    _, _ -> "table is empty"
 
   cell i j v =
     let pc = Int.round (v * 100.0)
