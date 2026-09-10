@@ -154,10 +154,24 @@ body {
    traces one under another with their envelopes aligned, which is how you see
    that position 7 is the odd one out. */
 .q-grid.is-line { grid-template-columns: 1fr; gap: 3px; }
-.q-grid.is-line .q-tile { display: grid; grid-template-columns: 22px 1fr auto; align-items: center; gap: 8px; }
-.q-grid.is-line .q-tile-face { padding: 2px 0 2px 6px; }
-.q-grid.is-line .q-tile-svg { height: 26px; }
-.q-grid.is-line .q-tile-foot { padding: 0 8px 0 0; }
+/* **The foot's children join the row.**
+   
+   A tile is two elements — the waveform and a foot holding its number, its
+   length and its keep — which stacked into three columns put the WAVEFORM in
+   the 22px one and the foot in the wide one. Twelve rows of nothing, and the
+   only thing missing was the thing they exist to show.
+   
+   `display: contents` on the foot dissolves it, so the row is four items and
+   each gets its own column: number, trace, length, keep. `order` puts the
+   number first, where a stack is scanned. */
+.q-grid.is-line .q-tile { display: grid; grid-template-columns: 26px 1fr 52px 24px;
+  align-items: center; gap: 10px; }
+.q-grid.is-line .q-tile-foot { display: contents; }
+.q-grid.is-line .q-tile-face { order: 2; padding: 3px 0; }
+.q-grid.is-line .q-tile-svg { height: 28px; }
+.q-grid.is-line .q-tile-n { order: 1; text-align: right; }
+.q-grid.is-line .q-tile-len { order: 3; flex: none; text-align: right; }
+.q-grid.is-line .q-tile-keep { order: 4; }
 .q-grid.is-line .q-cell { height: 26px; }
 .q-tile { border: 1px solid var(--rule); border-radius: 3px; background: #fff; overflow: hidden; transition: border-color .12s; }
 .q-tile:hover { border-color: var(--ink); }
@@ -270,13 +284,22 @@ body {
 /* Two pages, named. A text nav rather than boxed tabs: the rule under the
    masthead is the only frame it needs. */
 .q-nav { display: flex; gap: 16px; }
-/* The input, in the masthead: one chooser and the level it is hearing, where
-   five chips and a row of their own used to be. */
-.q-input { display: inline-flex; align-items: center; gap: 8px; }
-.q-input select { padding: 4px 6px; border: 1px solid var(--rule); border-radius: 3px;
-  background: #fff; font: inherit; font-size: 12px; }
-.q-inputdb { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; min-width: 62px; }
-.q-inputdb.is-quiet { color: var(--hot); }
+
+/* **What it is listening to, directly above the button that spends it.**
+   
+   A meter and not only a number, because a meter MOVES: play a note and the
+   bar jumps, which answers "is this the right input" in the one way that
+   cannot be misread. Empty below -60 dB, where nobody is playing into it. */
+.q-listen { display: flex; align-items: flex-end; gap: 12px;
+  border-top: 1px solid var(--rule); padding-top: 14px; margin-top: 16px; }
+.q-listen select { padding: 6px 8px; border: 1px solid var(--rule); border-radius: 3px;
+  background: #fff; font: inherit; font-size: 14px; min-width: 128px; }
+.q-meter { flex: 1; height: 10px; background: #eeeef1; border-radius: 2px; overflow: hidden; margin-bottom: 5px; }
+.q-meterbar { height: 100%; background: var(--live); transition: width .08s linear; }
+.q-meterbar.is-quiet { background: var(--hot); }
+.q-meterdb { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums;
+  min-width: 66px; text-align: right; margin-bottom: 3px; }
+.q-meterdb.is-quiet { color: var(--hot); font-weight: 600; }
 .q-tab { border: 0; background: none; padding: 0 0 2px; font: inherit; font-size: 13px;
   color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -12px; }
 .q-tab:hover { color: var(--ink); }

@@ -931,6 +931,11 @@ wantsAName st = not st.mine || st.name == "" || st.name == st.showing
 lastLine :: String -> String
 lastLine s = fromMaybe s (Array.last (Array.filter (_ /= "") (String.split (String.Pattern "\n") s)))
 
+-- | `clamp` for numbers, named apart because `clamp` is already in scope for
+-- | the Int uses on this page.
+clampN :: Number -> Number -> Number -> Number
+clampN lo hi v = max lo (min hi v)
+
 fmt :: Number -> String
 fmt n = show (Int.round (n * 100.0) # \k -> Int.toNumber k / 100.0)
 
@@ -944,7 +949,6 @@ render st =
             , pageTab Library "Library" "every set kept, re-runnable, and where it can go"
             ]
         , HH.span [ HP.class_ (HH.ClassName "q-sub") ] [ HH.text tagline ]
-        , inputPick
         , connection
         ]
     , case st.page of
@@ -974,6 +978,7 @@ render st =
                       { ports: st.midiPorts, open: st.sweepEdit, plan: st.sweep
                       , msg: SweepMsg, openParam: OpenParam }
                     Played -> handPanel
+                , inputRow
                 , goRow
                 , if not (Array.null st.regions) || st.busy || hasTake
                     then caught
@@ -1095,12 +1100,26 @@ render st =
                       if st.fill == Swept then RunSweep srcNow else ArmOn srcNow
                   ]
                   [ HH.text ((if st.fill == Swept then "Run on " else "Arm on ") <> srcName) ]
-              , HH.span [ HP.class_ (HH.ClassName "q-state") ]
-                  [ HH.text (case st.fill of
-                      Swept -> "the take closes itself when the last position has sounded"
-                      Played -> maybe "" (\c -> if c.holds
-                                                  then "captured " <> fmt c.secs <> " s"
-                                                  else Kind.prompt st.kind) cp) ]
+              -- | **The input is silent, said before the run and not after.**
+              -- |
+              -- | A whole transect went to an input with nothing patched to
+              -- | it: twenty-six seconds of correct schedule, correct
+              -- | division, correct measurement, all of digital silence. The
+              -- | button named the input — "Run on board" — and naming was
+              -- | not enough, because the name only tells you the input is
+              -- | wrong if you already knew which was right. The LEVEL tells
+              -- | you, and the daemon has been reporting it all along.
+              , if quiet
+                  then HH.span [ HP.class_ (HH.ClassName "q-warn") ]
+                    [ HH.text (srcName <> " is reading " <> fmt srcDb
+                        <> " dB — nothing is playing into it. Check the patch, \
+                           \or choose another input above.") ]
+                  else HH.span [ HP.class_ (HH.ClassName "q-state") ]
+                    [ HH.text (case st.fill of
+                        Swept -> "the take closes itself when the last position has sounded"
+                        Played -> maybe "" (\c -> if c.holds
+                                                    then "captured " <> fmt c.secs <> " s"
+                                                    else Kind.prompt st.kind) cp) ]
               ]
       )
 
@@ -1132,29 +1151,48 @@ render st =
       -- than the width of the screen.
       _ -> [ HP.class_ (HH.ClassName ("q-grid is-line" <> extra)) ]
 
-  -- | **The input, in the masthead, with what it is hearing right now.**
+  -- | **What it is listening to, and whether anything is coming in.**
   -- |
-  -- | It was five chips and a row of its own, four of which read -80 dB and
-  -- | none of which changed between takes. One chooser and one level says the
-  -- | same thing in a tenth of the space — and says it where it is visible on
-  -- | every page, rather than only on the one you happen to be looking at.
-  inputPick = case st.looper of
+  -- | This was five chips, then a chooser in the masthead, and the masthead
+  -- | was worse: a whole transect went to an input with nothing patched to
+  -- | it. Off in a corner, subtle, and read once at the start of a session
+  -- | when it was still right. It belongs where the decision is SPENT —
+  -- | directly above the button that spends it.
+  -- |
+  -- | And the number is not enough on its own. A meter MOVES: play a note and
+  -- | the bar jumps, which answers "is this the right input" in the only way
+  -- | that cannot be misread. The daemon has been metering every source
+  -- | separately all along; nothing here is new except showing it.
+  inputRow = case st.looper of
     Nothing -> HH.text ""
     Just top ->
-      HH.label [ HP.class_ (HH.ClassName "q-input") ]
-        [ HH.select
-            [ HP.disabled (st.armed || writing), HE.onValueChange PickSource ]
-            (Array.mapWithIndex
-              (\i src -> HH.option
-                [ HP.value (show (i + 1)), HP.selected (i + 1 == srcNow)
-                , HP.disabled (not src.available) ]
-                [ HH.text (src.name <> (if src.available then "" else " — off")) ])
-              top.sources)
-        -- The level, from the daemon, on the one input that matters. A dead
-        -- input is visible before you play into it rather than afterwards.
-        , HH.span [ HP.class_ (HH.ClassName ("q-inputdb" <> if quiet then " is-quiet" else "")) ]
+      HH.div [ HP.class_ (HH.ClassName "q-listen") ]
+        [ HH.label [ HP.class_ (HH.ClassName "q-stack") ]
+            [ HH.span_ [ HH.text "listening to" ]
+            , HH.select
+                [ HP.disabled (st.armed || writing), HE.onValueChange PickSource ]
+                (Array.mapWithIndex
+                  (\i src -> HH.option
+                    [ HP.value (show (i + 1)), HP.selected (i + 1 == srcNow)
+                    , HP.disabled (not src.available) ]
+                    [ HH.text (src.name <> (if src.available then "" else " — off")) ])
+                  top.sources)
+            ]
+        , HH.div [ HP.class_ (HH.ClassName "q-meter") ]
+            [ HH.div
+                [ HP.class_ (HH.ClassName ("q-meterbar" <> if quiet then " is-quiet" else ""))
+                , HP.style ("width: " <> show (Int.round (meterPc * 100.0)) <> "%")
+                ]
+                []
+            ]
+        , HH.span
+            [ HP.class_ (HH.ClassName ("q-meterdb" <> if quiet then " is-quiet" else "")) ]
             [ HH.text (fmt srcDb <> " dB") ]
         ]
+
+  -- | Where the bar sits, 0 at -60 dB and full at 0. Below -60 nobody is
+  -- | playing into it, so the bar is empty and says so by being empty.
+  meterPc = clampN 0.0 1.0 ((srcDb + 60.0) / 60.0)
 
   -- Whichever is chosen, or the first the daemon says is available.
   srcNow =
@@ -1163,8 +1201,13 @@ render st =
       (st.looper >>= \top -> Array.findIndex _.available top.sources)
   srcDb = maybe (-120.0) _.db
     (st.looper >>= \top -> Array.index top.sources (srcNow - 1))
-  -- Below this an input is not being played into; -120 is nothing patched.
-  quiet = srcDb < -90.0
+  -- | **Below this nobody is playing into it.**
+  -- |
+  -- | Was -90, which -80 does not trip — and -80 is silence. A whole transect
+  -- | went to an input with nothing patched to it while the page showed the
+  -- | reading and called it fine. -60 is quiet in any room; anything a module
+  -- | is actually driving sits far above it.
+  quiet = srcDb < -60.0
 
   connection = case st.looper of
     Nothing -> HH.span [ HP.class_ (HH.ClassName "q-warn") ] [ HH.text "no daemon" ]
@@ -1667,6 +1710,19 @@ render st =
   -- | this page looks like.
   spread
     | Array.length st.regions < 3 = HH.text ""
+    -- | **Silent is not flat, and the flat test cannot catch it.**
+    -- |
+    -- | Twelve regions of noise floor have ratios like level x1.35 — the
+    -- | noise is not constant, so they are not "within a few percent" and the
+    -- | flat warning stays quiet while the whole take is nothing. Measured on
+    -- | the take that proved it: peak 0.00014 throughout, which is -77 dBFS.
+    -- | A separate question, asked separately.
+    | loudest < 0.003 =
+        HH.span [ HP.class_ (HH.ClassName "q-warn") ]
+          [ HH.text ("nothing was recorded — the loudest sample in this take \
+                     \peaks at " <> show (Int.round (loudest * 100000.0))
+              <> "/100000, which is silence. The input had nothing playing \
+                 \into it.") ]
     | otherwise =
         let
           rng f =
