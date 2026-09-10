@@ -138,7 +138,27 @@ body {
    sets its own column count inline, from the inner axis — the one that
    varies fastest, which is what makes it the row. */
 .q-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
-.q-grid.is-shaped { grid-template-columns: var(--cols); }
+/* Two axes: the inner axis is the row, cells are small, and it scrolls
+   sideways rather than squeezing to nothing. Horizontal scroll is a thing to
+   avoid in most interfaces and the right answer in this one — a 12 x 16 set
+   is a wall by nature, and shrinking it until it fits is what would make it
+   unreadable. */
+.q-grid.is-shaped { grid-template-columns: var(--cols); overflow-x: auto; padding-bottom: 6px; gap: 5px; }
+/* 56px, so a 4 x 8 fits the column and only a set that is genuinely a wall
+   scrolls. A 12 x 16 does, and should. */
+.q-grid.is-shaped .q-cell { height: 56px; }
+.q-grid.is-shaped .q-tile-svg { height: 34px; }
+
+/* One axis: a column, not a row. Twelve samples laid across the page is a row
+   you read left to right and compare by memory; stacked, they are twelve
+   traces one under another with their envelopes aligned, which is how you see
+   that position 7 is the odd one out. */
+.q-grid.is-line { grid-template-columns: 1fr; gap: 3px; }
+.q-grid.is-line .q-tile { display: grid; grid-template-columns: 22px 1fr auto; align-items: center; gap: 8px; }
+.q-grid.is-line .q-tile-face { padding: 2px 0 2px 6px; }
+.q-grid.is-line .q-tile-svg { height: 26px; }
+.q-grid.is-line .q-tile-foot { padding: 0 8px 0 0; }
+.q-grid.is-line .q-cell { height: 26px; }
 .q-tile { border: 1px solid var(--rule); border-radius: 3px; background: #fff; overflow: hidden; transition: border-color .12s; }
 .q-tile:hover { border-color: var(--ink); }
 .q-tile.is-playing { border-color: var(--hot); }
@@ -228,15 +248,17 @@ body {
    Recto and verso. The right page is given the extra width because it holds
    the small multiples, and the left is floored at a measure the curve rail
    and its routing fit on without wrapping. */
-/* **The left page is a form; the right page is data.**
+/* **Left is the take; right is the instrument.**
    
-   A form does not get better with width — past about 600px the routing fields
-   are simply further apart — so the left page is fixed within a range and
-   every pixel the window gains goes to the right. */
+   A one-dimensional transect is a vertical stack of traces, which wants a
+   narrow column and no more — so what the take IS and what came OUT of it
+   share the left page, and every pixel the window gains goes to the right,
+   where the curves are actually worked. A grid of two axes is the one thing
+   that wants width on the left, and it scrolls rather than pushing. */
 /* `stretch`, not `start`: the rule between the pages runs the height of the
    taller one, which is what makes it a spread rather than two stacked boxes
    that happen to be side by side. */
-.q-spread { display: grid; grid-template-columns: minmax(400px, 600px) 1fr;
+.q-spread { display: grid; grid-template-columns: minmax(380px, 560px) 1fr;
   gap: clamp(20px, 2vw, 36px); align-items: stretch; }
 .q-recto { border-right: 1px solid var(--rule); padding-right: clamp(20px, 2vw, 36px); }
 .q-recto, .q-verso { margin-bottom: 30px; }
@@ -248,6 +270,13 @@ body {
 /* Two pages, named. A text nav rather than boxed tabs: the rule under the
    masthead is the only frame it needs. */
 .q-nav { display: flex; gap: 16px; }
+/* The input, in the masthead: one chooser and the level it is hearing, where
+   five chips and a row of their own used to be. */
+.q-input { display: inline-flex; align-items: center; gap: 8px; }
+.q-input select { padding: 4px 6px; border: 1px solid var(--rule); border-radius: 3px;
+  background: #fff; font: inherit; font-size: 12px; }
+.q-inputdb { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; min-width: 62px; }
+.q-inputdb.is-quiet { color: var(--hot); }
 .q-tab { border: 0; background: none; padding: 0 0 2px; font: inherit; font-size: 13px;
   color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -12px; }
 .q-tab:hover { color: var(--ink); }
@@ -275,8 +304,8 @@ body {
    run finishes: the empty cell and the specimen that replaces it are the same
    size and in the same place. A smaller placeholder would have made the shape
    of the run unreadable and then jumped. */
-.q-grid.is-planned { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); }
-.q-grid.is-planned.is-shaped { grid-template-columns: var(--cols); }
+
+
 .q-cell { display: flex; align-items: center; justify-content: center;
   height: 74px; border: 1px dashed var(--rule); border-radius: 3px;
   font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; background: #fff; }
@@ -310,13 +339,26 @@ body {
 .q-curvelabel { flex: 1; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
 
 .q-curveparam { display: flex; flex-direction: column; gap: 6px; padding-top: 2px; }
+/* The routing as a phrase. Monospace figures so two parameters' ranges line
+   up under each other and a wrong one is visible without reading it. */
+.q-swsays { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.q-swaxis { font-family: inherit; }
 .q-swname { padding: 5px 8px; border: 1px solid var(--rule); border-radius: 3px; font: inherit; font-size: 13px; width: 220px; }
 .q-swwhere { display: flex; align-items: center; gap: 5px 12px; flex-wrap: wrap; }
 /* The CV half and the MIDI half, each unbreakable, so the row wraps at the
    one point where a break says something. */
 .q-swgroup { display: inline-flex; align-items: center; gap: 5px; }
+/* **Label above value.** Beside, a row of seven fields is fourteen items wide
+   and wraps at the first excuse — which it did. Stacked, each field is one
+   narrow column and the labels line up across the row. */
+.q-stack { display: inline-flex; flex-direction: column; gap: 2px; }
+.q-stack > span { font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); }
+.q-stack input, .q-stack select { padding: 5px 7px; border: 1px solid var(--rule); border-radius: 3px;
+  font: inherit; font-size: 13px; font-variant-numeric: tabular-nums; }
+.q-stack.is-tiny > span { font-size: 9px; }
+.q-stack.is-tiny input { padding: 3px 5px; font-size: 11px; }
 .q-swtiny { display: inline-flex; align-items: center; gap: 3px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
-.q-swtiny input { padding: 3px 5px; border: 1px solid var(--rule); border-radius: 3px; font: inherit; font-size: 11px; font-variant-numeric: tabular-nums; }
 .q-swtiny select { padding: 2px 4px; border: 1px solid var(--rule); border-radius: 3px; font: inherit; font-size: 11px; }
 .q-swarrow { color: var(--rule); font-size: 11px; line-height: 1; }
 .q-swmini { border: 1px solid var(--rule); background: #fff; border-radius: 3px; cursor: pointer; font: inherit; font-size: 11px; padding: 3px 7px; }

@@ -15,6 +15,7 @@
 module Quadrat.SweepView
   ( Handlers
   , body
+  , settings
   ) where
 
 import Prelude
@@ -40,34 +41,23 @@ type Handlers act =
   , openParam :: Maybe Int -> act
   }
 
-body :: forall w act. Handlers act -> HH.HTML w act
-body h =
+-- | **What the take is** — the destination, the shape of the set, and the two
+-- | intervals that decide how long it runs. The left page's, because they
+-- | describe the take rather than the instrument: change one and you are
+-- | asking for a different set, not moving a different knob.
+settings :: forall w act. Handlers act -> HH.HTML w act
+settings h =
   HH.div [ cls "q-sweep" ]
     [ encodingRow
     , objections
-    , HH.div [ cls "q-curves" ] (Array.concat (Array.mapWithIndex row p.params))
-    , HH.div [ cls "q-swadd" ]
-        [ HH.button
-            [ cls "q-plain"
-            , HP.disabled (Array.length p.params >= 8)
-            , HP.title "one curve for every parameter you want to move"
-            , HE.onClick \_ -> h.msg AddParam
-            ]
-            [ HH.text "+ curve" ]
-        , HH.span [ cls "q-muted" ]
-            [ HH.text "A parameter with no curve is held. Click a curve to step \
-                      \through the shapes; open it to place every value by hand." ]
-        ]
-    , trigger
     ]
   where
   p = h.plan
   axs = Encoding.axes p.encoding
 
-  -- | **The encoding first, because everything else follows from it.**
   encodingRow =
     HH.div [ cls "q-swrow" ]
-      ( [ HH.label [ cls "q-field is-tight" ]
+      ( [ HH.label [ cls "q-stack" ]
             [ HH.span_ [ HH.text "encoding" ]
             , HH.select [ HE.onValueChange (h.msg <<< PickEncoding) ]
                 (map
@@ -78,35 +68,17 @@ body h =
             ]
         ]
           <> Array.mapWithIndex extentField axs
-          <> [ field "settle ms" (show p.settleMs) SetSettle 5
+          <> [ field "settle ms" (show p.settleMs) SetSettle 4
                  "after setting the parameters, before the trigger — too short and a \
                  \cell is a blend of itself and its neighbour"
              , field "spacing ms" (show p.spacingMs) SetSpacing 5
                  "trigger to trigger; long enough for the sound to finish AND for a \
                  \gap to be visible after it"
-             , HH.label [ cls "q-field is-tight" ]
-                 [ HH.span_ [ HH.text "midi out" ]
-                 , HH.select [ HE.onValueChange (h.msg <<< SetPort) ]
-                     (Array.cons
-                       (HH.option [ HP.value "", HP.selected (p.port == "") ]
-                         [ HH.text (if Array.null h.ports
-                                      then "none yet — allow MIDI when Chrome asks"
-                                      else "none") ])
-                       (map (\o -> HH.option
-                               [ HP.value o, HP.selected (o == p.port) ] [ HH.text o ])
-                          h.ports))
-                 ]
              ]
       )
 
-  -- | **A chooser where the destination enumerates, a box where it does not.**
-  -- |
-  -- | SLICER's eight divisions are the whole of what a slice axis can be, and
-  -- | a dropdown says so at a glance. SuperDirt's `n` has no such list, and a
-  -- | five-hundred-entry dropdown would be a set of choices pretending to be a
-  -- | constraint. Same `Axis`, one flag, two controls.
   extentField i ax =
-    HH.label [ cls "q-field is-tight", HP.title (ax.name <> " — picked by " <> ax.picked) ]
+    HH.label [ cls "q-stack", HP.title (ax.name <> " — picked by " <> ax.picked) ]
       [ HH.span_ [ HH.text (ax.name <> "s") ]
       , if ax.free
           then HH.input
@@ -124,25 +96,66 @@ body h =
                      ax.sizes)
       ]
 
-  -- | **What the destination will refuse, said before anything is recorded.**
-  -- |
-  -- | `msm kit build` makes the same objections at write time, which is after
-  -- | the hits exist. This is the only place saying it can save anything.
   objections =
     case Encoding.objections p.encoding p.extent of
       [] ->
         HH.div [ cls "q-swnote" ]
-          -- Not the count: the right page of the spread draws it, and a
-          -- number said twice a hand's breadth apart is a number you check
-          -- against itself instead of reading.
           [ HH.text ("about "
               <> show (Int.round (Int.toNumber
                    (Encoding.total p.extent * (p.settleMs + p.spacingMs)) / 1000.0))
-              <> " s to record")
-          ]
+              <> " s to record") ]
       objs ->
         HH.div [ cls "q-swnote is-bad" ]
           (map (\o -> HH.div_ [ HH.text o ]) objs)
+
+  field lbl v act w title =
+    HH.label [ cls "q-stack", HP.title title ]
+      [ HH.span_ [ HH.text lbl ]
+      , HH.input
+          [ HP.type_ HP.InputText, HP.value v
+          , style ("width: " <> show (w * 11 + 18) <> "px")
+          , HE.onValueInput (h.msg <<< act) ]
+      ]
+
+body :: forall w act. Handlers act -> HH.HTML w act
+body h =
+  HH.div [ cls "q-sweep" ]
+    -- **The trigger first.** It is rig setup — which jack fires the sound —
+    -- set once when the cable went in and then left alone, where the curves
+    -- below it are the thing being worked on. It was at the bottom because it
+    -- was added last, which is not a reason.
+    [ trigger
+    , HH.div [ cls "q-curves" ] (Array.concat (Array.mapWithIndex row p.params))
+    , HH.div [ cls "q-swadd" ]
+        [ HH.button
+            [ cls "q-plain"
+            , HP.disabled (Array.length p.params >= 8)
+            , HP.title "one curve for every parameter you want to move"
+            , HE.onClick \_ -> h.msg AddParam
+            ]
+            [ HH.text "+ curve" ]
+        , HH.span [ cls "q-muted" ]
+            [ HH.text "A parameter with no curve is held. Click a curve to step \
+                      \through the shapes; open it to place every value by hand." ]
+        ]
+    ]
+  where
+  p = h.plan
+  axs = Encoding.axes p.encoding
+
+  -- | **The encoding first, because everything else follows from it.**
+
+  -- | **A chooser where the destination enumerates, a box where it does not.**
+  -- |
+  -- | SLICER's eight divisions are the whole of what a slice axis can be, and
+  -- | a dropdown says so at a glance. SuperDirt's `n` has no such list, and a
+  -- | five-hundred-entry dropdown would be a set of choices pretending to be a
+  -- | constraint. Same `Axis`, one flag, two controls.
+
+  -- | **What the destination will refuse, said before anything is recorded.**
+  -- |
+  -- | `msm kit build` makes the same objections at write time, which is after
+  -- | the hits exist. This is the only place saying it can save anything.
 
   -- | A curve, and the parameter it moves. The sketch's left two columns, kept
   -- | on one row so the arrow between them needs no drawing.
@@ -173,35 +186,18 @@ body h =
             [ cls "q-swname", HP.type_ HP.InputText, HP.value q.name
             , HP.title "what this parameter is called on the instrument"
             , HE.onValueInput (h.msg <<< SetName i) ]
-        -- | **Where it is reached, in two groups that wrap as units.**
+        -- | **Where it goes, said in a phrase rather than in nine boxes.**
         -- |
-        -- | Nine small fields in one flex row wrapped wherever it ran out, so
-        -- | `ch 1 ×` would end up alone on a second line under a gap and the
-        -- | CV and MIDI halves of one parameter read as one run of numbers.
-        -- | Grouped, the break falls between them — which is the only place it
-        -- | could mean anything — and a rig that uses one and not the other
-        -- | still reads as two halves rather than as a wrapped sentence.
-        , HH.div [ cls "q-swwhere" ]
-            [ HH.span [ cls "q-swgroup" ]
-                [ tiny "cv" 3 (maybe "" show q.cv) (SetCv i)
-                    "es9-daemon bus — 8 is ES-9 panel jack 1, 15 is jack 8; blank for none"
-                , tiny "" 4 (num q.cvLo) (SetCvLo i)
-                    "what 0 means on that bus, -1 to 1 (1.0 is FULL output: this path is not halved)"
-                , arrow
-                , tiny "" 4 (num q.cvHi) (SetCvHi i) "what 1 means on that bus"
-                ]
-            , HH.span [ cls "q-swgroup" ]
-                [ tiny "cc" 3 (maybe "" show q.cc) (SetCc i) "controller number; blank for none"
-                , tiny "" 3 (show q.ccLo) (SetCcLo i) "controller value at 0"
-                , arrow
-                , tiny "" 3 (show q.ccHi) (SetCcHi i) "controller value at 1"
-                , tiny "ch" 2 (show q.channel) (SetChannel i) "MIDI channel"
-                ]
-            , axisPick i q
-            , HH.button
-                [ cls "q-swmini is-drop", HP.title "remove this parameter"
-                , HE.onClick \_ -> h.msg (DropParam i) ]
-                [ HH.text "×" ]
+        -- | The routing was always on screen and almost never touched: a bus
+        -- | and a range, set once when the cable went in. Nine small fields
+        -- | for that crowded out the two things you DO read — the shape and
+        -- | the name — and made every extra parameter cost a line of numbers.
+        -- | So the card states it, and `open` is where you change it, beside
+        -- | the sliders that are the other reason to open a parameter.
+        , HH.div [ cls "q-swsays" ]
+            [ HH.text (routing q)
+            , HH.span [ cls "q-swaxis" ]
+                [ HH.text (" · " <> maybe "" _.name (Array.index axs q.axis)) ]
             ]
         ]
     ]
@@ -232,9 +228,52 @@ body h =
             [ HH.text (q.name <> " — "
                 <> show (Array.length vs) <> " values along "
                 <> maybe "the axis" _.name (Array.index axs q.axis)) ]
+        , where_ i q
         , HH.div [ cls "q-deskgrid" ]
             (Array.mapWithIndex (cell i) vs)
         ]
+
+  -- | **A parameter's destination as one line.** Blank on both is worth
+  -- | saying out loud: a curve routed nowhere moves nothing, and it looks
+  -- | exactly like one that does until the take comes back flat.
+  routing q =
+    case q.cv, q.cc of
+      Nothing, Nothing -> "not routed — this parameter moves nothing"
+      Just b, Nothing -> "cv " <> show b <> "  " <> num q.cvLo <> " → " <> num q.cvHi
+      Nothing, Just c ->
+        "cc " <> show c <> " ch " <> show q.channel
+          <> "  " <> show q.ccLo <> " → " <> show q.ccHi
+      Just b, Just c ->
+        "cv " <> show b <> "  " <> num q.cvLo <> " → " <> num q.cvHi
+          <> "   ·   cc " <> show c <> " ch " <> show q.channel
+          <> "  " <> show q.ccLo <> " → " <> show q.ccHi
+
+  -- | **The routing, where you opened the parameter to change it.**
+  -- |
+  -- | Beside the sliders because they are the two reasons to open one, and
+  -- | because for most of a session the defaults are right — which is an
+  -- | argument for having them out of the way, not for having them absent.
+  where_ i q =
+    HH.div [ cls "q-swwhere" ]
+      [ HH.span [ cls "q-swgroup" ]
+          [ tiny "cv bus" 3 (maybe "" show q.cv) (SetCv i)
+              "es9-daemon bus — 8 is ES-9 panel jack 1, 15 is jack 8; blank for none"
+          , tiny "at 0" 4 (num q.cvLo) (SetCvLo i)
+              "what 0 means on that bus, -1 to 1 (1.0 is FULL output: this path is not halved)"
+          , tiny "at 1" 4 (num q.cvHi) (SetCvHi i) "what 1 means on that bus"
+          ]
+      , HH.span [ cls "q-swgroup" ]
+          [ tiny "cc" 3 (maybe "" show q.cc) (SetCc i) "controller number; blank for none"
+          , tiny "at 0" 3 (show q.ccLo) (SetCcLo i) "controller value at 0"
+          , tiny "at 1" 3 (show q.ccHi) (SetCcHi i) "controller value at 1"
+          , tiny "ch" 2 (show q.channel) (SetChannel i) "MIDI channel"
+          ]
+      , axisPick i q
+      , HH.button
+          [ cls "q-swmini is-drop", HP.title "remove this parameter"
+          , HE.onClick \_ -> h.msg (DropParam i) ]
+          [ HH.text "× remove" ]
+      ]
 
   cell i j v =
     let pc = Int.round (v * 100.0)
@@ -263,10 +302,29 @@ body h =
       , field "ch" (show p.trigger.channel) SetTrigChannel 3 "MIDI channel for the note"
       , field "vel" (show p.trigger.velocity) SetVelocity 4 "how hard"
       , field "hold ms" (show p.trigger.ms) SetHold 4 "how long it is held"
+      -- Where the note goes, beside the note. It was over with the encoding,
+      -- which is about the shape of the set and has nothing to say about MIDI.
+      , HH.label [ cls "q-stack" ]
+          [ HH.span_ [ HH.text "midi out" ]
+          , HH.select [ HE.onValueChange (h.msg <<< SetPort) ]
+              (Array.cons
+                (HH.option [ HP.value "", HP.selected (p.port == "") ]
+                  [ HH.text (if Array.null h.ports then "none yet" else "none") ])
+                (map (\o -> HH.option
+                        [ HP.value o, HP.selected (o == p.port) ] [ HH.text o ])
+                   h.ports))
+          ]
       ]
 
+  -- | **Label above value, not beside it.**
+  -- |
+  -- | Beside, a row of seven fields is fourteen items wide and wraps onto a
+  -- | second line at the first excuse — which it did. Stacked, each field is
+  -- | one narrow column, the row holds twice as many, and the labels line up
+  -- | across it so the row reads as a table of one row rather than as a
+  -- | sentence of alternating words.
   field lbl v act w title =
-    HH.label [ cls "q-field is-tight", HP.title title ]
+    HH.label [ cls "q-stack", HP.title title ]
       [ HH.span_ [ HH.text lbl ]
       , HH.input
           [ HP.type_ HP.InputText, HP.value v
@@ -274,14 +332,12 @@ body h =
           , HE.onValueInput (h.msg <<< act) ]
       ]
 
-  arrow = HH.span [ cls "q-swarrow" ] [ HH.text "→" ]
-
   tiny lbl w v act title =
-    HH.label [ cls "q-swtiny", HP.title title ]
-      [ if lbl == "" then HH.text "" else HH.span_ [ HH.text lbl ]
+    HH.label [ cls "q-stack is-tiny", HP.title title ]
+      [ HH.span_ [ HH.text lbl ]
       , HH.input
           [ HP.type_ HP.InputText, HP.value v
-          , style ("width: " <> show (w * 9 + 14) <> "px")
+          , style ("width: " <> show (w * 10 + 16) <> "px")
           , HE.onValueInput (h.msg <<< act) ]
       ]
 

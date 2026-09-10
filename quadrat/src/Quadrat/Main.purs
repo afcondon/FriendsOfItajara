@@ -205,6 +205,16 @@ type State =
   , overran :: Boolean
   , page :: Page
   , fill :: Fill
+  -- | **Which input the next take listens to**, 1-based, or zero for the
+  -- | first available.
+  -- |
+  -- | Held here because a capture has no source until it starts, so there is
+  -- | nothing to read it back from. That was the shape of an old bug — the
+  -- | page kept its own idea of the input and asserted it at Arm, so a reload
+  -- | silently armed on the wrong one. The answer is not to hide the choice
+  -- | but to put it where it cannot be missed: in the masthead, with the
+  -- | level it is reading right now, and named on the button that uses it.
+  , source :: Int
   }
 
 data Action
@@ -241,6 +251,7 @@ data Action
   | RefreshSets
   | GoTo Page
   | FillBy Fill
+  | PickSource String
   | RunAgain String
   | PlaceSet String
 
@@ -256,7 +267,7 @@ component = H.mkComponent
       , sweep: Sweep.emptyPlan, sweepOpen: false, sweepAt: Nothing
       , sweepFork: Nothing, midiPorts: [], swept: false, sweepEdit: Nothing
       , schedule: [], sets: [], overran: false
-      , page: Bench, fill: Swept }
+      , page: Bench, fill: Swept, source: 0 }
   , render
   , eval: H.mkEval H.defaultEval { handleAction = handleAction, initialize = Just Init }
   }
@@ -573,6 +584,7 @@ handleAction = case _ of
   -- | the first time, and a permission dialog appearing in the middle of a run
   -- | would cost the take.
   GoTo pg -> H.modify_ _ { page = pg }
+  PickSource v -> H.modify_ \s0 -> s0 { source = fromMaybe s0.source (Int.fromString v) }
   -- | **Choosing how to fill the take**, and asking the browser for MIDI the
   -- | first time a transect is chosen.
   -- |
@@ -932,6 +944,7 @@ render st =
             , pageTab Library "Library" "every set kept, re-runnable, and where it can go"
             ]
         , HH.span [ HP.class_ (HH.ClassName "q-sub") ] [ HH.text tagline ]
+        , inputPick
         , connection
         ]
     , case st.page of
@@ -942,27 +955,42 @@ render st =
         -- | the only loop that matters here — run, listen, bend, run again.
         -- | You cannot judge a curve against a sound you have to leave the
         -- | page to hear. Side by side they are one gesture.
+        -- | **Left is the take; right is the instrument.**
+        -- |
+        -- | Andrew's arrangement, and the samples argued for it: a
+        -- | one-dimensional transect is a vertical stack of traces, which
+        -- | wants a narrow column and no more. So what the take IS and what
+        -- | came OUT of it share the left page — they are the same subject —
+        -- | and the right page is given to the thing that needs width and is
+        -- | actually being worked: the trigger, and a curve per parameter.
         Bench ->
           HH.div [ HP.class_ (HH.ClassName "q-spread") ]
             [ HH.section [ HP.class_ (HH.ClassName "q-recto") ]
-                [ HH.h2_ [ HH.text "The run" ]
+                [ HH.h2_ [ HH.text "The take" ]
                 , fillRow
                 , nameField
                 , case st.fill of
-                    Swept -> transectPanel
+                    Swept -> SweepView.settings
+                      { ports: st.midiPorts, open: st.sweepEdit, plan: st.sweep
+                      , msg: SweepMsg, openParam: OpenParam }
                     Played -> handPanel
                 , goRow
-                ]
-            , HH.section [ HP.class_ (HH.ClassName "q-verso") ]
-                [ HH.h2_ [ HH.text "The record" ]
                 , if not (Array.null st.regions) || st.busy || hasTake
                     then caught
-                    -- **A hand-played take has no plan to draw.** The grid is
-                    -- the transect's shape; showing it here would promise a
-                    -- set of twelve to someone about to play four.
                     else case st.fill of
                       Swept -> expected
                       Played -> waiting
+                ]
+            , HH.section [ HP.class_ (HH.ClassName "q-verso") ]
+                [ HH.h2_ [ HH.text (case st.fill of
+                    Swept -> "What moves, and what strikes it"
+                    Played -> "The instrument") ]
+                , case st.fill of
+                    Swept -> transectPanel
+                    Played -> HH.p [ HP.class_ (HH.ClassName "q-blurb") ]
+                      [ HH.text "Nothing is driving the instrument — you are. \
+                                \Switch to Transect to have the rig play a \
+                                \schedule of positions instead." ]
                 ]
             ]
         Library ->
@@ -977,7 +1005,6 @@ render st =
   -- Four booleans where the loop needed `layers`, `armed`, `isWriting` and
   -- `sized` read together, and where the combination — not any one of them —
   -- said which of six states a loop was in.
-  srcNow = maybe 0 _.src cp
   srcName = maybe "?" _.name
     (st.looper >>= \top -> Array.index top.sources (srcNow - 1))
   hasTake = maybe false _.holds cp
@@ -1046,17 +1073,34 @@ render st =
             , HH.span [ HP.class_ (HH.ClassName "q-state") ]
                 [ HH.text ("recording — " <> elapsed <> " s") ]
             ]
-          else case st.fill of
-            Swept ->
-              [ HH.span [ HP.class_ (HH.ClassName "q-arm-label") ]
-                  [ HH.text (if running then "Running" else "Run on") ] ]
-                <> runOrStop
-            Played ->
-              [ armRow
+          else if running
+            then
+              [ HH.span [ HP.class_ (HH.ClassName "q-state") ]
+                  [ HH.text ("position " <> show (maybe 0 (_ + 1) st.sweepAt)
+                      <> " of " <> show (Encoding.total st.sweep.extent)) ]
+              , HH.button
+                  [ HP.class_ (HH.ClassName "q-big is-stop"), HE.onClick \_ -> StopSweep ]
+                  [ HH.text "Stop" ]
+              ]
+            else
+              -- **One button, and it names what it will listen to.** Five
+              -- chips became a chooser in the masthead; the gesture stayed
+              -- one press, and the press still says out loud which input it
+              -- is about to arm — which is the property the chips were there
+              -- for and the only one worth keeping.
+              [ HH.button
+                  [ HP.class_ (HH.ClassName "q-big is-go")
+                  , HP.disabled (st.looper == Nothing)
+                  , HE.onClick \_ ->
+                      if st.fill == Swept then RunSweep srcNow else ArmOn srcNow
+                  ]
+                  [ HH.text ((if st.fill == Swept then "Run on " else "Arm on ") <> srcName) ]
               , HH.span [ HP.class_ (HH.ClassName "q-state") ]
-                  [ HH.text (maybe "" (\c -> if c.holds
-                                               then "captured " <> fmt c.secs <> " s"
-                                               else "ready") cp) ]
+                  [ HH.text (case st.fill of
+                      Swept -> "the take closes itself when the last position has sounded"
+                      Played -> maybe "" (\c -> if c.holds
+                                                  then "captured " <> fmt c.secs <> " s"
+                                                  else Kind.prompt st.kind) cp) ]
               ]
       )
 
@@ -1067,20 +1111,60 @@ render st =
   -- | because the count is data (2…128) and a class per count would be a
   -- | stylesheet that had to know the encodings.
   -- |
-  -- | Empty for one axis, where `auto-fill` is right: a line of N has no shape
-  -- | to respect and should use whatever width there is.
-  shaped =
+  -- | One axis takes neither: a line of N is a vertical stack, and its rule
+  -- | is in the stylesheet under `.is-line`.
+  shaped = grids ""
+
+  shapedPlan = grids " is-planned"
+
+  grids extra =
     case st.sweep.extent of
       [ _, inner ] | inner > 1 ->
-        [ HP.class_ (HH.ClassName "q-grid is-shaped")
-        , HP.style ("--cols: repeat(" <> show inner <> ", minmax(0, 1fr))")
+        [ HP.class_ (HH.ClassName ("q-grid is-shaped" <> extra))
+        , HP.style ("--cols: repeat(" <> show inner <> ", minmax(56px, 1fr))")
         ]
-      _ -> [ HP.class_ (HH.ClassName "q-grid") ]
+      -- **A transect is a line, and a line is a column.**
+      --
+      -- Twelve samples laid across the page is a row you read left to right
+      -- and compare by memory. Stacked, they are twelve traces one under
+      -- another with their envelopes aligned — which is how you see that
+      -- position 7 is the odd one out — and they cost a narrow column rather
+      -- than the width of the screen.
+      _ -> [ HP.class_ (HH.ClassName ("q-grid is-line" <> extra)) ]
 
-  -- The same, for the cells drawn before there is anything to draw.
-  shapedPlan = case shaped of
-    [ _, sty ] -> [ HP.class_ (HH.ClassName "q-grid is-planned is-shaped"), sty ]
-    _ -> [ HP.class_ (HH.ClassName "q-grid is-planned") ]
+  -- | **The input, in the masthead, with what it is hearing right now.**
+  -- |
+  -- | It was five chips and a row of its own, four of which read -80 dB and
+  -- | none of which changed between takes. One chooser and one level says the
+  -- | same thing in a tenth of the space — and says it where it is visible on
+  -- | every page, rather than only on the one you happen to be looking at.
+  inputPick = case st.looper of
+    Nothing -> HH.text ""
+    Just top ->
+      HH.label [ HP.class_ (HH.ClassName "q-input") ]
+        [ HH.select
+            [ HP.disabled (st.armed || writing), HE.onValueChange PickSource ]
+            (Array.mapWithIndex
+              (\i src -> HH.option
+                [ HP.value (show (i + 1)), HP.selected (i + 1 == srcNow)
+                , HP.disabled (not src.available) ]
+                [ HH.text (src.name <> (if src.available then "" else " — off")) ])
+              top.sources)
+        -- The level, from the daemon, on the one input that matters. A dead
+        -- input is visible before you play into it rather than afterwards.
+        , HH.span [ HP.class_ (HH.ClassName ("q-inputdb" <> if quiet then " is-quiet" else "")) ]
+            [ HH.text (fmt srcDb <> " dB") ]
+        ]
+
+  -- Whichever is chosen, or the first the daemon says is available.
+  srcNow =
+    if st.source > 0 then st.source
+    else 1 + fromMaybe 0
+      (st.looper >>= \top -> Array.findIndex _.available top.sources)
+  srcDb = maybe (-120.0) _.db
+    (st.looper >>= \top -> Array.index top.sources (srcNow - 1))
+  -- Below this an input is not being played into; -120 is nothing patched.
+  quiet = srcDb < -90.0
 
   connection = case st.looper of
     Nothing -> HH.span [ HP.class_ (HH.ClassName "q-warn") ] [ HH.text "no daemon" ]
@@ -1092,42 +1176,10 @@ render st =
   -- | page cannot arm on an input you did not just choose, because choosing is
   -- | the gesture. Each chip shows what the daemon says that input is doing
   -- | right now, so a dead one is visible before you play into it.
-  armRow =
-    HH.div [ HP.class_ (HH.ClassName "q-arm") ]
-      [ HH.span [ HP.class_ (HH.ClassName "q-arm-label") ] [ HH.text "Arm on" ]
-      , HH.div [ HP.class_ (HH.ClassName "q-chips") ]
-          (maybe [ HH.text "no daemon" ]
-            (\top -> Array.mapWithIndex chip top.sources)
-            st.looper)
-      ]
 
-  chip n s =
-    HH.button
-      [ HP.class_ (HH.ClassName ("q-chip is-arm"
-          <> (if srcNow == n + 1 then " on" else "")
-          <> (if s.available then "" else " off")))
-      , HP.disabled (not s.available)
-      , HP.title (if s.available
-                    then "arm on " <> s.name <> " — it reads " <> fmt s.db <> " dBFS right now"
-                    else s.name <> " is on an interface that is not switched on")
-      , HE.onClick \_ -> ArmOn (n + 1)
-      ]
-      [ HH.span [ HP.class_ (HH.ClassName "q-chip-name") ] [ HH.text s.name ]
-      , HH.span [ HP.class_ (HH.ClassName "q-chip-db") ] [ HH.text (fmt s.db) ]
-      ]
 
   running = Maybe.isJust st.sweepFork
 
-  runChip n src =
-    HH.button
-      [ HP.class_ (HH.ClassName ("q-chip is-arm" <> if src.available then "" else " off"))
-      , HP.disabled (not src.available)
-      , HP.title ("arm on " <> src.name <> " and start the run")
-      , HE.onClick \_ -> RunSweep (n + 1)
-      ]
-      [ HH.span [ HP.class_ (HH.ClassName "q-chip-name") ] [ HH.text src.name ]
-      , HH.span [ HP.class_ (HH.ClassName "q-chip-db") ] [ HH.text (fmt src.db) ]
-      ]
 
   -- | **The sweep, as a view rather than a dialog.**
   -- |
@@ -1154,27 +1206,6 @@ render st =
       , openParam: OpenParam
       }
 
-  runOrStop
-    | running =
-        [ HH.span [ HP.class_ (HH.ClassName "q-state") ]
-            [ HH.text ("position " <> show (maybe 0 (_ + 1) st.sweepAt)
-                <> " of " <> show (Encoding.total st.sweep.extent)) ]
-        , HH.button
-            [ HP.class_ (HH.ClassName "q-plain is-replacing")
-            , HE.onClick \_ -> StopSweep
-            ]
-            [ HH.text "stop" ]
-        ]
-    | otherwise =
-        [ HH.div [ HP.class_ (HH.ClassName "q-chips") ]
-            (maybe [ HH.text "no daemon" ]
-              (\top -> Array.mapWithIndex runChip top.sources)
-              st.looper)
-        , HH.span [ HP.class_ (HH.ClassName "q-muted") ]
-            [ HH.text "pressing an input arms the take and starts the run, the \
-                      \same gesture as recording by hand. The take closes itself \
-                      \when the last position has sounded." ]
-        ]
 
   -- | **The sets on disk**, which are the artefact this page exists to make.
   -- |
