@@ -15,7 +15,7 @@
 -- | keep two copies of the answer — so **there is one field**, and its
 -- | constructor says which kind of thing it currently is. The thumbnail is a
 -- | picture of the constructor.
-module Workshop.Curve
+module Quadrat.Curve
   ( Shape(..)
   , shapes
   , shapeName

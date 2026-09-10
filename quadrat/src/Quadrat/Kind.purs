@@ -1,12 +1,12 @@
 -- | **What is being recorded, and therefore what happens to it.**
 -- |
 -- | The looper's controls are about *time* — record, overdub, undo, a loop and
--- | its layers. The Workshop's are about *material*, because everything that
+-- | its layers. Quadrat's are about *material*, because everything that
 -- | matters afterwards follows from what the thing IS: how it is armed, when it
 -- | closes, whether it is divided, and what the divisions mean.
 -- |
 -- | Five kinds, and the same taxonomy `msm`'s classifier reads a card with.
-module Workshop.Kind
+module Quadrat.Kind
   ( Kind(..)
   , all
   , name
@@ -36,7 +36,7 @@ data Kind
   | ChordHits
   -- | A bar, or a count of them, at tempo.
   | Bars Int
-  -- | Twelve of something, pitched. **Not yet designed** — see `Workshop.Card`
+  -- | Twelve of something, pitched. **Not yet designed** — see `Quadrat.Card`
   -- | for the question it turns on.
   | Chromatic
   -- | One long take. A pad, a field recording, a drone.

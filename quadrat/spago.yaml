@@ -1,0 +1,51 @@
+package:
+  name: quadrat
+  description: |
+    Quadrat — sample an instrument at chosen points, and keep what comes back.
+
+    A quadrat is the square frame a field survey lays down before recording
+    everything inside it: you cannot walk the whole meadow, so you choose
+    where to look and you look there thoroughly. A module has more parameter
+    space than anyone can play through, so you cut a TRANSECT across it — N
+    curves through N dimensions — and sample it at the points the destination
+    can address.
+
+    Two tasks, and they are opposites. Finding the transect is slow, one
+    judgement at a time, with you listening. Harvesting it is as fast as the
+    instrument allows, with nobody present, and it fails SILENTLY. The first
+    task's output is small, complete, and the second task's only input — which
+    is what lets a harvest run unattended, at a resolution nobody chose at the
+    time.
+
+    Deliberately not the Friend's looper page: that was tried first and fought
+    back, and two capture sessions were lost to pressing the obvious thing.
+    Since 2026-09-10 it does not use the daemon as a looper at all — it
+    records through `cap`, a capture that has a start and an end and no other
+    state.
+  dependencies:
+    - aff
+    - aff-promise
+    - arrays
+    - console
+    - effect
+    - either
+    - foldable-traversable
+    - halogen
+    - halogen-subscriptions
+    - integers
+    - itajara-client
+    - maybe
+    - nullable
+    - numbers
+    - ordered-collections
+    - prelude
+    - strings
+    - web-dom
+    - web-html
+    - web-uievents
+  build:
+    strict: true
+  bundle:
+    module: Quadrat.Main
+    outfile: ../static/quadrat.js
+    platform: browser

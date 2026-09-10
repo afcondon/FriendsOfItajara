@@ -12,7 +12,7 @@
 -- | Editing opens **in place**, full width, rather than in a modal. Eight
 -- | parameters at twelve or sixteen positions is a mixing desk, and a desk in a
 -- | dialog is a desk you cannot work.
-module Workshop.SweepView
+module Quadrat.SweepView
   ( Handlers
   , body
   ) where
@@ -26,10 +26,10 @@ import Halogen (AttrName(..), ElemName(..), Namespace(..))
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
-import Workshop.Curve (isDrawn)
-import Workshop.Curve as Curve
-import Workshop.Encoding as Encoding
-import Workshop.Sweep (Msg(..), Plan, valuesFor)
+import Quadrat.Curve (isDrawn)
+import Quadrat.Curve as Curve
+import Quadrat.Encoding as Encoding
+import Quadrat.Sweep (Msg(..), Plan, valuesFor)
 
 type Handlers act =
   { ports :: Array String
@@ -42,19 +42,19 @@ type Handlers act =
 
 body :: forall w act. Handlers act -> HH.HTML w act
 body h =
-  HH.div [ cls "ws-sweep" ]
+  HH.div [ cls "q-sweep" ]
     [ encodingRow
     , objections
-    , HH.div [ cls "ws-curves" ] (Array.concat (Array.mapWithIndex row p.params))
-    , HH.div [ cls "ws-swadd" ]
+    , HH.div [ cls "q-curves" ] (Array.concat (Array.mapWithIndex row p.params))
+    , HH.div [ cls "q-swadd" ]
         [ HH.button
-            [ cls "ws-plain"
+            [ cls "q-plain"
             , HP.disabled (Array.length p.params >= 8)
             , HP.title "one curve for every parameter you want to move"
             , HE.onClick \_ -> h.msg AddParam
             ]
             [ HH.text "+ curve" ]
-        , HH.span [ cls "ws-muted" ]
+        , HH.span [ cls "q-muted" ]
             [ HH.text "A parameter with no curve is held. Click a curve to step \
                       \through the shapes; open it to place every value by hand." ]
         ]
@@ -66,8 +66,8 @@ body h =
 
   -- | **The encoding first, because everything else follows from it.**
   encodingRow =
-    HH.div [ cls "ws-swrow" ]
-      ( [ HH.label [ cls "ws-field is-tight" ]
+    HH.div [ cls "q-swrow" ]
+      ( [ HH.label [ cls "q-field is-tight" ]
             [ HH.span_ [ HH.text "encoding" ]
             , HH.select [ HE.onValueChange (h.msg <<< PickEncoding) ]
                 (map
@@ -84,7 +84,7 @@ body h =
              , field "spacing ms" (show p.spacingMs) SetSpacing 5
                  "trigger to trigger; long enough for the sound to finish AND for a \
                  \gap to be visible after it"
-             , HH.label [ cls "ws-field is-tight" ]
+             , HH.label [ cls "q-field is-tight" ]
                  [ HH.span_ [ HH.text "midi out" ]
                  , HH.select [ HE.onValueChange (h.msg <<< SetPort) ]
                      (Array.cons
@@ -106,7 +106,7 @@ body h =
   -- | five-hundred-entry dropdown would be a set of choices pretending to be a
   -- | constraint. Same `Axis`, one flag, two controls.
   extentField i ax =
-    HH.label [ cls "ws-field is-tight", HP.title (ax.name <> " — picked by " <> ax.picked) ]
+    HH.label [ cls "q-field is-tight", HP.title (ax.name <> " — picked by " <> ax.picked) ]
       [ HH.span_ [ HH.text (ax.name <> "s") ]
       , if ax.free
           then HH.input
@@ -131,30 +131,30 @@ body h =
   objections =
     case Encoding.objections p.encoding p.extent of
       [] ->
-        HH.div [ cls "ws-swnote" ]
+        HH.div [ cls "q-swnote" ]
           [ HH.text (show (Encoding.total p.extent) <> " samples, about "
               <> show (Int.round (Int.toNumber
                    (Encoding.total p.extent * (p.settleMs + p.spacingMs)) / 1000.0))
               <> " s to record")
           ]
       objs ->
-        HH.div [ cls "ws-swnote is-bad" ]
+        HH.div [ cls "q-swnote is-bad" ]
           (map (\o -> HH.div_ [ HH.text o ]) objs)
 
   -- | A curve, and the parameter it moves. The sketch's left two columns, kept
   -- | on one row so the arrow between them needs no drawing.
   row i q =
-    [ HH.div [ cls "ws-curvecard" ]
+    [ HH.div [ cls "q-curvecard" ]
         [ HH.button
-            [ cls "ws-curveface"
+            [ cls "q-curveface"
             , HP.title (if isDrawn q.curve
                           then "drawn by hand — open it to change the values"
                           else "click for the next shape")
             , HE.onClick \_ -> h.msg (NextShape i)
             ]
             [ thumb (valuesFor p q) (isDrawn q.curve) ]
-        , HH.div [ cls "ws-curvefoot" ]
-            [ HH.span [ cls "ws-curvelabel" ] [ HH.text (Curve.label q.curve) ]
+        , HH.div [ cls "q-curvefoot" ]
+            [ HH.span [ cls "q-curvelabel" ] [ HH.text (Curve.label q.curve) ]
             , mini "↔" "reverse it — the falling half of a pair" (h.msg (FlipCurve i))
             , mini (if h.open == Just i then "close" else "open")
                 "place every value by hand"
@@ -165,12 +165,12 @@ body h =
                 else HH.text ""
             ]
         ]
-    , HH.div [ cls "ws-curveparam" ]
+    , HH.div [ cls "q-curveparam" ]
         [ HH.input
-            [ cls "ws-swname", HP.type_ HP.InputText, HP.value q.name
+            [ cls "q-swname", HP.type_ HP.InputText, HP.value q.name
             , HP.title "what this parameter is called on the instrument"
             , HE.onValueInput (h.msg <<< SetName i) ]
-        , HH.div [ cls "ws-swwhere" ]
+        , HH.div [ cls "q-swwhere" ]
             [ tiny "cv" 3 (maybe "" show q.cv) (SetCv i)
                 "es9-daemon bus — 8 is ES-9 panel jack 1, 15 is jack 8; blank for none"
             , tiny "" 4 (num q.cvLo) (SetCvLo i)
@@ -184,7 +184,7 @@ body h =
             , tiny "ch" 2 (show q.channel) (SetChannel i) "MIDI channel"
             , axisPick i q
             , HH.button
-                [ cls "ws-swmini is-drop", HP.title "remove this parameter"
+                [ cls "q-swmini is-drop", HP.title "remove this parameter"
                 , HE.onClick \_ -> h.msg (DropParam i) ]
                 [ HH.text "×" ]
             ]
@@ -197,7 +197,7 @@ body h =
   axisPick i q
     | Array.length axs < 2 = HH.text ""
     | otherwise =
-        HH.label [ cls "ws-swtiny", HP.title "which axis this parameter moves along" ]
+        HH.label [ cls "q-swtiny", HP.title "which axis this parameter moves along" ]
           [ HH.span_ [ HH.text "along" ]
           , HH.select
               [ HE.onValueChange (\v -> h.msg (SetAxis i (maybe 0 identity (Int.fromString v)))) ]
@@ -212,34 +212,34 @@ body h =
   sliders i q =
     let vs = valuesFor p q
     in
-      HH.div [ cls "ws-desk" ]
-        [ HH.div [ cls "ws-deskhead" ]
+      HH.div [ cls "q-desk" ]
+        [ HH.div [ cls "q-deskhead" ]
             [ HH.text (q.name <> " — "
                 <> show (Array.length vs) <> " values along "
                 <> maybe "the axis" _.name (Array.index axs q.axis)) ]
-        , HH.div [ cls "ws-deskgrid" ]
+        , HH.div [ cls "q-deskgrid" ]
             (Array.mapWithIndex (cell i) vs)
         ]
 
   cell i j v =
     let pc = Int.round (v * 100.0)
     in
-      HH.div [ cls "ws-swcell" ]
+      HH.div [ cls "q-swcell" ]
         [ HH.input
-            [ cls "ws-swslider"
+            [ cls "q-swslider"
             , HP.type_ HP.InputRange
             , HP.min 0.0, HP.max 100.0, HP.step (HP.Step 1.0)
             , HP.value (show pc)
             , HP.title (show (j + 1) <> ": " <> show pc <> "%")
             , HE.onValueInput (h.msg <<< SetValue i j)
             ]
-        , HH.span [ cls "ws-swval" ] [ HH.text (show pc) ]
-        , HH.span [ cls "ws-swidx" ] [ HH.text (show (j + 1)) ]
+        , HH.span [ cls "q-swval" ] [ HH.text (show pc) ]
+        , HH.span [ cls "q-swidx" ] [ HH.text (show (j + 1)) ]
         ]
 
   trigger =
-    HH.div [ cls "ws-swrow is-trig" ]
-      [ HH.span [ cls "ws-arm-label" ] [ HH.text "Trigger" ]
+    HH.div [ cls "q-swrow is-trig" ]
+      [ HH.span [ cls "q-arm-label" ] [ HH.text "Trigger" ]
       , field "gate bus" (maybe "" show p.trigger.gate) SetGate 3
           "an es9-daemon bus pulsed to fire the sound; 15 is ES-9 panel jack 8"
       , field "level" (num p.trigger.gateLevel) SetGateLevel 4 "how high that pulse goes, -1 to 1"
@@ -251,7 +251,7 @@ body h =
       ]
 
   field lbl v act w title =
-    HH.label [ cls "ws-field is-tight", HP.title title ]
+    HH.label [ cls "q-field is-tight", HP.title title ]
       [ HH.span_ [ HH.text lbl ]
       , HH.input
           [ HP.type_ HP.InputText, HP.value v
@@ -259,10 +259,10 @@ body h =
           , HE.onValueInput (h.msg <<< act) ]
       ]
 
-  arrow = HH.span [ cls "ws-swarrow" ] [ HH.text "→" ]
+  arrow = HH.span [ cls "q-swarrow" ] [ HH.text "→" ]
 
   tiny lbl w v act title =
-    HH.label [ cls "ws-swtiny", HP.title title ]
+    HH.label [ cls "q-swtiny", HP.title title ]
       [ if lbl == "" then HH.text "" else HH.span_ [ HH.text lbl ]
       , HH.input
           [ HP.type_ HP.InputText, HP.value v
@@ -271,7 +271,7 @@ body h =
       ]
 
   mini txt title act =
-    HH.button [ cls "ws-swmini", HP.title title, HE.onClick \_ -> act ] [ HH.text txt ]
+    HH.button [ cls "q-swmini", HP.title title, HE.onClick \_ -> act ] [ HH.text txt ]
 
 -- | **A picture of the constructor.**
 -- |
@@ -282,10 +282,10 @@ thumb :: forall w i. Array Number -> Boolean -> HH.HTML w i
 thumb vs drawn =
   el "svg"
     [ attr "viewBox" "0 0 1 1", attr "preserveAspectRatio" "none"
-    , attr "class" ("ws-thumb" <> if drawn then " is-drawn" else "")
+    , attr "class" ("q-thumb" <> if drawn then " is-drawn" else "")
     ]
     (if drawn then map bar (Array.mapWithIndex (\i v -> { i, v }) vs)
-     else [ el "polyline" [ attr "points" points, attr "class" "ws-thumbline" ] [] ])
+     else [ el "polyline" [ attr "points" points, attr "class" "q-thumbline" ] [] ])
   where
   n = max 1 (Array.length vs)
   w = 1.0 / Int.toNumber n

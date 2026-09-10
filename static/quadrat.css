@@ -1,0 +1,235 @@
+/* The Workshop. A different job from the looper page and it should not look
+   like it: one column, a lot of air, and the record box the only thing with
+   any weight on it. Swiss rather than console — this is a bench, not a
+   transport. */
+:root {
+  --ink: #16161a; --muted: #7a7a85; --rule: #dcdce2; --ground: #fbfbfc;
+  --hot: #c8442a; --live: #2a7d4f;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--ground); color: var(--ink);
+  font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+.q { max-width: 940px; margin: 0 auto; padding: 32px 28px 80px; }
+.q-head { display: flex; align-items: baseline; gap: 14px; border-bottom: 2px solid var(--ink); padding-bottom: 10px; margin-bottom: 28px; }
+.q-head h1 { margin: 0; font-size: 26px; font-weight: 600; letter-spacing: -0.01em; }
+.q-sub { color: var(--muted); font-size: 13px; flex: 1; }
+.q-ok { color: var(--live); font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; }
+.q-warn { color: var(--hot); font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; }
+
+.q h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); margin: 0 0 10px; font-weight: 600; }
+.q section { margin-bottom: 30px; }
+
+.q-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.q-chip { display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
+  padding: 7px 12px; border: 1px solid var(--rule); background: #fff; border-radius: 3px;
+  cursor: pointer; font: inherit; min-width: 92px; }
+.q-chip:hover { border-color: var(--ink); }
+.q-chip.on { border-color: var(--ink); box-shadow: inset 0 -3px 0 var(--ink); }
+.q-chip.off { opacity: 0.4; text-decoration: line-through; cursor: not-allowed; }
+.q-chip-name { font-size: 14px; }
+.q-chip-db { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.q-chip.on .q-chip-db { color: #b9b9c2; }
+
+.q-toggle { display: inline-flex; border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; }
+.q-tog { padding: 5px 14px; border: 0; background: #fff; cursor: pointer; font: inherit; font-size: 13px; }
+.q-tog.on { background: var(--ink); color: #fff; }
+
+.q-rec { border: 1px solid var(--rule); border-radius: 4px; background: #fff; padding: 20px; }
+.q-kinds { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.q-kind { padding: 8px 14px; border: 1px solid var(--rule); background: #fff; border-radius: 3px; cursor: pointer; font: inherit; }
+.q-kind:hover { border-color: var(--ink); }
+.q-kind.on { border-color: var(--ink); background: var(--ink); color: #fff; }
+.q-blurb { color: var(--muted); font-size: 13px; margin: 10px 0 16px; max-width: 62ch; }
+.q-field { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; font-size: 13px; }
+.q-field span { color: var(--muted); min-width: 96px; }
+.q-field input { padding: 6px 9px; border: 1px solid var(--rule); border-radius: 3px; font: inherit; width: 190px; }
+
+.q-actions { display: flex; align-items: center; gap: 16px; border-top: 1px solid var(--rule); padding-top: 16px; }
+.q-big { padding: 12px 30px; border: 0; border-radius: 3px; background: var(--ink); color: #fff;
+  font: inherit; font-size: 15px; font-weight: 500; cursor: pointer; }
+.q-big.is-stop { background: var(--hot); }
+.q-big:disabled { background: var(--rule); cursor: not-allowed; }
+.q-state { color: var(--muted); font-size: 13px; flex: 1; }
+.q-plain { border: 1px solid var(--rule); background: #fff; padding: 8px 14px; border-radius: 3px; cursor: pointer; font: inherit; font-size: 13px; }
+
+.q-card { border-top: 1px solid var(--rule); padding-top: 20px; }
+/* The sets on disk. Same rule and rhythm as the card above it: they are
+   two views of the same shelf, one of them a projection. */
+.q-sets { border-top: 1px solid var(--rule); padding-top: 20px; }
+/* How to play a set in a pattern. Monospace because it is meant to be
+   typed, not read. */
+.q-dirt code { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.q-muted { color: var(--muted); font-size: 13px; max-width: 62ch; }
+.q-log { font: 12px/1.7 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); }
+
+/* What was caught. The whole take across the top, and every sub-sample as its
+   own tile underneath — small multiples, because the question is comparative:
+   which of these forty is the one I meant, and are they the same sound? A list
+   of numbers cannot be read that way; a grid of shapes can. */
+.q-caught { border-top: 1px solid var(--rule); padding-top: 20px; }
+.q-whole { border: 1px solid var(--rule); border-radius: 3px; background: #fff; padding: 6px; margin-bottom: 14px; }
+.q-whole-svg { display: block; width: 100%; height: 72px; }
+.q-whole-svg polygon { fill: var(--ink); }
+
+.q-gridhead { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; font-size: 13px; color: var(--muted); }
+.q-gridhead > span:first-child { flex: 1; font-variant-numeric: tabular-nums; }
+.q-hover { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+
+/* Auto-fill rather than a fixed count: ten hits and a hundred slices should
+   both look deliberate, and the tile is the unit that stays constant. */
+.q-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
+.q-tile { border: 1px solid var(--rule); border-radius: 3px; background: #fff; overflow: hidden; transition: border-color .12s; }
+.q-tile:hover { border-color: var(--ink); }
+.q-tile.is-playing { border-color: var(--hot); }
+/* Dropped, not gone. It stays in place and keeps its number, because the
+   order is the meaning and a grid that reflowed on every click would make
+   picking harder than it is. */
+.q-tile.is-dropped { opacity: 0.34; }
+.q-tile-face { display: block; width: 100%; border: 0; background: none; padding: 6px 6px 2px; cursor: pointer; }
+.q-tile-svg { display: block; width: 100%; height: 46px; }
+.q-tile-svg polygon { fill: var(--ink); }
+.q-tile.is-playing .q-tile-svg polygon { fill: var(--hot); }
+.q-tile-foot { display: flex; align-items: center; gap: 6px; padding: 2px 8px 6px; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.q-tile-n { font-weight: 600; color: var(--ink); }
+.q-tile-len { flex: 1; }
+.q-tile-keep { border: 0; background: none; cursor: pointer; font-size: 13px; color: var(--live); padding: 0 2px; line-height: 1; }
+.q-tile.is-dropped .q-tile-keep { color: var(--muted); }
+.q-quiet { display: inline-flex; align-items: center; gap: 7px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; }
+.q-quiet input { width: 110px; }
+.q-gapval { font-variant-numeric: tabular-nums; min-width: 52px; text-transform: none; letter-spacing: 0; }
+
+/* Arming IS choosing the input. One row, and the thing you press says what it
+   is about to listen to — the mistake it removes is arming on an input you did
+   not choose, which is silent and costs a whole take. */
+.q-arm { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.q-arm-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); font-weight: 600; }
+.q-chip.is-arm { min-width: 88px; border-color: var(--ink); }
+.q-chip.is-arm:hover { background: var(--ink); color: #fff; }
+.q-chip.is-arm:hover .q-chip-db { color: #b9b9c2; }
+.q-chip.is-arm.off:hover { background: #fff; color: inherit; }
+
+/* Where the kept tiles go, and where the card goes. Both are rows of small
+   fields ending in one button, because both are one decision with a couple of
+   names attached. */
+.q-send { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--rule); }
+.q-field.is-tight { margin: 0; gap: 6px; }
+.q-field.is-tight span { min-width: 0; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; }
+.q-field.is-tight input { width: 130px; }
+.q-field.is-tight select { padding: 6px 8px; border: 1px solid var(--rule); border-radius: 3px; font: inherit; }
+.q-plain.is-go { border-color: var(--ink); font-weight: 500; }
+.q-plain.is-go:hover:enabled { background: var(--ink); color: #fff; }
+.q-plain:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.q-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.q-table th { text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); padding: 0 12px 6px 0; font-weight: 600; }
+.q-table td { padding: 6px 12px 6px 0; border-top: 1px solid var(--rule); font-variant-numeric: tabular-nums; }
+
+/* The compiler's own account of the card, verbatim. Not a summary of it — the
+   rules it enforces are the ones the module fails silently on, and a paraphrase
+   is one more place for them to drift. */
+.q-plan { margin-top: 16px; padding: 12px 14px; background: #fff; border: 1px solid var(--rule); border-radius: 3px;
+  font: 11px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted);
+  white-space: pre-wrap; max-height: 260px; overflow: auto; }
+.q-plan.is-bad { border-color: var(--hot); color: var(--ink); }
+
+/* The dividing algorithms: a row of named questions, with the chosen one's
+   explanation beside them. Deliberately quiet — you read it once, then you
+   read the tiles. */
+.q-dividers {
+  display: flex; align-items: center; flex-wrap: wrap;
+  gap: 10px; margin: 2px 0 14px;
+}
+.q-dividers .q-chips { margin-bottom: 0; }
+.q-dividers .q-chip { min-width: 0; padding: 5px 11px; font-size: 13px; }
+.q-dividers .q-muted { flex: 1 1 220px; font-size: 12px; line-height: 1.45; }
+.q-dividers .q-field { margin: 0; }
+.q-dividers .q-field input { width: 62px; }
+
+/* About to overwrite something. Stated, not blocked — the address is yours to
+   reuse, but never by accident. */
+.q-warn { flex: 1 1 240px; font-size: 12px; line-height: 1.45; color: #a8442a; }
+.q-plain.is-go.is-replacing { border-color: #a8442a; color: #a8442a; }
+
+/* Two verbs, side by side: stand beside what is there, or take its place.
+   The additive one reads as ordinary, the destructive one as a warning. */
+.q-twoverbs { display: flex; gap: 8px; align-items: center; }
+.q-plain.is-replacing { border-color: #a8442a; color: #a8442a; }
+
+/* ---------------------------------------------------------------------------
+   The sweep bench.
+
+   A view, not a dialog: curves down the left, the parameters they move beside
+   them, and — when one is opened — a full-width bank of sliders under it. Eight
+   parameters at sixteen positions is a mixing desk, and a desk in a dialog is a
+   desk you cannot work.
+   --------------------------------------------------------------------------- */
+.q.is-wide { max-width: 1400px; }
+.q-bench { border-top: 1px solid var(--rule); padding-top: 18px; }
+.q-modhead { display: flex; align-items: baseline; gap: 14px; border-bottom: 1px solid var(--rule); padding-bottom: 12px; margin-bottom: 16px; }
+.q-modhead h2 { margin: 0; font-size: 19px; font-weight: 600; }
+.q-modhead .q-sub { flex: 1; }
+
+.q-swrow { display: flex; align-items: center; flex-wrap: wrap; gap: 14px; margin-bottom: 12px; }
+.q-swrow.is-trig { border-top: 1px solid var(--rule); padding-top: 14px; margin-top: 6px; }
+.q-swrow .q-field { margin: 0; }
+.q-swrow select { padding: 6px 8px; border: 1px solid var(--rule); border-radius: 3px; font: inherit; }
+
+/* What the run will cost, or what the destination will refuse. The second is
+   the same objection msm makes at write time, moved to before the recording —
+   which is the only place saying it can save anything. */
+.q-swnote { font-size: 12px; color: var(--muted); margin: 0 0 14px; }
+.q-swnote.is-bad { color: #a8442a; font-weight: 500; }
+
+/* A curve and the parameter it moves, on one row, so the arrow between them
+   needs no drawing. */
+.q-curves { display: grid; grid-template-columns: 216px 1fr; gap: 10px 16px; align-items: start; }
+.q-curvecard { border: 1px solid var(--rule); border-radius: 4px; background: #fff; overflow: hidden; }
+.q-curveface { display: block; width: 100%; border: 0; background: none; padding: 6px 6px 2px; cursor: pointer; }
+.q-thumb { display: block; width: 100%; height: 52px; }
+.q-thumbline { fill: none; stroke: var(--ink); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.q-thumb.is-drawn rect { fill: var(--ink); }
+.q-curvefoot { display: flex; align-items: center; gap: 5px; padding: 2px 7px 7px; }
+.q-curvelabel { flex: 1; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.q-curveparam { display: flex; flex-direction: column; gap: 6px; padding-top: 2px; }
+.q-swname { padding: 5px 8px; border: 1px solid var(--rule); border-radius: 3px; font: inherit; font-size: 13px; width: 220px; }
+.q-swwhere { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.q-swtiny { display: inline-flex; align-items: center; gap: 3px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.q-swtiny input { padding: 3px 5px; border: 1px solid var(--rule); border-radius: 3px; font: inherit; font-size: 11px; font-variant-numeric: tabular-nums; }
+.q-swtiny select { padding: 2px 4px; border: 1px solid var(--rule); border-radius: 3px; font: inherit; font-size: 11px; }
+.q-swarrow { color: var(--rule); font-size: 11px; line-height: 1; }
+.q-swmini { border: 1px solid var(--rule); background: #fff; border-radius: 3px; cursor: pointer; font: inherit; font-size: 11px; padding: 3px 7px; }
+.q-swmini:hover { border-color: var(--ink); }
+.q-swmini.is-drop { color: #a8442a; }
+
+/* The desk: opened in place, spanning both columns, one slider per position. */
+.q-desk { grid-column: 1 / -1; border: 1px solid var(--ink); border-radius: 4px; background: #fff; padding: 12px 14px 10px; margin: 2px 0 6px; }
+.q-deskhead { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); font-weight: 600; margin-bottom: 10px; }
+.q-deskgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(26px, 1fr)); gap: 4px; }
+.q-swcell { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+/* Vertical range inputs: `writing-mode` is how Chrome does this now and
+   `slider-vertical` is how it used to. Both are set, because a slider that
+   silently comes out horizontal turns the desk into nonsense. */
+.q-swslider {
+  writing-mode: vertical-lr; direction: rtl;
+  -webkit-appearance: slider-vertical; appearance: slider-vertical;
+  width: 20px; height: 108px; margin: 0; padding: 0;
+  accent-color: var(--ink); cursor: ns-resize;
+}
+.q-swval { font-size: 10px; color: var(--ink); font-variant-numeric: tabular-nums; }
+.q-swidx { font-size: 9px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.q-swadd { display: flex; align-items: center; gap: 14px; margin: 14px 0 6px; }
+.q-swadd .q-muted { flex: 1; font-size: 12px; }
+
+/* What came out, under what it looks like. Two bars because two witnesses:
+   a sweep through a timbre holds its level perfectly still, so level alone
+   cannot tell a good run from one that never reached the instrument. */
+.q-meter { display: flex; flex-direction: column; gap: 2px; padding: 0 8px 7px; }
+.q-bar { height: 3px; background: var(--rule); border-radius: 2px; overflow: hidden; }
+.q-bar-fill { height: 100%; background: var(--ink); }
+.q-bar.is-bright .q-bar-fill { background: #7a7a85; }
+.q-tile.is-dropped .q-bar-fill { background: var(--muted); }

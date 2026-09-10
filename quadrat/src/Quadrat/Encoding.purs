@@ -19,7 +19,7 @@
 -- | division the module has. `msm kit build` already refuses it at compile time;
 -- | the point of putting it here is to refuse it *before* sixteen hits are
 -- | recorded rather than after.
-module Workshop.Encoding
+module Quadrat.Encoding
   ( Encoding(..)
   , all
   , name

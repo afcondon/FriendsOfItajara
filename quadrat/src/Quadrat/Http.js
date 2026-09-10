@@ -88,7 +88,7 @@ export const storedSets = () =>
   })).catch(() => ({ ok: false, sets: [] }));
 
 // One set's spec, raw. The merge over the current default belongs to
-// `Workshop.Sweep`, which owns the shape — and an FFI module cannot import
+// `Quadrat.Sweep`, which owns the shape — and an FFI module cannot import
 // another module's FFI, because spago writes each one to its own directory in
 // `output/`. So this fetches and `Sweep.adopt` merges.
 export const loadSpec = (name) => () =>

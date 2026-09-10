@@ -1,9 +1,9 @@
--- | The Workshop's own server, as one call.
+-- | Quadrat's own server, as one call.
 -- |
 -- | The page can see the daemon's waveform live, but only `msm` knows where a
 -- | sound begins — so the divisions come back over HTTP while the picture
 -- | comes down the socket, and the page puts one on top of the other.
-module Workshop.Http
+module Quadrat.Http
   ( Region
   , Divisions
   , divisions
@@ -63,7 +63,7 @@ type Divisions =
 -- | divisions — the page issued every trigger — so it sends them and `msm`
 -- | measures those instead of looking. Empty is the ordinary case and means
 -- | "go and find them". The answer has the same shape either way, so nothing
--- | downstream of here knows or needs to which it was. See `Workshop.Schedule`.
+-- | downstream of here knows or needs to which it was. See `Quadrat.Schedule`.
 foreign import divisions
   :: { take :: String, as :: String, by :: String, minGap :: Number
      , regions :: Array { start :: Number, end :: Number } }
@@ -114,7 +114,7 @@ foreign import card :: Effect (Promise CardView)
 -- | The boundaries and the measurements say what came out; `cell` and `means`
 -- | say what the instrument was doing to produce it. A sample's meaning is not
 -- | its index — `morph 2.5 V` survives a year and `position 7 of 12` does not.
--- | See `Workshop.Sweep.Meaning`, whose shape this is; the two are structural
+-- | See `Quadrat.Sweep.Meaning`, whose shape this is; the two are structural
 -- | so nothing converts between them.
 type Meant =
   { cell :: Array Int
@@ -131,7 +131,7 @@ type Meant =
 -- | write the set's own description into the same directory.
 -- |
 -- | `spec` is polymorphic on purpose: this module is the wire and has no
--- | business knowing the shape of a sweep plan. It is `Workshop.Sweep.Plain`
+-- | business knowing the shape of a sweep plan. It is `Quadrat.Sweep.Plain`
 -- | at the one call site, and JSON on the far side.
 foreign import addToCard
   :: forall spec
@@ -185,7 +185,7 @@ foreign import placeSet
   -> Effect (Promise Wrote)
 
 -- | One stored set's spec, raw. Polymorphic for the same reason `addToCard`
--- | is: this module is the wire. `Workshop.Sweep.adopt` is what makes a plan
+-- | is: this module is the wire. `Quadrat.Sweep.adopt` is what makes a plan
 -- | of it, and it owns the merge over the current default — a set written by
 -- | an older build has to open rather than half-open.
 -- |

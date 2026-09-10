@@ -3,14 +3,14 @@
 -- |
 -- | Three ideas, and each replaced something that had turned out to be wrong.
 -- |
--- | **A curve is an object, not a setting** (`Workshop.Curve`). You add one for
+-- | **A curve is an object, not a setting** (`Quadrat.Curve`). You add one for
 -- | every parameter you want to move, so the list of curves and the list of
 -- | controlled parameters are the same list, and a parameter with no curve is
 -- | simply held. Click steps through the named shapes; editing a point turns it
 -- | into a drawing, and the thumbnail says which it is. One field, two
 -- | constructors, no second copy of the answer.
 -- |
--- | **The shape of the set comes from the destination** (`Workshop.Encoding`).
+-- | **The shape of the set comes from the destination** (`Quadrat.Encoding`).
 -- | Line or grid is not a preference offered beside the real choices; it is a
 -- | consequence of how the thing playing it back can be addressed. Choose an
 -- | encoding and the axes, their legal sizes and the recording order all follow.
@@ -19,7 +19,7 @@
 -- | parameters the useful edit after listening is "position 8 is wrong", which
 -- | is a point edit. The curve is a fast way to fill a row, never a claim about
 -- | what is in it.
-module Workshop.Sweep
+module Quadrat.Sweep
   ( Param
   , Trigger
   , Plan
@@ -46,10 +46,10 @@ import Data.Int as Int
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Number as Number
 import Effect (Effect)
-import Workshop.Curve (Curve(..), Shape(..), shapeName, shapeOf)
-import Workshop.Curve as Curve
-import Workshop.Encoding (Cell, Encoding(..))
-import Workshop.Encoding as Encoding
+import Quadrat.Curve (Curve(..), Shape(..), shapeName, shapeOf)
+import Quadrat.Curve as Curve
+import Quadrat.Encoding (Cell, Encoding(..))
+import Quadrat.Encoding as Encoding
 
 -- | **One parameter of the instrument, and where it is reached.**
 -- |
@@ -71,7 +71,7 @@ type Param =
   , ccLo :: Int
   , ccHi :: Int
   , channel :: Int
-  -- | Its shape over its axis. See `Workshop.Curve`.
+  -- | Its shape over its axis. See `Quadrat.Curve`.
   , curve :: Curve
   -- | **Which axis it moves along**, as an index into the encoding's axes.
   -- |
@@ -117,7 +117,7 @@ type Plan =
   -- | every boundary when the schedule divides the take, so the region opens
   -- | just before its sound. Too small clips the attack; too large puts silence
   -- | in front of every sample. Both are visible in the tiles — this is a knob
-  -- | to set by looking, not a constant to believe. See `Workshop.Schedule`.
+  -- | to set by looking, not a constant to believe. See `Quadrat.Schedule`.
   , leadMs :: Int
   }
 

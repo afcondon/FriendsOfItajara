@@ -1,4 +1,23 @@
--- | **The Workshop** — a page for building a card.
+-- | **Quadrat** — sample an instrument at chosen points, and keep what comes
+-- | back.
+-- |
+-- | A quadrat is the square frame a field survey lays down before recording
+-- | everything inside it: you cannot walk the whole meadow, so you choose
+-- | where to look and you look there thoroughly. That is the whole method
+-- | here. A module has more parameter space than anyone can play through, so
+-- | you cut a **transect** across it — N curves through N dimensions — and
+-- | sample it at the points the destination can address.
+-- |
+-- | **Two tasks, and they are opposites.** Finding the transect is slow, one
+-- | judgement at a time, with you listening, and it fails by not converging.
+-- | Harvesting it is as fast as the instrument allows, with nobody present,
+-- | and it fails *silently* — you come back to 192 samples and one is wrong.
+-- | The first task's output is small, complete, and the second task's only
+-- | input, which is what lets a harvest run unattended, repeatedly, on
+-- | another machine, at a resolution nobody chose at the time.
+-- |
+-- | That is also why the measurements are not a nicety: an unattended run has
+-- | to be able to say "these twelve are identical" without you there.
 -- |
 -- | Deliberately not the Friend's looper page. That was tried first and fought
 -- | back: its source bar points every loop at one input, its Record button is
@@ -18,7 +37,7 @@
 -- | it: `Alternates false`, `Sounding false`, `OnGrid false`, and a `Clear`
 -- | before every take. That mismatch cost a take — see `captureOn` below —
 -- | and those four verbs are exactly what capture removed.
-module Workshop.Main where
+module Quadrat.Main where
 
 import Prelude
 
@@ -55,19 +74,19 @@ import Halogen.VDom.Driver (runUI)
 import Data.Set (Set)
 import Data.Set as Set
 import Control.Promise (toAffE)
-import Workshop.Audio as Audio
-import Workshop.Http as Http
-import Workshop.Wave as Wave
-import Workshop.Kind (Close(..), Fold(..), Kind)
-import Workshop.Kind as Kind
-import Workshop.Slug (slugFor)
-import Workshop.Divider (Divider)
-import Workshop.Divider as Divider
-import Workshop.Rig as Rig
-import Workshop.Encoding as Encoding
-import Workshop.Schedule as Schedule
-import Workshop.Sweep as Sweep
-import Workshop.SweepView as SweepView
+import Quadrat.Audio as Audio
+import Quadrat.Http as Http
+import Quadrat.Wave as Wave
+import Quadrat.Kind (Close(..), Fold(..), Kind)
+import Quadrat.Kind as Kind
+import Quadrat.Slug (slugFor)
+import Quadrat.Divider (Divider)
+import Quadrat.Divider as Divider
+import Quadrat.Rig as Rig
+import Quadrat.Encoding as Encoding
+import Quadrat.Schedule as Schedule
+import Quadrat.Sweep as Sweep
+import Quadrat.SweepView as SweepView
 
 main :: Effect Unit
 main = HA.runHalogenAff do
@@ -130,7 +149,7 @@ type State =
   , voice :: Int
   , cardBusy :: Boolean
   -- | **The sweep**: what to set, at how many points, and how to make a sound
-  -- | at each of them. See `Workshop.Sweep` for why it is a table of values
+  -- | at each of them. See `Quadrat.Sweep` for why it is a table of values
   -- | rather than a set of curves.
   , sweep :: Sweep.Plan
   , sweepOpen :: Boolean
@@ -154,7 +173,7 @@ type State =
   -- | so it is take time and not page time. Empty for a take that was played
   -- | rather than run, and that emptiness is the switch: with a schedule the
   -- | take divides at its own boundaries, without one `msm` goes looking. See
-  -- | `Workshop.Schedule` for why that difference matters more at 192 hits
+  -- | `Quadrat.Schedule` for why that difference matters more at 192 hits
   -- | than at twelve.
   , schedule :: Array Number
   -- | **The sets already on disk**, newest first. Read from the server rather
@@ -221,7 +240,7 @@ component = H.mkComponent
 -- |
 -- | Every verb this page sends is rig-wide now: a capture is not a loop, so
 -- | there is no number in front of it. Which also means a pedalboard session
--- | on loops 1–6 is untouched by the Workshop and the Workshop by it — the
+-- | on loops 1–6 is untouched by Quadrat and Quadrat by it — the
 -- | separation the scratch loop was standing in for, without a loop.
 send :: forall o m. MonadAff m => Verb -> H.HalogenM State Action () o m Unit
 send v = do
@@ -243,7 +262,7 @@ handleAction :: forall o m. MonadAff m => Action -> H.HalogenM State Action () o
 handleAction = case _ of
   Init -> do
     n <- liftEffect (slugFor Kind.DrumHits)
-    -- The sweep plan as it was left. See `Workshop.Sweep.restore` — a run,
+    -- The sweep plan as it was left. See `Quadrat.Sweep.restore` — a run,
     -- listen, bend, run again loop cannot survive a page that forgets between
     -- runs, and reloading to pick up a fix is exactly when it forgets.
     pl <- liftEffect (Sweep.restore Sweep.emptyPlan)
@@ -682,7 +701,7 @@ runSweep = do
     -- **Where in the take this hit is about to be**, asked immediately before
     -- the trigger rather than after it: everything between here and the pulse
     -- is a few microseconds of arithmetic, where everything after it is a
-    -- round trip of unknown length. See `Workshop.Schedule`.
+    -- round trip of unknown length. See `Quadrat.Schedule`.
     mk <- liftEffect Schedule.at
     for_ mk \t -> H.modify_ \s0 -> s0 { schedule = Array.snoc s0.schedule t }
     for_ p.trigger.gate \b -> void $
@@ -743,7 +762,7 @@ analyse write = do
       let takeName = if write then st.name else st.showing
           -- **The run divides its own take.** Empty for anything played by
           -- hand, which is when the detector is the only thing that could
-          -- know. See `Workshop.Schedule` for the lead, which is the one
+          -- know. See `Quadrat.Schedule` for the lead, which is the one
           -- number the schedule cannot supply itself.
           declared = Schedule.slots
                        (Int.toNumber st.sweep.leadMs / 1000.0)
@@ -872,10 +891,10 @@ render :: forall m. State -> H.ComponentHTML Action () m
 render st =
   -- The bench wants width the rest of the page does not, so the container
   -- widens for it rather than the bench breaking out of the container.
-  HH.div [ HP.class_ (HH.ClassName ("ws" <> if st.sweepOpen then " is-wide" else "")) ]
-    [ HH.header [ HP.class_ (HH.ClassName "ws-head") ]
-        [ HH.h1_ [ HH.text "Workshop" ]
-        , HH.span [ HP.class_ (HH.ClassName "ws-sub") ]
+  HH.div [ HP.class_ (HH.ClassName ("q" <> if st.sweepOpen then " is-wide" else "")) ]
+    [ HH.header [ HP.class_ (HH.ClassName "q-head") ]
+        [ HH.h1_ [ HH.text "Quadrat" ]
+        , HH.span [ HP.class_ (HH.ClassName "q-sub") ]
             [ HH.text "record material, divide it, put it on a card" ]
         , connection
         ]
@@ -884,7 +903,7 @@ render st =
     , if st.sweepOpen then HH.text "" else caught
     , if st.sweepOpen then HH.text "" else cardView
     , if st.sweepOpen then HH.text "" else setsView
-    , HH.section [ HP.class_ (HH.ClassName "ws-log") ]
+    , HH.section [ HP.class_ (HH.ClassName "q-log") ]
         (map (\l -> HH.div_ [ HH.text l ]) st.log)
     ]
   where
@@ -908,8 +927,8 @@ render st =
   elapsed = maybe "0" (\c -> fmt c.secs) cp
 
   connection = case st.looper of
-    Nothing -> HH.span [ HP.class_ (HH.ClassName "ws-warn") ] [ HH.text "no daemon" ]
-    Just _ -> HH.span [ HP.class_ (HH.ClassName "ws-ok") ] [ HH.text "daemon" ]
+    Nothing -> HH.span [ HP.class_ (HH.ClassName "q-warn") ] [ HH.text "no daemon" ]
+    Just _ -> HH.span [ HP.class_ (HH.ClassName "q-ok") ] [ HH.text "daemon" ]
 
   -- | **The inputs, and pressing one is what arms.**
   -- |
@@ -918,9 +937,9 @@ render st =
   -- | the gesture. Each chip shows what the daemon says that input is doing
   -- | right now, so a dead one is visible before you play into it.
   armRow =
-    HH.div [ HP.class_ (HH.ClassName "ws-arm") ]
-      [ HH.span [ HP.class_ (HH.ClassName "ws-arm-label") ] [ HH.text "Arm on" ]
-      , HH.div [ HP.class_ (HH.ClassName "ws-chips") ]
+    HH.div [ HP.class_ (HH.ClassName "q-arm") ]
+      [ HH.span [ HP.class_ (HH.ClassName "q-arm-label") ] [ HH.text "Arm on" ]
+      , HH.div [ HP.class_ (HH.ClassName "q-chips") ]
           (maybe [ HH.text "no daemon" ]
             (\top -> Array.mapWithIndex chip top.sources)
             st.looper)
@@ -928,7 +947,7 @@ render st =
 
   chip n s =
     HH.button
-      [ HP.class_ (HH.ClassName ("ws-chip is-arm"
+      [ HP.class_ (HH.ClassName ("q-chip is-arm"
           <> (if srcNow == n + 1 then " on" else "")
           <> (if s.available then "" else " off")))
       , HP.disabled (not s.available)
@@ -937,21 +956,21 @@ render st =
                     else s.name <> " is on an interface that is not switched on")
       , HE.onClick \_ -> ArmOn (n + 1)
       ]
-      [ HH.span [ HP.class_ (HH.ClassName "ws-chip-name") ] [ HH.text s.name ]
-      , HH.span [ HP.class_ (HH.ClassName "ws-chip-db") ] [ HH.text (fmt s.db) ]
+      [ HH.span [ HP.class_ (HH.ClassName "q-chip-name") ] [ HH.text s.name ]
+      , HH.span [ HP.class_ (HH.ClassName "q-chip-db") ] [ HH.text (fmt s.db) ]
       ]
 
   running = Maybe.isJust st.sweepFork
 
   runChip n src =
     HH.button
-      [ HP.class_ (HH.ClassName ("ws-chip is-arm" <> if src.available then "" else " off"))
+      [ HP.class_ (HH.ClassName ("q-chip is-arm" <> if src.available then "" else " off"))
       , HP.disabled (not src.available)
       , HP.title ("arm on " <> src.name <> " and start the run")
       , HE.onClick \_ -> RunSweep (n + 1)
       ]
-      [ HH.span [ HP.class_ (HH.ClassName "ws-chip-name") ] [ HH.text src.name ]
-      , HH.span [ HP.class_ (HH.ClassName "ws-chip-db") ] [ HH.text (fmt src.db) ]
+      [ HH.span [ HP.class_ (HH.ClassName "q-chip-name") ] [ HH.text src.name ]
+      , HH.span [ HP.class_ (HH.ClassName "q-chip-db") ] [ HH.text (fmt src.db) ]
       ]
 
   -- | **The sweep, as a view rather than a dialog.**
@@ -965,14 +984,14 @@ render st =
   -- | was room, and a second page would have meant a second Halogen app and a
   -- | second socket to the daemon to get it.
   sweepBench =
-    HH.section [ HP.class_ (HH.ClassName "ws-bench") ]
-      [ HH.header [ HP.class_ (HH.ClassName "ws-modhead") ]
+    HH.section [ HP.class_ (HH.ClassName "q-bench") ]
+      [ HH.header [ HP.class_ (HH.ClassName "q-modhead") ]
           [ HH.h2_ [ HH.text "Sweep" ]
-          , HH.span [ HP.class_ (HH.ClassName "ws-sub") ]
+          , HH.span [ HP.class_ (HH.ClassName "q-sub") ]
               [ HH.text "a curve for every parameter you want to move, and the \
                         \destination decides the shape of the set" ]
           , HH.button
-              [ HP.class_ (HH.ClassName "ws-plain")
+              [ HP.class_ (HH.ClassName "q-plain")
               , HP.disabled running
               , HE.onClick \_ -> OpenSweep false
               ]
@@ -985,8 +1004,8 @@ render st =
           , msg: SweepMsg
           , openParam: OpenParam
           }
-      , HH.div [ HP.class_ (HH.ClassName "ws-send") ]
-          ( [ HH.span [ HP.class_ (HH.ClassName "ws-arm-label") ]
+      , HH.div [ HP.class_ (HH.ClassName "q-send") ]
+          ( [ HH.span [ HP.class_ (HH.ClassName "q-arm-label") ]
                 [ HH.text (if running then "Running" else "Run on") ] ]
               <> runOrStop
           )
@@ -994,21 +1013,21 @@ render st =
 
   runOrStop
     | running =
-        [ HH.span [ HP.class_ (HH.ClassName "ws-state") ]
+        [ HH.span [ HP.class_ (HH.ClassName "q-state") ]
             [ HH.text ("position " <> show (maybe 0 (_ + 1) st.sweepAt)
                 <> " of " <> show (Encoding.total st.sweep.extent)) ]
         , HH.button
-            [ HP.class_ (HH.ClassName "ws-plain is-replacing")
+            [ HP.class_ (HH.ClassName "q-plain is-replacing")
             , HE.onClick \_ -> StopSweep
             ]
             [ HH.text "stop" ]
         ]
     | otherwise =
-        [ HH.div [ HP.class_ (HH.ClassName "ws-chips") ]
+        [ HH.div [ HP.class_ (HH.ClassName "q-chips") ]
             (maybe [ HH.text "no daemon" ]
               (\top -> Array.mapWithIndex runChip top.sources)
               st.looper)
-        , HH.span [ HP.class_ (HH.ClassName "ws-muted") ]
+        , HH.span [ HP.class_ (HH.ClassName "q-muted") ]
             [ HH.text "pressing an input arms the take and starts the run, the \
                       \same gesture as recording by hand. The take closes itself \
                       \when the last position has sounded." ]
@@ -1028,9 +1047,9 @@ render st =
   setsView
     | Array.null st.sets = HH.text ""
     | otherwise =
-        HH.section [ HP.class_ (HH.ClassName "ws-sets") ]
+        HH.section [ HP.class_ (HH.ClassName "q-sets") ]
           [ HH.h2_ [ HH.text "Sets on disk" ]
-          , HH.table [ HP.class_ (HH.ClassName "ws-table") ]
+          , HH.table [ HP.class_ (HH.ClassName "q-table") ]
               [ HH.tbody_ (map setRow st.sets) ]
           ]
 
@@ -1048,7 +1067,7 @@ render st =
     HH.tr_
       [ HH.td_ [ HH.text r.name ]
       , HH.td_ [ HH.text (show r.count <> " samples") ]
-      , HH.td [ HP.class_ (HH.ClassName "ws-muted") ]
+      , HH.td [ HP.class_ (HH.ClassName "q-muted") ]
           [ HH.text
               (if not r.described then "no description — cut before sets were stored"
                else if Array.null r.moved then "played by hand"
@@ -1065,15 +1084,15 @@ render st =
       -- | index — SuperDirt filters on extension and skips it — and the names
       -- | are zero-padded, which is what keeps the tenth sample from sorting
       -- | between the first and the second.
-      , HH.td [ HP.class_ (HH.ClassName "ws-dirt") ] [ HH.code_ [ HH.text (dirt r) ] ]
+      , HH.td [ HP.class_ (HH.ClassName "q-dirt") ] [ HH.code_ [ HH.text (dirt r) ] ]
       -- | **The two things you do with a set that already exists**: make more
       -- | of it, or send it somewhere. The SuperDirt column to the left needs
       -- | no button at all, which is the whole finding.
       , HH.td_
-          [ HH.div [ HP.class_ (HH.ClassName "ws-twoverbs") ]
+          [ HH.div [ HP.class_ (HH.ClassName "q-twoverbs") ]
               [ if r.runnable
                   then HH.button
-                         [ HP.class_ (HH.ClassName "ws-plain")
+                         [ HP.class_ (HH.ClassName "q-plain")
                          , HP.title "load the spec that made this set, so it can be \
                                     \recorded again at a different resolution"
                          , HE.onClick \_ -> RunAgain r.name
@@ -1082,7 +1101,7 @@ render st =
                   else HH.text ""
               , if r.described && r.count > 0
                   then HH.button
-                         [ HP.class_ (HH.ClassName "ws-plain")
+                         [ HP.class_ (HH.ClassName "q-plain")
                          , HP.disabled st.cardBusy
                          , HP.title "put this set on the card, at the bank and voice \
                                     \chosen above — nothing is cut or measured again"
@@ -1095,13 +1114,13 @@ render st =
       ]
 
   recordBox =
-    HH.section [ HP.class_ (HH.ClassName "ws-rec") ]
+    HH.section [ HP.class_ (HH.ClassName "q-rec") ]
       [ HH.h2_ [ HH.text "Record" ]
-      , HH.div [ HP.class_ (HH.ClassName "ws-kinds") ]
+      , HH.div [ HP.class_ (HH.ClassName "q-kinds") ]
           (map kindBtn Kind.all)
       , case st.kind of
           Kind.Bars _ ->
-            HH.label [ HP.class_ (HH.ClassName "ws-field") ]
+            HH.label [ HP.class_ (HH.ClassName "q-field") ]
               [ HH.span_ [ HH.text "How many bars" ]
               , HH.input
                   [ HP.type_ HP.InputText, HP.value (show st.bars)
@@ -1109,14 +1128,14 @@ render st =
                   , HE.onValueInput SetBars ]
               ]
           _ -> HH.text ""
-      , HH.label [ HP.class_ (HH.ClassName "ws-field") ]
+      , HH.label [ HP.class_ (HH.ClassName "q-field") ]
           [ HH.span_ [ HH.text "Call it" ]
           , HH.input
               [ HP.type_ HP.InputText, HP.value st.name
               , HP.disabled (st.armed || writing)
               , HE.onValueInput SetName ]
           ]
-      , HH.p [ HP.class_ (HH.ClassName "ws-blurb") ]
+      , HH.p [ HP.class_ (HH.ClassName "q-blurb") ]
           [ HH.text (Kind.blurb st.kind)
           , HH.text (" Captured from " <> srcName <> " as it comes"
               <> ", and folded to "
@@ -1126,13 +1145,13 @@ render st =
                     then " — where it takes two of the four voices."
                     else "."))
           ]
-      , HH.div [ HP.class_ (HH.ClassName "ws-actions") ]
+      , HH.div [ HP.class_ (HH.ClassName "q-actions") ]
           [ if st.armed || writing || listening
               then HH.button
-                     [ HP.class_ (HH.ClassName "ws-big is-stop"), HE.onClick \_ -> Close ]
+                     [ HP.class_ (HH.ClassName "q-big is-stop"), HE.onClick \_ -> Close ]
                      [ HH.text (if writing then "Stop" else "Cancel") ]
               else armRow
-          , HH.span [ HP.class_ (HH.ClassName "ws-state") ]
+          , HH.span [ HP.class_ (HH.ClassName "q-state") ]
               [ HH.text
                   (if writing then "recording — " <> elapsed <> " s"
                    else if listening then Kind.prompt st.kind
@@ -1143,7 +1162,7 @@ render st =
           -- | other: hand the schedule to the rig, and get a set that is even
           -- | where a hand cannot be even.
           , HH.button
-              [ HP.class_ (HH.ClassName "ws-plain")
+              [ HP.class_ (HH.ClassName "q-plain")
               , HP.disabled (st.armed || writing)
               , HP.title "drive the instrument through a set of positions and \
                          \record the result as one take"
@@ -1166,14 +1185,14 @@ render st =
   caught
     | Array.null st.regions && not st.busy && not hasTake = HH.text ""
     | otherwise =
-        HH.section [ HP.class_ (HH.ClassName "ws-caught") ]
+        HH.section [ HP.class_ (HH.ClassName "q-caught") ]
           [ HH.h2_ [ HH.text "What was caught" ]
           , case st.peaks of
               Just pk | Array.length pk.hi > 0 ->
-                HH.div [ HP.class_ (HH.ClassName "ws-whole") ]
-                  [ Wave.svg pk.lo pk.hi [ Wave.klass "ws-whole-svg" ] ]
+                HH.div [ HP.class_ (HH.ClassName "q-whole") ]
+                  [ Wave.svg pk.lo pk.hi [ Wave.klass "q-whole-svg" ] ]
               _ -> HH.text ""
-          , HH.div [ HP.class_ (HH.ClassName "ws-gridhead") ]
+          , HH.div [ HP.class_ (HH.ClassName "q-gridhead") ]
               [ HH.span_
                   [ HH.text (if st.busy then "dividing…"
                              else if Array.null st.regions
@@ -1183,15 +1202,15 @@ render st =
               , spread
               , declaredVsFound
               , if Array.null st.regions && hasTake && not st.busy
-                  then HH.button [ HP.class_ (HH.ClassName "ws-plain"), HE.onClick \_ -> Analyse ]
+                  then HH.button [ HP.class_ (HH.ClassName "q-plain"), HE.onClick \_ -> Analyse ]
                          [ HH.text "Divide it" ]
                   else HH.text ""
-              , HH.button [ HP.class_ (HH.ClassName "ws-plain"), HE.onClick \_ -> KeepAll true ]
+              , HH.button [ HP.class_ (HH.ClassName "q-plain"), HE.onClick \_ -> KeepAll true ]
                   [ HH.text "Keep all" ]
-              , HH.button [ HP.class_ (HH.ClassName "ws-plain"), HE.onClick \_ -> KeepAll false ]
+              , HH.button [ HP.class_ (HH.ClassName "q-plain"), HE.onClick \_ -> KeepAll false ]
                   [ HH.text "Keep none" ]
               , if not (Array.null st.schedule) then HH.text "" else
-                HH.label [ HP.class_ (HH.ClassName "ws-quiet") ]
+                HH.label [ HP.class_ (HH.ClassName "q-quiet") ]
                   -- A wider gap means fewer divisions, so FEWER is the
                   -- right-hand end — the same direction the old level knob
                   -- ran, and the one people expect.
@@ -1204,10 +1223,10 @@ render st =
                       , HP.title "how close two sounds can be and still be two, in milliseconds"
                       ]
                   , HH.span_ [ HH.text "fewer" ]
-                  , HH.span [ HP.class_ (HH.ClassName "ws-gapval") ]
+                  , HH.span [ HP.class_ (HH.ClassName "q-gapval") ]
                       [ HH.text (show (Int.round st.minGap) <> " ms") ]
                   ]
-              , HH.label [ HP.class_ (HH.ClassName "ws-hover") ]
+              , HH.label [ HP.class_ (HH.ClassName "q-hover") ]
                   [ HH.input
                       [ HP.type_ HP.InputCheckbox, HP.checked st.hoverPlays
                       , HE.onChecked SetHoverPlays ]
@@ -1215,7 +1234,7 @@ render st =
                   ]
               ]
           , dividerRow
-          , HH.div [ HP.class_ (HH.ClassName "ws-grid") ]
+          , HH.div [ HP.class_ (HH.ClassName "q-grid") ]
               (Array.mapWithIndex tile st.regions)
           , sendRow
           ]
@@ -1231,12 +1250,12 @@ render st =
     -- The run's own boundaries, and no chooser: see `scheduled`.
     | not (Array.null st.schedule) = scheduled
     | otherwise =
-        HH.div [ HP.class_ (HH.ClassName "ws-dividers") ]
-          [ HH.span [ HP.class_ (HH.ClassName "ws-arm-label") ] [ HH.text "Divide" ]
-          , HH.div [ HP.class_ (HH.ClassName "ws-chips") ]
+        HH.div [ HP.class_ (HH.ClassName "q-dividers") ]
+          [ HH.span [ HP.class_ (HH.ClassName "q-arm-label") ] [ HH.text "Divide" ]
+          , HH.div [ HP.class_ (HH.ClassName "q-chips") ]
               (map dividerBtn (Divider.all st.equalN))
           , if Divider.needsCount st.divider
-              then HH.label [ HP.class_ (HH.ClassName "ws-field is-tight") ]
+              then HH.label [ HP.class_ (HH.ClassName "q-field is-tight") ]
                      [ HH.span_ [ HH.text "pieces" ]
                      , HH.input
                          [ HP.type_ HP.InputNumber, HP.value (show st.equalN)
@@ -1244,7 +1263,7 @@ render st =
                          , HE.onValueInput SetEqualN ]
                      ]
               else HH.text ""
-          , HH.span [ HP.class_ (HH.ClassName "ws-muted") ]
+          , HH.span [ HP.class_ (HH.ClassName "q-muted") ]
               [ HH.text (Divider.blurb st.divider) ]
           ]
 
@@ -1256,11 +1275,11 @@ render st =
   -- | back. Set it by looking — the tiles show a clipped attack as a low peak
   -- | and a lead too long as silence at the head.
   scheduled =
-    HH.div [ HP.class_ (HH.ClassName "ws-dividers") ]
-      [ HH.span [ HP.class_ (HH.ClassName "ws-arm-label") ] [ HH.text "Divide" ]
-      , HH.span [ HP.class_ (HH.ClassName "ws-chips") ]
-          [ HH.span [ HP.class_ (HH.ClassName "ws-chip on") ] [ HH.text "by the schedule" ] ]
-      , HH.label [ HP.class_ (HH.ClassName "ws-field is-tight") ]
+    HH.div [ HP.class_ (HH.ClassName "q-dividers") ]
+      [ HH.span [ HP.class_ (HH.ClassName "q-arm-label") ] [ HH.text "Divide" ]
+      , HH.span [ HP.class_ (HH.ClassName "q-chips") ]
+          [ HH.span [ HP.class_ (HH.ClassName "q-chip on") ] [ HH.text "by the schedule" ] ]
+      , HH.label [ HP.class_ (HH.ClassName "q-field is-tight") ]
           [ HH.span_ [ HH.text "lead ms" ]
           , HH.input
               [ HP.type_ HP.InputNumber, HP.value (show st.sweep.leadMs)
@@ -1268,7 +1287,7 @@ render st =
               , HP.title "how long after a trigger its sound is in the take"
               , HE.onValueChange SetLead ]
           ]
-      , HH.span [ HP.class_ (HH.ClassName "ws-muted") ]
+      , HH.span [ HP.class_ (HH.ClassName "q-muted") ]
           [ HH.text (show (Array.length st.schedule)
               <> " triggers, timed by the daemon as it recorded them — nothing was \
                  \detected, so nothing could be missed") ]
@@ -1276,7 +1295,7 @@ render st =
 
   dividerBtn dv =
     HH.button
-      [ HP.class_ (HH.ClassName ("ws-chip" <> if dv == st.divider then " on" else ""))
+      [ HP.class_ (HH.ClassName ("q-chip" <> if dv == st.divider then " on" else ""))
       , HP.disabled st.busy
       , HP.title (Divider.blurb dv)
       , HE.onClick \_ -> PickDivider dv
@@ -1287,7 +1306,7 @@ render st =
   sendRow
     | Array.null st.regions = HH.text ""
     | otherwise =
-        HH.div [ HP.class_ (HH.ClassName "ws-send") ]
+        HH.div [ HP.class_ (HH.ClassName "q-send") ]
           -- | **Cutting a set is the act; a card is one place to put it.**
           -- |
           -- | These were one button until SuperDirt arrived, because until
@@ -1297,17 +1316,17 @@ render st =
           -- | without an address on a card. Which was always true, and had
           -- | simply never been asked.
           [ HH.button
-              [ HP.class_ (HH.ClassName "ws-plain")
+              [ HP.class_ (HH.ClassName "q-plain")
               , HP.disabled (st.cardBusy || Set.isEmpty st.keep)
               , HP.title "cut the kept regions into a set and write its \
                          \description beside them — no card, no voice"
               , HE.onClick \_ -> SendToCard { place: false, append: false }
               ]
               [ HH.text "Save as a set" ]
-          , HH.span [ HP.class_ (HH.ClassName "ws-arm-label") ] [ HH.text "or send to" ]
+          , HH.span [ HP.class_ (HH.ClassName "q-arm-label") ] [ HH.text "or send to" ]
           , small "bank" st.bank SetBank
           , small "kit" (if st.kit == "" then st.name else st.kit) SetKit
-          , HH.label [ HP.class_ (HH.ClassName "ws-field is-tight") ]
+          , HH.label [ HP.class_ (HH.ClassName "q-field is-tight") ]
               [ HH.span_ [ HH.text "voice" ]
               , HH.select [ HE.onValueChange SetVoice ]
                   (map (\n -> HH.option
@@ -1327,15 +1346,15 @@ render st =
           , case occupant of
               Nothing ->
                 HH.button
-                  [ HP.class_ (HH.ClassName "ws-plain is-go")
+                  [ HP.class_ (HH.ClassName "q-plain is-go")
                   , HP.disabled (st.cardBusy || Set.isEmpty st.keep)
                   , HE.onClick \_ -> SendToCard { place: true, append: false }
                   ]
                   [ HH.text (show (Set.size st.keep) <> " to the kit") ]
               Just r ->
-                HH.div [ HP.class_ (HH.ClassName "ws-twoverbs") ]
+                HH.div [ HP.class_ (HH.ClassName "q-twoverbs") ]
                   [ HH.button
-                      [ HP.class_ (HH.ClassName "ws-plain is-go")
+                      [ HP.class_ (HH.ClassName "q-plain is-go")
                       , HP.disabled (st.cardBusy || Set.isEmpty st.keep)
                       , HP.title "the layer selector picks between them"
                       , HE.onClick \_ -> SendToCard { place: true, append: true }
@@ -1343,7 +1362,7 @@ render st =
                       [ HH.text ("add as layer "
                           <> show (Array.length r.sets + 1)) ]
                   , HH.button
-                      [ HP.class_ (HH.ClassName "ws-plain is-replacing")
+                      [ HP.class_ (HH.ClassName "q-plain is-replacing")
                       , HP.disabled (st.cardBusy || Set.isEmpty st.keep)
                       , HE.onClick \_ -> SendToCard { place: true, append: false }
                       ]
@@ -1364,7 +1383,7 @@ render st =
           -- where the module decides for itself.
           , case occupant of
               Just r | Array.length r.sets >= 1 ->
-                HH.label [ HP.class_ (HH.ClassName "ws-field is-tight") ]
+                HH.label [ HP.class_ (HH.ClassName "q-field is-tight") ]
                   [ HH.span_ [ HH.text "picked by" ]
                   , HH.select [ HE.onValueChange SetLayerMode ]
                       (map (\m -> HH.option
@@ -1377,7 +1396,7 @@ render st =
           , case occupant of
               Nothing -> HH.text ""
               Just r ->
-                HH.span [ HP.class_ (HH.ClassName "ws-warn") ]
+                HH.span [ HP.class_ (HH.ClassName "q-warn") ]
                   [ HH.text ("voice " <> show st.voice <> " holds "
                       <> joinWith ", " r.sets
                       <> (if r.slicer > 0 then " in " <> show r.slicer <> " slots" else "")
@@ -1398,7 +1417,7 @@ render st =
         v.rows
 
   small lbl v act =
-    HH.label [ HP.class_ (HH.ClassName "ws-field is-tight") ]
+    HH.label [ HP.class_ (HH.ClassName "q-field is-tight") ]
       [ HH.span_ [ HH.text lbl ]
       , HH.input [ HP.type_ HP.InputText, HP.value v, HE.onValueInput act ]
       ]
@@ -1435,7 +1454,7 @@ render st =
           rz = rng _.tilt
           flat = rp > 0.0 && rz > 0.0 && rp < 1.1 && rz < 1.1
         in
-          HH.span [ HP.class_ (HH.ClassName (if flat then "ws-warn" else "ws-muted")) ]
+          HH.span [ HP.class_ (HH.ClassName (if flat then "q-warn" else "q-muted")) ]
             [ HH.text
                 (if flat
                    then "these " <> show (Array.length st.regions)
@@ -1455,13 +1474,13 @@ render st =
     -- dropping the regions that fall past its end.
     | not (Array.null st.schedule) =
         if Array.length st.regions == Array.length st.schedule then HH.text ""
-        else HH.span [ HP.class_ (HH.ClassName "ws-warn") ]
+        else HH.span [ HP.class_ (HH.ClassName "q-warn") ]
                [ HH.text ("the run made " <> show (Array.length st.schedule)
                    <> " hits and the take holds " <> show (Array.length st.regions)
                    <> " — the recording ended before the run did") ]
     | Array.length st.regions == Encoding.total st.sweep.extent = HH.text ""
     | otherwise =
-        HH.span [ HP.class_ (HH.ClassName "ws-warn") ]
+        HH.span [ HP.class_ (HH.ClassName "q-warn") ]
           [ HH.text ("you swept " <> show (Encoding.total st.sweep.extent)
               <> " samples and this divided into " <> show (Array.length st.regions)
               <> " — try another divider, or a wider gap, before sending it") ]
@@ -1472,7 +1491,7 @@ render st =
   brightest = fromMaybe 0.0 (Array.last (Array.sort (map _.tilt st.regions)))
 
   meter r =
-    HH.div [ HP.class_ (HH.ClassName "ws-meter") ]
+    HH.div [ HP.class_ (HH.ClassName "q-meter") ]
       [ bar "level" (r.peak / max 1.0e-9 loudest)
           (fmt (r.peak * 100.0) <> "% of the loudest here")
       , bar "bright" (r.tilt / max 1.0e-9 brightest)
@@ -1481,9 +1500,9 @@ render st =
       ]
 
   bar k v title =
-    HH.div [ HP.class_ (HH.ClassName ("ws-bar is-" <> k)), HP.title (k <> " — " <> title) ]
+    HH.div [ HP.class_ (HH.ClassName ("q-bar is-" <> k)), HP.title (k <> " — " <> title) ]
       [ HH.div
-          [ HP.class_ (HH.ClassName "ws-bar-fill")
+          [ HP.class_ (HH.ClassName "q-bar-fill")
           , HP.attr (HH.AttrName "style")
               ("width: " <> show (Int.round (100.0 * clamp 0.0 1.0 v)) <> "%")
           ]
@@ -1501,26 +1520,26 @@ render st =
       kept = Set.member i st.keep
     in
       HH.div
-        [ HP.class_ (HH.ClassName ("ws-tile"
+        [ HP.class_ (HH.ClassName ("q-tile"
             <> (if kept then "" else " is-dropped")
             <> (if st.playing == Just i then " is-playing" else "")))
         , HE.onMouseEnter \_ -> HoverPlay i
         ]
         [ HH.button
-            [ HP.class_ (HH.ClassName "ws-tile-face")
+            [ HP.class_ (HH.ClassName "q-tile-face")
             , HP.title (fmt (r.end - r.start) <> " s at " <> fmt r.start <> " s")
             , HE.onClick \_ -> Play i
             ]
             [ Wave.svg (maybe [] (cut <<< _.lo) st.peaks)
                        (maybe [] (cut <<< _.hi) st.peaks)
-                       [ Wave.klass "ws-tile-svg" ]
+                       [ Wave.klass "q-tile-svg" ]
             ]
-        , HH.div [ HP.class_ (HH.ClassName "ws-tile-foot") ]
-            [ HH.span [ HP.class_ (HH.ClassName "ws-tile-n") ] [ HH.text (show (i + 1)) ]
-            , HH.span [ HP.class_ (HH.ClassName "ws-tile-len") ]
+        , HH.div [ HP.class_ (HH.ClassName "q-tile-foot") ]
+            [ HH.span [ HP.class_ (HH.ClassName "q-tile-n") ] [ HH.text (show (i + 1)) ]
+            , HH.span [ HP.class_ (HH.ClassName "q-tile-len") ]
                 [ HH.text (fmt (r.end - r.start)) ]
             , HH.button
-                [ HP.class_ (HH.ClassName "ws-tile-keep")
+                [ HP.class_ (HH.ClassName "q-tile-keep")
                 , HP.title (if kept then "drop this one" else "keep this one")
                 , HE.onClick \_ -> ToggleKeep i
                 ]
@@ -1536,26 +1555,26 @@ render st =
   -- | rules the module fails silently on stay enforced in one place, by the
   -- | compiler, whose objections are shown here rather than restated.
   cardView =
-    HH.section [ HP.class_ (HH.ClassName "ws-card") ]
+    HH.section [ HP.class_ (HH.ClassName "q-card") ]
       [ HH.h2_ [ HH.text "The card, so far" ]
       , case st.cardView of
-          Nothing -> HH.p [ HP.class_ (HH.ClassName "ws-muted") ] [ HH.text "…" ]
+          Nothing -> HH.p [ HP.class_ (HH.ClassName "q-muted") ] [ HH.text "…" ]
           Just v
             | Array.null v.rows ->
-                HH.p [ HP.class_ (HH.ClassName "ws-muted") ]
+                HH.p [ HP.class_ (HH.ClassName "q-muted") ]
                   [ HH.text "Nothing on it yet. Record something, keep the ones you \
                             \meant, and send them to a voice. It is kept on disk as \
                             \you build it; no card need be mounted until you write." ]
             | otherwise ->
                 HH.div_
-                  [ HH.table [ HP.class_ (HH.ClassName "ws-table") ]
+                  [ HH.table [ HP.class_ (HH.ClassName "q-table") ]
                       [ HH.thead_ [ HH.tr_ (map (\h -> HH.th_ [ HH.text h ])
                           [ "bank", "kit", "voice", "holds" ]) ]
                       , HH.tbody_ (map row v.rows)
                       ]
                   , writeRow v
                   , if v.plan == "" then HH.text ""
-                    else HH.pre [ HP.class_ (HH.ClassName ("ws-plan" <> if v.ok then "" else " is-bad")) ]
+                    else HH.pre [ HP.class_ (HH.ClassName ("q-plan" <> if v.ok then "" else " is-bad")) ]
                            [ HH.text v.plan ]
                   ]
       ]
@@ -1575,15 +1594,15 @@ render st =
       ]
 
   writeRow v =
-    HH.div [ HP.class_ (HH.ClassName "ws-send") ]
-      [ HH.span [ HP.class_ (HH.ClassName "ws-arm-label") ] [ HH.text "Write to" ]
+    HH.div [ HP.class_ (HH.ClassName "q-send") ]
+      [ HH.span [ HP.class_ (HH.ClassName "q-arm-label") ] [ HH.text "Write to" ]
       , if Array.null v.cards
-          then HH.span [ HP.class_ (HH.ClassName "ws-muted") ]
+          then HH.span [ HP.class_ (HH.ClassName "q-muted") ]
                  [ HH.text "no Rample card is mounted — everything above is safe on \
                            \disk; mount one when you want it written" ]
-          else HH.div [ HP.class_ (HH.ClassName "ws-chips") ]
+          else HH.div [ HP.class_ (HH.ClassName "q-chips") ]
                  (map (\c -> HH.button
-                         [ HP.class_ (HH.ClassName "ws-chip is-arm")
+                         [ HP.class_ (HH.ClassName "q-chip is-arm")
                          , HP.disabled (st.cardBusy || not v.ok)
                          , HP.title ("compile the manifest onto " <> c)
                          , HE.onClick \_ -> WriteCard c
@@ -1593,7 +1612,7 @@ render st =
 
   kindBtn k =
     HH.button
-      [ HP.class_ (HH.ClassName ("ws-kind" <> if Kind.name k == Kind.name st.kind then " on" else ""))
+      [ HP.class_ (HH.ClassName ("q-kind" <> if Kind.name k == Kind.name st.kind then " on" else ""))
       , HP.disabled (st.armed || writing)
       , HE.onClick \_ -> PickKind (case k of
                                      Kind.Bars _ -> Kind.Bars st.bars

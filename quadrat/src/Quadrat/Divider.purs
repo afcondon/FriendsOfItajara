@@ -13,7 +13,7 @@
 -- | So the kind supplies a default and the buttons let you overrule it. The
 -- | pictures underneath make it obvious within a second which was right, which
 -- | is a better interface than a correct guess would be.
-module Workshop.Divider
+module Quadrat.Divider
   ( Divider(..)
   , all
   , name
@@ -25,7 +25,7 @@ module Workshop.Divider
 
 import Prelude
 
-import Workshop.Kind (Kind(Bars, Chromatic, ChordHits, DrumHits, Longform))
+import Quadrat.Kind (Kind(Bars, Chromatic, ChordHits, DrumHits, Longform))
 
 data Divider
   -- | Spectral flux with a peak follower: where the signal changes fastest.

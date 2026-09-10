@@ -1,6 +1,6 @@
 -- | **Where the sounds are, because we put them there.**
 -- |
--- | The Workshop has two ways to divide a take, and they are not two settings
+-- | Quadrat has two ways to divide a take, and they are not two settings
 -- | of one thing. A take you *played* has to be listened to: `msm onset` finds
 -- | the attacks and you keep the ones you meant. A take the rig **ran** does
 -- | not, because the page issued every trigger and already knows when.
@@ -35,7 +35,7 @@
 -- | short by a window we guessed at, and the only thing that can end it is the
 -- | next hit — which is exactly right, because the next hit is the only thing
 -- | that actually does end it.
-module Workshop.Schedule
+module Quadrat.Schedule
   ( at
   , slots
   ) where

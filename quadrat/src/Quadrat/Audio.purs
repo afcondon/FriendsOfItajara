@@ -5,7 +5,7 @@
 -- | a seek, not a request and a file — and it means the thing you hear is
 -- | literally the take, at the offsets the detector proposed, rather than a
 -- | copy that might have been made differently.
-module Workshop.Audio (playRange, stop) where
+module Quadrat.Audio (playRange, stop) where
 
 import Prelude
 

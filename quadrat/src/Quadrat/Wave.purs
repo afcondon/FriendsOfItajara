@@ -7,7 +7,7 @@
 -- |
 -- | The alternative was cutting the audio on the server and drawing each piece
 -- | from its own file, which is dozens of writes to answer a hover.
-module Workshop.Wave
+module Quadrat.Wave
   ( bucketsFor
   , svg
   , klass

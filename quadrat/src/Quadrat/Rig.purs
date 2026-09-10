@@ -19,7 +19,7 @@
 -- | the audio** — twelve tiles that differ. That is not a shortcoming to work
 -- | around later; it is why the measured readout beside the requested values is
 -- | part of the feature rather than a nicety.
-module Workshop.Rig
+module Quadrat.Rig
   ( Sent
   , openMidi
   , ports

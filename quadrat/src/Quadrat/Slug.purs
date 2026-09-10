@@ -10,13 +10,13 @@
 -- | and when. `chord-hits-0909-115143`. It sorts, it says what it holds, it
 -- | cannot collide with yesterday's, and it is still a plain editable string
 -- | for when you would rather call it something.
-module Workshop.Slug (slugFor) where
+module Quadrat.Slug (slugFor) where
 
 import Prelude
 
 import Effect (Effect)
-import Workshop.Kind (Kind)
-import Workshop.Kind as Kind
+import Quadrat.Kind (Kind)
+import Quadrat.Kind as Kind
 
 -- A nullary effect, which is exactly what a JS thunk is.
 foreign import _stamp :: Effect String
