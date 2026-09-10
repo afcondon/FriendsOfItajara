@@ -169,27 +169,31 @@ objections enc ext = Array.catMaybes (Array.mapWithIndex check (axes enc)) <> lo
 joinInts :: Array Int -> String
 joinInts = Array.intercalate ", " <<< map show
 
--- | One cell of the set, in the order it will be RECORDED.
-type Cell = { layer :: Int, slice :: Int }
+-- | **One cell of the set: a position along each axis, in axis order.**
+-- |
+-- | An array rather than a record with named fields, because the number of axes
+-- | is the encoding's business and a third one — a Rample drum machine adding
+-- | voices to layers and slices — should be a row in a table rather than a new
+-- | field everywhere.
+type Cell = Array Int
 
--- | **Recording order is layer-major, and it is not arbitrary.**
+-- | Every cell, **in the order it will be RECORDED**, and that order is not
+-- | arbitrary.
 -- |
 -- | A grid is a stack of joined files: each layer is one file holding its
 -- | slices end to end. So the take has to arrive in the order the compiler will
 -- | cut it — every slice of layer 1, then every slice of layer 2 — because the
 -- | module reads a voice's stack in byte order and reads a joined file left to
--- | right, and neither of those is negotiable.
+-- | right, and neither of those is negotiable. **Last axis varies fastest.**
 -- |
 -- | Getting this backwards would not fail. It would produce a card that plays,
 -- | with the two axes transposed, and the only symptom would be that the
 -- | instrument felt wrong.
 cells :: Encoding -> Array Int -> Array Cell
-cells enc ext = case enc of
-  RampleLayers -> map (\l -> { layer: l, slice: 0 }) (upto 0)
-  RampleSlices -> map (\s -> { layer: 0, slice: s }) (upto 0)
-  RampleGrid -> do
-    l <- upto 0
-    s <- upto 1
-    pure { layer: l, slice: s }
+cells enc ext = Array.foldl step [ [] ] (Array.mapWithIndex size (axes enc))
   where
-  upto i = Array.range 0 (max 1 (fromMaybe 1 (Array.index ext i)) - 1)
+  size i _ = max 1 (fromMaybe 1 (Array.index ext i))
+  step acc n = do
+    prefix <- acc
+    j <- Array.range 0 (n - 1)
+    pure (Array.snoc prefix j)

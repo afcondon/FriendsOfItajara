@@ -1,45 +1,34 @@
--- | **The sweep: a table of values, not a set of curves.**
+-- | **The sweep: what to move, over what, and how to make a sound at each
+-- | point.**
 -- |
--- | Andrew's reframing, 2026-09-09, and it inverts what the plan said. The
--- | plan had a curve spec first and editable breakpoints as a later refinement.
--- | The right way round is the other one:
+-- | Three ideas, and each replaced something that had turned out to be wrong.
 -- |
--- |   > "rather than tweaking functions for these discreet values the best
--- |   > thing would be to show n sliders for each parameter with one slider for
--- |   > each position that we're sweeping. We could APPLY a function to each
--- |   > slider set to speed the set up but this would let the user listen to a
--- |   > sweep and tweak any parameter at any point."
+-- | **A curve is an object, not a setting** (`Workshop.Curve`). You add one for
+-- | every parameter you want to move, so the list of curves and the list of
+-- | controlled parameters are the same list, and a parameter with no curve is
+-- | simply held. Click steps through the named shapes; editing a point turns it
+-- | into a drawing, and the thumbnail says which it is. One field, two
+-- | constructors, no second copy of the answer.
 -- |
--- | The reason it is right is in what the edit *after listening* looks like.
--- | With seven interacting non-linear parameters the useful thought is almost
--- | always "position 8 is wrong" — a point edit — and no named curve can
--- | express one without bending everything either side of it. So the artefact
--- | is `Array Number` per parameter, one value per position, and an easing is a
--- | way of FILLING that array quickly rather than a way of describing it.
+-- | **The shape of the set comes from the destination** (`Workshop.Encoding`).
+-- | Line or grid is not a preference offered beside the real choices; it is a
+-- | consequence of how the thing playing it back can be addressed. Choose an
+-- | encoding and the axes, their legal sizes and the recording order all follow.
 -- |
--- | It is also the smaller thing to store, to diff and to send.
--- |
--- | ## The grid is the same grid
--- |
--- | A parameter is a ROW and a position is a COLUMN, which means a column here
--- | and a tile in `What was caught` are the same index — the sliders above
--- | position 7 are the state the synth was in when the seventh hit was struck.
--- | That alignment is what makes measured-against-requested a matter of reading
--- | down the page rather than a second chart to build.
+-- | **The values are still the truth.** With seven interacting non-linear
+-- | parameters the useful edit after listening is "position 8 is wrong", which
+-- | is a point edit. The curve is a fast way to fill a row, never a claim about
+-- | what is in it.
 module Workshop.Sweep
-  ( Shape(..)
-  , shapes
-  , shapeName
-  , at
-  , Param
+  ( Param
   , Trigger
   , Plan
   , emptyPlan
+  , valuesFor
   , Msg(..)
   , update
   , Step
   , steps
-  , resample
   , remember
   , restore
   ) where
@@ -51,174 +40,83 @@ import Data.Int as Int
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Number as Number
 import Effect (Effect)
+import Workshop.Curve (Curve(..), Shape(..), shapeName, shapeOf)
+import Workshop.Curve as Curve
+import Workshop.Encoding (Cell, Encoding(..))
+import Workshop.Encoding as Encoding
 
--- | **Only the monotone families.**
+-- | **One parameter of the instrument, and where it is reached.**
 -- |
--- | `purescript-hylograph-selection` has twenty-five of these, and they are the
--- | same arithmetic — but they are ANIMATION easings, and Back, Elastic and
--- | Bounce all overshoot outside 0…1 on purpose, because a menu that springs
--- | past its resting place looks alive. A sweep's value is a voltage into a
--- | module, so an overshoot leaves the range you declared and reaches a place
--- | you never looked at. `at` clamps as well, but the honest fix is not to
--- | offer them.
--- |
--- | The names match hylograph's `EasingType` constructors exactly, so if this
--- | ever wants the full set it is an import rather than a rewrite. (Note that
--- | `applyEasing` lives in `Hylograph.Internal.Transition.Manager` and not in
--- | `Hylograph.Attribute`, which is what the plan said — `Attribute` has the
--- | type but not the function, and Internal is not an API.)
-data Shape
-  = Linear
-  | QuadIn | QuadOut | QuadInOut
-  | CubicIn | CubicOut | CubicInOut
-  | SinIn | SinOut | SinInOut
-  | ExpIn | ExpOut | ExpInOut
-  | CircleIn | CircleOut | CircleInOut
-
-derive instance Eq Shape
-
-shapes :: Array Shape
-shapes =
-  [ Linear
-  , QuadIn, QuadOut, QuadInOut
-  , CubicIn, CubicOut, CubicInOut
-  , SinIn, SinOut, SinInOut
-  , ExpIn, ExpOut, ExpInOut
-  , CircleIn, CircleOut, CircleInOut
-  ]
-
-shapeName :: Shape -> String
-shapeName = case _ of
-  Linear -> "Linear"
-  QuadIn -> "QuadIn"
-  QuadOut -> "QuadOut"
-  QuadInOut -> "QuadInOut"
-  CubicIn -> "CubicIn"
-  CubicOut -> "CubicOut"
-  CubicInOut -> "CubicInOut"
-  SinIn -> "SinIn"
-  SinOut -> "SinOut"
-  SinInOut -> "SinInOut"
-  ExpIn -> "ExpIn"
-  ExpOut -> "ExpOut"
-  ExpInOut -> "ExpInOut"
-  CircleIn -> "CircleIn"
-  CircleOut -> "CircleOut"
-  CircleInOut -> "CircleInOut"
-
-shapeOf :: String -> Maybe Shape
-shapeOf s = Array.find (\x -> shapeName x == s) shapes
-
--- | The shape at `t`, clamped into the unit interval. Same arithmetic as
--- | hylograph's `applyEasing` for every constructor named here.
-at :: Shape -> Number -> Number
-at sh t = clamp 0.0 1.0 (raw sh (clamp 0.0 1.0 t))
-  where
-  raw = case _ of
-    Linear -> identity
-    QuadIn -> \u -> u * u
-    QuadOut -> \u -> u * (2.0 - u)
-    QuadInOut -> \u -> if u < 0.5 then 2.0 * u * u else -1.0 + (4.0 - 2.0 * u) * u
-    CubicIn -> \u -> u * u * u
-    CubicOut -> \u -> let v = u - 1.0 in v * v * v + 1.0
-    CubicInOut -> \u ->
-      if u < 0.5 then 4.0 * u * u * u
-      else (u - 1.0) * (2.0 * u - 2.0) * (2.0 * u - 2.0) + 1.0
-    SinIn -> \u -> 1.0 - Number.cos (u * Number.pi / 2.0)
-    SinOut -> \u -> Number.sin (u * Number.pi / 2.0)
-    SinInOut -> \u -> -(Number.cos (Number.pi * u) - 1.0) / 2.0
-    ExpIn -> \u -> if u == 0.0 then 0.0 else Number.pow 2.0 (10.0 * (u - 1.0))
-    ExpOut -> \u -> if u == 1.0 then 1.0 else 1.0 - Number.pow 2.0 (-10.0 * u)
-    ExpInOut -> \u ->
-      if u == 0.0 then 0.0
-      else if u == 1.0 then 1.0
-      else if u < 0.5 then Number.pow 2.0 (20.0 * u - 10.0) / 2.0
-      else (2.0 - Number.pow 2.0 (-20.0 * u + 10.0)) / 2.0
-    CircleIn -> \u -> 1.0 - Number.sqrt (1.0 - u * u)
-    CircleOut -> \u -> Number.sqrt (1.0 - Number.pow (u - 1.0) 2.0)
-    CircleInOut -> \u ->
-      if u < 0.5 then (1.0 - Number.sqrt (1.0 - Number.pow (2.0 * u) 2.0)) / 2.0
-      else (Number.sqrt (1.0 - Number.pow (-2.0 * u + 2.0) 2.0) + 1.0) / 2.0
-
--- | **One parameter of the synth, and where it is reached.**
--- |
--- | CV *and* MIDI, not one or the other: some things on the rig answer both, a
--- | BIA parameter that has a CV input also has none over MIDI, and an iPad
--- | synth is CC-only. Leaving both set is legal and means both are sent.
--- |
--- | `values` is the artefact. It is in the unit interval so the shapes apply to
--- | it directly and so the two destinations can scale it differently — the same
--- | sweep is 0…0.5 as a level and 20…110 as a controller.
+-- | CV *and* MIDI, not one or the other: a modular parameter has a CV input and
+-- | no controller, an iPad synth has a controller and no CV, and some things
+-- | answer both. Leaving both set is legal and means both are sent.
 type Param =
   { name :: String
-  -- | An es9-daemon bus, 0…15, or nothing.
+  -- | An es9-daemon bus, 0…15, or nothing. **Bus 8 is ES-9 panel jack 1** and
+  -- | bus 15 is jack 8; the lower eight reach expanders and non-panel outputs.
   , cv :: Maybe Int
   -- | What 0.0 and 1.0 mean on that bus, as the daemon's own -1…1 level.
   -- |
   -- | **Not halved for you.** `/tidal/cv` multiplies by es9-daemon's
-  -- | `SAFETY_SCALE`; the direct `/cv <bus> <val>` path this uses does NOT, so
-  -- | 1.0 here is the ES-9's full output. Hence the default range of 0…0.5.
+  -- | `SAFETY_SCALE`; the direct `/cv <bus> <val>` path this uses does not.
   , cvLo :: Number
   , cvHi :: Number
-  -- | A controller number, 0…127, or nothing.
   , cc :: Maybe Int
   , ccLo :: Int
   , ccHi :: Int
-  -- | The MIDI channel this parameter's CC goes out on, 1…16.
   , channel :: Int
-  -- | One per position, in the unit interval. **This is the thing you keep.**
-  , values :: Array Number
-  -- | What the Apply button would fill `values` with. A pending choice, never a
-  -- | claim about what is in there — the first drag of a slider would make such
-  -- | a claim false and nothing would say so.
-  , seed :: Shape
+  -- | Its shape over its axis. See `Workshop.Curve`.
+  , curve :: Curve
+  -- | **Which axis it moves along**, as an index into the encoding's axes.
+  -- |
+  -- | One curve per parameter means one axis per parameter — there is nothing
+  -- | for a second to be a function of. That is also what makes a grid legible:
+  -- | a column shares its value on one axis, a row on the other.
+  , axis :: Int
   }
 
 -- | **What actually makes the sound happen**, once the parameters have settled.
 type Trigger =
-  { gate :: Maybe Int      -- an es9-daemon bus to pulse
-  , gateLevel :: Number    -- how high the pulse goes, on the same -1…1 scale
-  , note :: Maybe Int      -- a MIDI note to play
+  { gate :: Maybe Int
+  , gateLevel :: Number
+  , note :: Maybe Int
   , channel :: Int
   , velocity :: Int
-  , ms :: Int              -- how long it is held
+  , ms :: Int
   }
 
 type Plan =
-  { positions :: Int
+  { encoding :: Encoding
+  -- | One size per axis of the encoding. `Encoding.objections` says what the
+  -- | destination will refuse, before anything is recorded.
+  , extent :: Array Int
   , params :: Array Param
   , trigger :: Trigger
-  -- | A substring of a WebMIDI output's name, matched the way the rest of the
-  -- | rig matches ports. Empty means MIDI is not used at all.
+  -- | A substring of a WebMIDI output's name. Empty means MIDI is unused.
   , port :: String
   -- | **How long after setting the parameters before the trigger.**
   -- |
-  -- | Unmeasured, and it is the one number here that can silently ruin a run:
-  -- | too short and the hit is struck while the CVs are still on their way, so
-  -- | position 7 sounds like a blend of 6 and 7. es9-daemon smooths per channel
-  -- | with a first-order IIR, so "arrived" is asymptotic rather than a moment.
+  -- | The one number here that can silently ruin a run: too short and the hit
+  -- | is struck while the CVs are still on their way, so a cell is a blend of
+  -- | itself and its neighbour — and a blend looks exactly like a value.
   , settleMs :: Int
   -- | Trigger to next trigger. Long enough for the sound to finish, plus enough
-  -- | silence that the divider can see the join.
+  -- | silence to see the join.
   , spacingMs :: Int
   }
 
--- | Twelve positions and one parameter, which is the smallest thing that can
--- | still fail visibly: one row, rising, and if the twelve tiles come out
--- | identical then nothing is reaching the module.
+-- | Twelve layers on one voice and one parameter rising — the smallest thing
+-- | that can still fail visibly. If the twelve tiles come out identical then
+-- | nothing is reaching the instrument.
 emptyPlan :: Plan
 emptyPlan =
-  { positions: 12
+  { encoding: RampleLayers
+  , extent: Encoding.defaultExtent RampleLayers
   , params: [ param "morph" 8 ]
-  -- **Bus 8 is ES-9 panel jack 1 and bus 15 is jack 8.** Not 0 and 7: the
-  -- daemon addresses sixteen cpal channels and the panel is the upper eight
-  -- (`main.rs`: "bus 8-15 → ES-9 panel jacks 1-8"). Buses 0-7 reach expanders
-  -- and non-panel outputs, so a sweep aimed at bus 0 goes somewhere real and
-  -- silent, which is the worst kind of wrong.
   , trigger: { gate: Just 15, gateLevel: 0.5, note: Nothing, channel: 1, velocity: 100, ms: 10 }
   , port: ""
   , settleMs: 120
-  , spacingMs: 700
+  , spacingMs: 2000
   }
 
 param :: String -> Int -> Param
@@ -227,51 +125,21 @@ param nm bus =
   , cv: Just bus, cvLo: 0.0, cvHi: 0.5
   , cc: Nothing, ccLo: 0, ccHi: 127
   , channel: 1
-  , values: rampOf 12
-  , seed: Linear
+  , curve: Named Linear false
+  , axis: 0
   }
 
-rampOf :: Int -> Array Number
-rampOf n = valuesFor Linear n
+-- | How many points this parameter's curve is sampled at: the size of the axis
+-- | it moves along.
+sizeOfAxis :: Plan -> Int -> Int
+sizeOfAxis p a = max 1 (fromMaybe 1 (Array.index p.extent a))
 
-valuesFor :: Shape -> Int -> Array Number
-valuesFor sh n
-  | n <= 1 = [ at sh 1.0 ]
-  | otherwise = map
-      (\i -> at sh (Int.toNumber i / Int.toNumber (n - 1)))
-      (Array.range 0 (n - 1))
-
--- | **Changing the number of positions keeps the shape you drew.**
--- |
--- | Truncating would silently drop the top of a sweep and padding would repeat
--- | its end; interpolating keeps what a hand edit meant, which is the only
--- | thing in here that could not be recreated by pressing a button.
-resample :: Int -> Array Number -> Array Number
-resample n xs
-  | n <= 0 = []
-  | Array.length xs == n = xs
-  | otherwise = case Array.length xs of
-      0 -> Array.replicate n 0.0
-      1 -> Array.replicate n (fromMaybe 0.0 (Array.head xs))
-      m
-        | n == 1 -> [ fromMaybe 0.0 (Array.last xs) ]
-        | otherwise -> map
-            (\i -> lerpAt xs
-                     (Int.toNumber i / Int.toNumber (n - 1) * Int.toNumber (m - 1)))
-            (Array.range 0 (n - 1))
-
-lerpAt :: Array Number -> Number -> Number
-lerpAt xs u =
-  let
-    i = Int.floor u
-    f = u - Int.toNumber i
-    a = fromMaybe 0.0 (Array.index xs i)
-    b = fromMaybe a (Array.index xs (i + 1))
-  in
-    a + (b - a) * f
+valuesFor :: Plan -> Param -> Array Number
+valuesFor p q = Curve.valuesOf (sizeOfAxis p q.axis) q.curve
 
 data Msg
-  = SetPositions String
+  = PickEncoding String
+  | SetExtent Int String
   | AddParam
   | DropParam Int
   | SetName Int String
@@ -282,10 +150,14 @@ data Msg
   | SetCcLo Int String
   | SetCcHi Int String
   | SetChannel Int String
+  | SetAxis Int Int
+  -- | Click: the next named shape. Deliberately a no-op over a drawing.
+  | NextShape Int
+  | FlipCurve Int
+  -- | Back to a curve, which has to be its own deliberate act because it
+  -- | discards hand-placed values.
+  | ToCurve Int
   | SetValue Int Int String
-  | SetSeed Int String
-  | ApplySeed Int
-  | FlipRow Int
   | SetPort String
   | SetGate String
   | SetGateLevel String
@@ -298,18 +170,27 @@ data Msg
 
 update :: Msg -> Plan -> Plan
 update = case _ of
-  SetPositions v -> \p ->
-    let n = clamp 2 24 (int p.positions v)
-    in p { positions = n, params = map (\q -> q { values = resample n q.values }) p.params }
+  PickEncoding v -> \p ->
+    case Array.find (\e -> Encoding.name e == v) Encoding.all of
+      Nothing -> p
+      Just e ->
+        -- A new encoding is a new set of axes, so an extent from the old one
+        -- would be meaningless and a parameter could be pointing at an axis
+        -- that no longer exists.
+        p { encoding = e
+          , extent = Encoding.defaultExtent e
+          , params = map (\q -> q { axis = min q.axis (Array.length (Encoding.axes e) - 1) }) p.params
+          }
+  SetExtent a v -> \p ->
+    p { extent = fromMaybe p.extent
+          (Array.updateAt a (clamp 1 128 (intOr (sizeOfAxis p a) v)) p.extent) }
   AddParam -> \p ->
-    -- Seven is the FH-2's spare jacks and so the number the whole idea was
-    -- sized to; it is not a law, but past it a row stops fitting the screen
-    -- and the grid stops being readable, which is the actual limit.
-    if Array.length p.params >= 7 then p
+    -- Seven is what the FH-2 has spare and about what a row of curves can be
+    -- read at a glance; it is not a law of anything.
+    if Array.length p.params >= 8 then p
     else p { params = Array.snoc p.params
                (param ("param " <> show (Array.length p.params + 1))
-                      (8 + Array.length p.params))
-                 { values = rampOf p.positions } }
+                      (8 + Array.length p.params)) }
   DropParam i -> \p -> p { params = fromMaybe p.params (Array.deleteAt i p.params) }
   SetName i v -> onParam i \q -> q { name = v }
   SetCv i v -> onParam i \q -> q { cv = busOf v }
@@ -319,12 +200,16 @@ update = case _ of
   SetCcLo i v -> onParam i \q -> q { ccLo = clamp 0 127 (intOr q.ccLo v) }
   SetCcHi i v -> onParam i \q -> q { ccHi = clamp 0 127 (intOr q.ccHi v) }
   SetChannel i v -> onParam i \q -> q { channel = clamp 1 16 (intOr q.channel v) }
-  SetValue i j v -> onParam i \q ->
-    q { values = fromMaybe q.values
-          (Array.updateAt j (clamp 0.0 1.0 (Int.toNumber (intOr 0 v) / 100.0)) q.values) }
-  SetSeed i v -> onParam i \q -> q { seed = fromMaybe q.seed (shapeOf v) }
-  ApplySeed i -> \p -> onParam i (\q -> q { values = valuesFor q.seed p.positions }) p
-  FlipRow i -> onParam i \q -> q { values = Array.reverse q.values }
+  SetAxis i a -> \p ->
+    onParam i (\q -> q { axis = clamp 0 (Array.length (Encoding.axes p.encoding) - 1) a }) p
+  NextShape i -> onParam i \q -> q { curve = Curve.nextShape q.curve }
+  FlipCurve i -> \p -> onParam i (\q -> q { curve = Curve.flipped (sizeOfAxis p q.axis) q.curve }) p
+  ToCurve i -> onParam i \q -> q { curve = Named Linear false }
+  SetValue i j v -> \p ->
+    onParam i
+      (\q -> q { curve = Curve.setAt (sizeOfAxis p q.axis) j
+                   (Int.toNumber (intOr 0 v) / 100.0) q.curve })
+      p
   SetPort v -> \p -> p { port = v }
   SetGate v -> onTrig \t -> t { gate = busOf v }
   SetGateLevel v -> onTrig \t -> t { gateLevel = level t.gateLevel v }
@@ -332,12 +217,11 @@ update = case _ of
   SetTrigChannel v -> onTrig \t -> t { channel = clamp 1 16 (intOr t.channel v) }
   SetVelocity v -> onTrig \t -> t { velocity = clamp 1 127 (intOr t.velocity v) }
   SetHold v -> onTrig \t -> t { ms = clamp 1 5000 (intOr t.ms v) }
-  SetSettle v -> \p -> p { settleMs = clamp 0 5000 (int p.settleMs v) }
-  SetSpacing v -> \p -> p { spacingMs = clamp 50 20000 (int p.spacingMs v) }
+  SetSettle v -> \p -> p { settleMs = clamp 0 5000 (intOr p.settleMs v) }
+  SetSpacing v -> \p -> p { spacingMs = clamp 50 20000 (intOr p.spacingMs v) }
   where
   onParam i f p = p { params = fromMaybe p.params (Array.modifyAt i f p.params) }
   onTrig f p = p { trigger = f p.trigger }
-  int d v = intOr d v
   intOr d v = fromMaybe d (Int.fromString v)
   level d v = clamp (-1.0) 1.0 (fromMaybe d (Number.fromString v))
   -- An empty box means "not routed", which has to be distinguishable from bus
@@ -346,43 +230,48 @@ update = case _ of
   ccOf v = if v == "" then Nothing else map (clamp 0 127) (Int.fromString v)
   noteOf v = if v == "" then Nothing else map (clamp 0 127) (Int.fromString v)
 
--- | **One position, resolved.** What to set, immediately before hit `index`.
+-- | **One cell, resolved.** What to set, immediately before its hit.
 type Step =
   { index :: Int
+  , cell :: Cell
   , cv :: Array { bus :: Int, level :: Number }
   , cc :: Array { channel :: Int, cc :: Int, value :: Int }
   }
 
 steps :: Plan -> Array Step
-steps p = map one (Array.range 0 (p.positions - 1))
+steps p = Array.mapWithIndex one (Encoding.cells p.encoding p.extent)
   where
-  one i =
+  one i cell =
     { index: i
-    , cv: Array.mapMaybe (\q -> map (\b -> { bus: b, level: lerp q.cvLo q.cvHi (v q i) }) q.cv) p.params
+    , cell
+    , cv: Array.mapMaybe (\q -> map (\b -> { bus: b, level: lerp q.cvLo q.cvHi (v q cell) }) q.cv) p.params
     , cc: Array.mapMaybe
             (\q -> map
               (\c -> { channel: q.channel, cc: c
-                     , value: Int.round (lerp (Int.toNumber q.ccLo) (Int.toNumber q.ccHi) (v q i)) })
+                     , value: Int.round (lerp (Int.toNumber q.ccLo) (Int.toNumber q.ccHi) (v q cell)) })
               q.cc)
             p.params
     }
-  v q i = fromMaybe 0.0 (Array.index q.values i)
+  -- Each parameter reads the cell's position on ITS axis. That is the whole of
+  -- what makes a grid legible: a column shares one axis's value, a row the
+  -- other's.
+  v q cell =
+    fromMaybe 0.0 (Array.index (valuesFor p q) (fromMaybe 0 (Array.index cell q.axis)))
   lerp a b t = a + (b - a) * t
-
 
 -- ---------------------------------------------------------------------------
 -- Keeping it across a reload
 -- ---------------------------------------------------------------------------
 
--- | **A plan has to survive a force-reload**, and this was learned the hard
--- | way: the second BIA run captured all twelve hits and every one of them was
--- | at the default spacing, because reloading the page to pick up a fix had
--- | quietly reset the plan that had just been tuned. The take says so — 0.836 s
--- | between triggers, which is `120 + 700` and nothing else.
+-- | **A plan has to survive a force-reload**, learned the hard way: the second
+-- | BIA run captured all twelve hits and every one of them was at the default
+-- | spacing, because reloading to pick up a fix had quietly reset the plan that
+-- | had just been tuned. The take said so — 0.836 s between triggers, which is
+-- | `120 + 700` and nothing else.
 -- |
--- | Which matters more here than for most settings, because the whole feature
--- | IS a loop of run, listen, bend, run again — and a page you reload between
--- | runs is a loop that keeps starting over.
+-- | It matters more here than for most settings, because the whole feature IS a
+-- | loop of run, listen, bend, run again, and a page you reload between runs is
+-- | a loop that keeps starting over.
 -- |
 -- | Stored flat, with `-1` for "not routed": `Maybe` does not survive a round
 -- | trip through `JSON.stringify` in any shape worth defending, and a sentinel
@@ -392,12 +281,19 @@ type PlainParam =
   , cv :: Int, cvLo :: Number, cvHi :: Number
   , cc :: Int, ccLo :: Int, ccHi :: Int
   , channel :: Int
+  , axis :: Int
+  -- | `"named"` or `"drawn"` — the constructor, written down, because it is the
+  -- | difference between a shape that can be resampled and points that can only
+  -- | be interpolated.
+  , kind :: String
+  , shape :: String
+  , flipped :: Boolean
   , values :: Array Number
-  , seed :: String
   }
 
 type Plain =
-  { positions :: Int
+  { encoding :: String
+  , extent :: Array Int
   , params :: Array PlainParam
   , gate :: Int
   , gateLevel :: Number
@@ -410,9 +306,6 @@ type Plain =
   , spacingMs :: Int
   }
 
--- | The JS keeps the default as the base and merges the stored fields over it,
--- | so a plan written by an older build — one with a field this one has since
--- | added — comes back usable instead of coming back broken.
 foreign import savePlain :: Plain -> Effect Unit
 foreign import loadPlain :: Plain -> Effect Plain
 
@@ -424,7 +317,8 @@ restore d = map unflatten (loadPlain (flatten d))
 
 flatten :: Plan -> Plain
 flatten p =
-  { positions: p.positions
+  { encoding: Encoding.name p.encoding
+  , extent: p.extent
   , params: map one p.params
   , gate: fromMaybe (-1) p.trigger.gate
   , gateLevel: p.trigger.gateLevel
@@ -442,36 +336,50 @@ flatten p =
     , cv: fromMaybe (-1) q.cv, cvLo: q.cvLo, cvHi: q.cvHi
     , cc: fromMaybe (-1) q.cc, ccLo: q.ccLo, ccHi: q.ccHi
     , channel: q.channel
-    , values: q.values
-    , seed: shapeName q.seed
+    , axis: q.axis
+    , kind: if Curve.isDrawn q.curve then "drawn" else "named"
+    , shape: case q.curve of
+        Named sh _ -> shapeName sh
+        Drawn _ -> shapeName Linear
+    , flipped: case q.curve of
+        Named _ f -> f
+        Drawn _ -> false
+    , values: Curve.valuesOf 32 q.curve
     }
 
 unflatten :: Plain -> Plan
 unflatten p =
-  { positions: clamp 2 24 p.positions
-  , params: map one p.params
-  , trigger:
-      { gate: some p.gate
-      , gateLevel: clamp (-1.0) 1.0 p.gateLevel
-      , note: some p.note
-      , channel: clamp 1 16 p.trigChannel
-      , velocity: clamp 1 127 p.velocity
-      , ms: clamp 1 5000 p.holdMs
-      }
-  , port: p.port
-  , settleMs: clamp 0 5000 p.settleMs
-  , spacingMs: clamp 50 20000 p.spacingMs
-  }
+  let
+    enc = fromMaybe RampleLayers (Array.find (\e -> Encoding.name e == p.encoding) Encoding.all)
+    nAxes = Array.length (Encoding.axes enc)
+    ext = Array.mapWithIndex
+            (\i _ -> clamp 1 128 (fromMaybe 8 (Array.index p.extent i)))
+            (Encoding.axes enc)
+  in
+    { encoding: enc
+    , extent: ext
+    , params: map (one nAxes) p.params
+    , trigger:
+        { gate: some p.gate
+        , gateLevel: clamp (-1.0) 1.0 p.gateLevel
+        , note: some p.note
+        , channel: clamp 1 16 p.trigChannel
+        , velocity: clamp 1 127 p.velocity
+        , ms: clamp 1 5000 p.holdMs
+        }
+    , port: p.port
+    , settleMs: clamp 0 5000 p.settleMs
+    , spacingMs: clamp 50 20000 p.spacingMs
+    }
   where
   some n = if n < 0 then Nothing else Just n
-  one q =
+  one nAxes q =
     { name: q.name
     , cv: some q.cv, cvLo: clamp (-1.0) 1.0 q.cvLo, cvHi: clamp (-1.0) 1.0 q.cvHi
     , cc: some q.cc, ccLo: clamp 0 127 q.ccLo, ccHi: clamp 0 127 q.ccHi
     , channel: clamp 1 16 q.channel
-    -- The stored row may be a different length from the stored position count
-    -- if either was written by a build that disagreed; resampling makes them
-    -- agree rather than leaving a row the grid cannot draw.
-    , values: resample (clamp 2 24 p.positions) (map (clamp 0.0 1.0) q.values)
-    , seed: fromMaybe Linear (shapeOf q.seed)
+    , axis: clamp 0 (nAxes - 1) q.axis
+    , curve:
+        if q.kind == "drawn" then Drawn (map (clamp 0.0 1.0) q.values)
+        else Named (fromMaybe Linear (shapeOf q.shape)) q.flipped
     }

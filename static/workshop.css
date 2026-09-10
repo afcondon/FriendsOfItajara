@@ -153,65 +153,70 @@ body {
 .ws-plain.is-replacing { border-color: #a8442a; color: #a8442a; }
 
 /* ---------------------------------------------------------------------------
-   The sweep.
+   The sweep bench.
 
-   A modal, because setting up a run is a mode and not a panel: while it is
-   open you are describing what the rig should do, and the page behind it is
-   about what you played. Wider than the page on purpose — the grid is the
-   whole idea and a grid that wraps is not one.
+   A view, not a dialog: curves down the left, the parameters they move beside
+   them, and — when one is opened — a full-width bank of sliders under it. Eight
+   parameters at sixteen positions is a mixing desk, and a desk in a dialog is a
+   desk you cannot work.
    --------------------------------------------------------------------------- */
-.ws-scrim {
-  position: fixed; inset: 0; z-index: 40;
-  background: rgba(22, 22, 26, 0.32);
-  display: flex; align-items: flex-start; justify-content: center;
-  padding: 28px 20px; overflow: auto;
-}
-.ws-modal {
-  background: #fff; border: 1px solid var(--rule); border-radius: 5px;
-  box-shadow: 0 18px 60px rgba(22, 22, 26, 0.22);
-  width: min(1360px, 100%); padding: 22px 24px 20px;
-}
+.ws.is-wide { max-width: 1400px; }
+.ws-bench { border-top: 1px solid var(--rule); padding-top: 18px; }
 .ws-modhead { display: flex; align-items: baseline; gap: 14px; border-bottom: 1px solid var(--rule); padding-bottom: 12px; margin-bottom: 16px; }
 .ws-modhead h2 { margin: 0; font-size: 19px; font-weight: 600; }
 .ws-modhead .ws-sub { flex: 1; }
 
-.ws-swrow { display: flex; align-items: center; flex-wrap: wrap; gap: 14px; margin-bottom: 14px; }
-.ws-swrow.is-trig { border-top: 1px solid var(--rule); padding-top: 14px; margin-top: 4px; }
+.ws-swrow { display: flex; align-items: center; flex-wrap: wrap; gap: 14px; margin-bottom: 12px; }
+.ws-swrow.is-trig { border-top: 1px solid var(--rule); padding-top: 14px; margin-top: 6px; }
 .ws-swrow .ws-field { margin: 0; }
+.ws-swrow select { padding: 6px 8px; border: 1px solid var(--rule); border-radius: 3px; font: inherit; }
 
-/* Parameters down, positions across. The first column carries where the
-   parameter GOES, which you set once; every column after it carries what it
-   does, which you come back to after every listen. */
-.ws-swgrid { display: grid; gap: 4px 3px; align-items: end; margin-bottom: 12px; }
-.ws-swcorner { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); font-weight: 600; padding-bottom: 4px; }
-.ws-swnum {
-  text-align: center; font-size: 11px; color: var(--muted);
-  font-variant-numeric: tabular-nums; padding-bottom: 4px;
-  border-bottom: 1px solid var(--rule);
-}
-.ws-swhead { display: flex; flex-direction: column; gap: 4px; padding: 6px 12px 6px 0; }
-.ws-swname { padding: 5px 8px; border: 1px solid var(--rule); border-radius: 3px; font: inherit; font-size: 13px; width: 100%; }
+/* What the run will cost, or what the destination will refuse. The second is
+   the same objection msm makes at write time, moved to before the recording —
+   which is the only place saying it can save anything. */
+.ws-swnote { font-size: 12px; color: var(--muted); margin: 0 0 14px; }
+.ws-swnote.is-bad { color: #a8442a; font-weight: 500; }
+
+/* A curve and the parameter it moves, on one row, so the arrow between them
+   needs no drawing. */
+.ws-curves { display: grid; grid-template-columns: 216px 1fr; gap: 10px 16px; align-items: start; }
+.ws-curvecard { border: 1px solid var(--rule); border-radius: 4px; background: #fff; overflow: hidden; }
+.ws-curveface { display: block; width: 100%; border: 0; background: none; padding: 6px 6px 2px; cursor: pointer; }
+.ws-thumb { display: block; width: 100%; height: 52px; }
+.ws-thumbline { fill: none; stroke: var(--ink); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.ws-thumb.is-drawn rect { fill: var(--ink); }
+.ws-curvefoot { display: flex; align-items: center; gap: 5px; padding: 2px 7px 7px; }
+.ws-curvelabel { flex: 1; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.ws-curveparam { display: flex; flex-direction: column; gap: 6px; padding-top: 2px; }
+.ws-swname { padding: 5px 8px; border: 1px solid var(--rule); border-radius: 3px; font: inherit; font-size: 13px; width: 220px; }
 .ws-swwhere { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
 .ws-swtiny { display: inline-flex; align-items: center; gap: 3px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
 .ws-swtiny input { padding: 3px 5px; border: 1px solid var(--rule); border-radius: 3px; font: inherit; font-size: 11px; font-variant-numeric: tabular-nums; }
-.ws-swseed { padding: 3px 4px; border: 1px solid var(--rule); border-radius: 3px; font: inherit; font-size: 11px; }
+.ws-swtiny select { padding: 2px 4px; border: 1px solid var(--rule); border-radius: 3px; font: inherit; font-size: 11px; }
+.ws-swarrow { color: var(--rule); font-size: 11px; line-height: 1; }
 .ws-swmini { border: 1px solid var(--rule); background: #fff; border-radius: 3px; cursor: pointer; font: inherit; font-size: 11px; padding: 3px 7px; }
 .ws-swmini:hover { border-color: var(--ink); }
 .ws-swmini.is-drop { color: #a8442a; }
 
+/* The desk: opened in place, spanning both columns, one slider per position. */
+.ws-desk { grid-column: 1 / -1; border: 1px solid var(--ink); border-radius: 4px; background: #fff; padding: 12px 14px 10px; margin: 2px 0 6px; }
+.ws-deskhead { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); font-weight: 600; margin-bottom: 10px; }
+.ws-deskgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(26px, 1fr)); gap: 4px; }
 .ws-swcell { display: flex; flex-direction: column; align-items: center; gap: 2px; }
-/* Vertical range inputs: `writing-mode` is the way Chrome does this now, and
-   `slider-vertical` is the way it used to. Both are set because a slider that
-   silently comes out horizontal turns the grid into nonsense. */
+/* Vertical range inputs: `writing-mode` is how Chrome does this now and
+   `slider-vertical` is how it used to. Both are set, because a slider that
+   silently comes out horizontal turns the desk into nonsense. */
 .ws-swslider {
   writing-mode: vertical-lr; direction: rtl;
   -webkit-appearance: slider-vertical; appearance: slider-vertical;
-  width: 20px; height: 104px; margin: 0; padding: 0;
+  width: 20px; height: 108px; margin: 0; padding: 0;
   accent-color: var(--ink); cursor: ns-resize;
 }
-.ws-swval { font-size: 10px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.ws-swval { font-size: 10px; color: var(--ink); font-variant-numeric: tabular-nums; }
+.ws-swidx { font-size: 9px; color: var(--muted); font-variant-numeric: tabular-nums; }
 
-.ws-swadd { display: flex; align-items: center; gap: 14px; margin-bottom: 6px; }
+.ws-swadd { display: flex; align-items: center; gap: 14px; margin: 14px 0 6px; }
 .ws-swadd .ws-muted { flex: 1; font-size: 12px; }
 
 /* What came out, under what it looks like. Two bars because two witnesses:
@@ -222,4 +227,3 @@ body {
 .ws-bar-fill { height: 100%; background: var(--ink); }
 .ws-bar.is-bright .ws-bar-fill { background: #7a7a85; }
 .ws-tile.is-dropped .ws-bar-fill { background: var(--muted); }
-.ws-swarrow { color: var(--rule); font-size: 11px; line-height: 1; }

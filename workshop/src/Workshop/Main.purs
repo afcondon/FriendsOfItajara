@@ -58,6 +58,7 @@ import Workshop.Slug (slugFor)
 import Workshop.Divider (Divider)
 import Workshop.Divider as Divider
 import Workshop.Rig as Rig
+import Workshop.Encoding as Encoding
 import Workshop.Sweep as Sweep
 import Workshop.SweepView as SweepView
 
@@ -139,6 +140,10 @@ type State =
   -- | interrupted by pressing anything.
   , sweepFork :: Maybe H.ForkId
   , midiPorts :: Array String
+  -- | Which parameter's values are open for editing point by point. UI state,
+  -- | so it is here and not in the plan: a plan that remembered which drawer
+  -- | was open would put that in the file it is saved to.
+  , sweepEdit :: Maybe Int
   -- | The take on show was made by a sweep, so the measurements are worth
   -- | reading as a set rather than one at a time.
   , swept :: Boolean
@@ -171,6 +176,7 @@ data Action
   | SetHoverPlays Boolean
   | OpenSweep Boolean
   | SweepMsg Sweep.Msg
+  | OpenParam (Maybe Int)
   | RunSweep Int
   | StopSweep
 
@@ -184,7 +190,7 @@ component = H.mkComponent
       , minGap: 300.0, divider: Divider.Attacks, equalN: 16, mine: false, kitMine: false, layerMode: ""
       , cardView: Nothing, bank: "WORKSHOP", kit: "", voice: 1, cardBusy: false
       , sweep: Sweep.emptyPlan, sweepOpen: false, sweepAt: Nothing
-      , sweepFork: Nothing, midiPorts: [], swept: false }
+      , sweepFork: Nothing, midiPorts: [], swept: false, sweepEdit: Nothing }
   , render
   , eval: H.mkEval H.defaultEval { handleAction = handleAction, initialize = Just Init }
   }
@@ -409,6 +415,7 @@ handleAction = case _ of
           -- answered, so this says "not yet" rather than "not at all".
           when (Array.null ports) $ H.modify_
             (note "no MIDI ports yet — allow MIDI if Chrome asks; CV is unaffected")
+  OpenParam i -> H.modify_ _ { sweepEdit = i }
   SweepMsg m -> do
     H.modify_ \s -> s { sweep = Sweep.update m s.sweep }
     st <- H.get
@@ -554,7 +561,7 @@ runSweep = do
   -- from one that is short because the sound was.
   H.liftAff (delay (Milliseconds 300.0))
   restCv
-  H.modify_ (note ("swept " <> show p.positions <> " positions")
+  H.modify_ (note ("swept " <> show (Encoding.total p.extent) <> " samples")
     <<< _ { sweepAt = Nothing, sweepFork = Nothing, sweepOpen = false, swept = true })
   handleAction Close
 
@@ -718,19 +725,21 @@ fmt n = show (Int.round (n * 100.0) # \k -> Int.toNumber k / 100.0)
 
 render :: forall m. State -> H.ComponentHTML Action () m
 render st =
-  HH.div [ HP.class_ (HH.ClassName "ws") ]
+  -- The bench wants width the rest of the page does not, so the container
+  -- widens for it rather than the bench breaking out of the container.
+  HH.div [ HP.class_ (HH.ClassName ("ws" <> if st.sweepOpen then " is-wide" else "")) ]
     [ HH.header [ HP.class_ (HH.ClassName "ws-head") ]
         [ HH.h1_ [ HH.text "Workshop" ]
         , HH.span [ HP.class_ (HH.ClassName "ws-sub") ]
             [ HH.text "record material, divide it, put it on a card" ]
         , connection
         ]
-    , recordBox
-    , caught
-    , cardView
+    , if st.sweepOpen then sweepBench else HH.text ""
+    , if st.sweepOpen then HH.text "" else recordBox
+    , if st.sweepOpen then HH.text "" else caught
+    , if st.sweepOpen then HH.text "" else cardView
     , HH.section [ HP.class_ (HH.ClassName "ws-log") ]
         (map (\l -> HH.div_ [ HH.text l ]) st.log)
-    , sweepModal
     ]
   where
   lp = loop st
@@ -795,47 +804,49 @@ render st =
       , HH.span [ HP.class_ (HH.ClassName "ws-chip-db") ] [ HH.text (fmt src.db) ]
       ]
 
-  -- | **The sweep, as a modal.**
+  -- | **The sweep, as a view rather than a dialog.**
   -- |
-  -- | A modal because it is a mode: while it is open you are describing a run
-  -- | rather than making a recording, and those want different verbs on the
-  -- | screen. Modelled on Triggerfish's routing modal, which answers the same
-  -- | shape of question — a table of things against the places they reach, too
-  -- | wide for a sidebar and too settled to deserve one.
-  sweepModal
-    | not st.sweepOpen = HH.text ""
-    | otherwise =
-        HH.div [ HP.class_ (HH.ClassName "ws-scrim") ]
-          [ HH.div
-              [ HP.class_ (HH.ClassName "ws-modal")
-              , HP.attr (HH.AttrName "role") "dialog"
+  -- | It was a modal first, and eight parameters at sixteen positions is a
+  -- | mixing desk — a desk in a dialog is a desk you cannot work. So the page
+  -- | swaps: while you are describing a run you are not looking at a recording,
+  -- | and the two want different verbs on screen anyway.
+  -- |
+  -- | Not a second HTML page, which was the other option considered. The point
+  -- | was room, and a second page would have meant a second Halogen app and a
+  -- | second socket to the daemon to get it.
+  sweepBench =
+    HH.section [ HP.class_ (HH.ClassName "ws-bench") ]
+      [ HH.header [ HP.class_ (HH.ClassName "ws-modhead") ]
+          [ HH.h2_ [ HH.text "Sweep" ]
+          , HH.span [ HP.class_ (HH.ClassName "ws-sub") ]
+              [ HH.text "a curve for every parameter you want to move, and the \
+                        \destination decides the shape of the set" ]
+          , HH.button
+              [ HP.class_ (HH.ClassName "ws-plain")
+              , HP.disabled running
+              , HE.onClick \_ -> OpenSweep false
               ]
-              [ HH.header [ HP.class_ (HH.ClassName "ws-modhead") ]
-                  [ HH.h2_ [ HH.text "Sweep" ]
-                  , HH.span [ HP.class_ (HH.ClassName "ws-sub") ]
-                      [ HH.text "a row per parameter, a column per hit — and the \
-                                \columns are the tiles you will get back" ]
-                  , HH.button
-                      [ HP.class_ (HH.ClassName "ws-plain")
-                      , HP.disabled running
-                      , HE.onClick \_ -> OpenSweep false
-                      ]
-                      [ HH.text "close" ]
-                  ]
-              , map SweepMsg (SweepView.body st.midiPorts st.sweep)
-              , HH.div [ HP.class_ (HH.ClassName "ws-send") ]
-                  ( [ HH.span [ HP.class_ (HH.ClassName "ws-arm-label") ]
-                        [ HH.text (if running then "Running" else "Run on") ] ]
-                      <> runOrStop
-                  )
-              ]
+              [ HH.text "back" ]
           ]
+      , SweepView.body
+          { ports: st.midiPorts
+          , open: st.sweepEdit
+          , plan: st.sweep
+          , msg: SweepMsg
+          , openParam: OpenParam
+          }
+      , HH.div [ HP.class_ (HH.ClassName "ws-send") ]
+          ( [ HH.span [ HP.class_ (HH.ClassName "ws-arm-label") ]
+                [ HH.text (if running then "Running" else "Run on") ] ]
+              <> runOrStop
+          )
+      ]
 
   runOrStop
     | running =
         [ HH.span [ HP.class_ (HH.ClassName "ws-state") ]
             [ HH.text ("position " <> show (maybe 0 (_ + 1) st.sweepAt)
-                <> " of " <> show st.sweep.positions) ]
+                <> " of " <> show (Encoding.total st.sweep.extent)) ]
         , HH.button
             [ HP.class_ (HH.ClassName "ws-plain is-replacing")
             , HE.onClick \_ -> StopSweep
@@ -1161,11 +1172,11 @@ render st =
   declaredVsFound
     | not st.swept = HH.text ""
     | Array.null st.regions = HH.text ""
-    | Array.length st.regions == st.sweep.positions = HH.text ""
+    | Array.length st.regions == Encoding.total st.sweep.extent = HH.text ""
     | otherwise =
         HH.span [ HP.class_ (HH.ClassName "ws-warn") ]
-          [ HH.text ("you swept " <> show st.sweep.positions
-              <> " positions and this divided into " <> show (Array.length st.regions)
+          [ HH.text ("you swept " <> show (Encoding.total st.sweep.extent)
+              <> " samples and this divided into " <> show (Array.length st.regions)
               <> " — try another divider, or a wider gap, before sending it") ]
 
   -- The loudest and the brightest in this take, so a tile is read against its
