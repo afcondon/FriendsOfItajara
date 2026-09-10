@@ -59,6 +59,7 @@ import Workshop.Divider (Divider)
 import Workshop.Divider as Divider
 import Workshop.Rig as Rig
 import Workshop.Encoding as Encoding
+import Workshop.Schedule as Schedule
 import Workshop.Sweep as Sweep
 import Workshop.SweepView as SweepView
 
@@ -147,6 +148,15 @@ type State =
   -- | The take on show was made by a sweep, so the measurements are worth
   -- | reading as a set rather than one at a time.
   , swept :: Boolean
+  -- | **When each trigger of the last run landed**, in seconds into the take.
+  -- |
+  -- | Read from the daemon's own `recFrames` at the instant of each trigger,
+  -- | so it is take time and not page time. Empty for a take that was played
+  -- | rather than run, and that emptiness is the switch: with a schedule the
+  -- | take divides at its own boundaries, without one `msm` goes looking. See
+  -- | `Workshop.Schedule` for why that difference matters more at 192 hits
+  -- | than at twelve.
+  , schedule :: Array Number
   }
 
 data Action
@@ -179,6 +189,7 @@ data Action
   | OpenParam (Maybe Int)
   | RunSweep Int
   | StopSweep
+  | SetLead String
 
 component :: forall q i o m. MonadAff m => H.Component q i o m
 component = H.mkComponent
@@ -190,7 +201,8 @@ component = H.mkComponent
       , minGap: 300.0, divider: Divider.Attacks, equalN: 16, mine: false, kitMine: false, layerMode: ""
       , cardView: Nothing, bank: "WORKSHOP", kit: "", voice: 1, cardBusy: false
       , sweep: Sweep.emptyPlan, sweepOpen: false, sweepAt: Nothing
-      , sweepFork: Nothing, midiPorts: [], swept: false, sweepEdit: Nothing }
+      , sweepFork: Nothing, midiPorts: [], swept: false, sweepEdit: Nothing
+      , schedule: [] }
   , render
   , eval: H.mkEval H.defaultEval { handleAction = handleAction, initialize = Just Init }
   }
@@ -366,6 +378,14 @@ handleAction = case _ of
     H.modify_ \s -> s { minGap = fromMaybe s.minGap (Number.fromString v) }
     st <- H.get
     when (st.showing /= "") (analyse false)
+  -- | The lead, and re-divide at once. It costs one pass over a take already
+  -- | on disk, and the whole reason it is a knob rather than a constant is
+  -- | that you set it by looking at what comes back.
+  SetLead v -> do
+    H.modify_ \s -> s { sweep = Sweep.update (Sweep.SetLead v) s.sweep }
+    st <- H.get
+    liftEffect (Sweep.remember st.sweep)
+    when (st.showing /= "" && not (Array.null st.schedule)) (analyse false)
   -- Choosing an algorithm re-divides at once. It costs one pass over a take
   -- already on disk, and the whole value of naming them is being able to see
   -- both answers next to each other.
@@ -432,7 +452,7 @@ handleAction = case _ of
         -- Open, not level-armed: see `armOn`. The schedule knows when the
         -- first hit happens, so nothing needs to detect it.
         armOn false src
-        H.modify_ _ { swept = false, sweepAt = Nothing }
+        H.modify_ _ { swept = false, sweepAt = Nothing, schedule = [] }
         fid <- H.fork runSweep
         H.modify_ _ { sweepFork = Just fid }
   StopSweep -> do
@@ -519,8 +539,12 @@ armOn levelArmed src = do
   -- Not swept until something sweeps it. Left set, the declared-against-found
   -- check would go on comparing every later take by hand against a position
   -- count that has nothing to do with it.
+  -- The schedule belongs to a run, and this take is not that run until one
+  -- starts. Left standing, a take played by hand would be divided at the
+  -- boundaries of the sweep before it — silently, and at plausible-looking
+  -- times.
   H.modify_ (note (if levelArmed then Kind.prompt st.kind else "recording — the run starts in a moment")
-    <<< _ { armed = true, swept = false })
+    <<< _ { armed = true, swept = false, schedule = [] })
 
 -- | **The run.**
 -- |
@@ -548,6 +572,12 @@ runSweep = do
     when (p.port /= "") $ liftEffect $ for_ s.cc \c ->
       Rig.sendCc { port: p.port, channel: c.channel, cc: c.cc, value: c.value }
     H.liftAff (delay (Milliseconds (Int.toNumber p.settleMs)))
+    -- **Where in the take this hit is about to be**, asked immediately before
+    -- the trigger rather than after it: everything between here and the pulse
+    -- is a few microseconds of arithmetic, where everything after it is a
+    -- round trip of unknown length. See `Workshop.Schedule`.
+    mk <- liftEffect (Schedule.at scratch)
+    for_ mk \t -> H.modify_ \s0 -> s0 { schedule = Array.snoc s0.schedule t }
     for_ p.trigger.gate \b -> void $
       H.liftAff (attempt (toAffE (Rig.pulse
         { bus: b, level: p.trigger.gateLevel, ms: p.trigger.ms })))
@@ -604,11 +634,19 @@ analyse write = do
         -- the folder is there a moment later.
         H.liftAff (delay (Milliseconds 900.0))
       let takeName = if write then st.name else st.showing
+          -- **The run divides its own take.** Empty for anything played by
+          -- hand, which is when the detector is the only thing that could
+          -- know. See `Workshop.Schedule` for the lead, which is the one
+          -- number the schedule cannot supply itself.
+          declared = Schedule.slots
+                       (Int.toNumber st.sweep.leadMs / 1000.0)
+                       st.schedule
       r <- H.liftAff (attempt (toAffE (Http.divisions
             { take: takeName
             , as: Kind.material st.kind
             , by: Divider.name st.divider
-            , minGap: st.minGap })))
+            , minGap: st.minGap
+            , regions: declared })))
       case r of
         Left e -> H.modify_ (note ("could not analyse: " <> Aff.message e) <<< _ { busy = false })
         Right d
@@ -960,7 +998,8 @@ render st =
                   [ HH.text "Keep all" ]
               , HH.button [ HP.class_ (HH.ClassName "ws-plain"), HE.onClick \_ -> KeepAll false ]
                   [ HH.text "Keep none" ]
-              , HH.label [ HP.class_ (HH.ClassName "ws-quiet") ]
+              , if not (Array.null st.schedule) then HH.text "" else
+                HH.label [ HP.class_ (HH.ClassName "ws-quiet") ]
                   -- A wider gap means fewer divisions, so FEWER is the
                   -- right-hand end — the same direction the old level knob
                   -- ran, and the one people expect.
@@ -997,6 +1036,8 @@ render st =
   -- | whether it was the right question.
   dividerRow
     | not hasTake = HH.text ""
+    -- The run's own boundaries, and no chooser: see `scheduled`.
+    | not (Array.null st.schedule) = scheduled
     | otherwise =
         HH.div [ HP.class_ (HH.ClassName "ws-dividers") ]
           [ HH.span [ HP.class_ (HH.ClassName "ws-arm-label") ] [ HH.text "Divide" ]
@@ -1014,6 +1055,32 @@ render st =
           , HH.span [ HP.class_ (HH.ClassName "ws-muted") ]
               [ HH.text (Divider.blurb st.divider) ]
           ]
+
+  -- | **A run divides its own take**, so there is nothing here to choose.
+  -- |
+  -- | Shown in place of the dividers, because offering both would be offering
+  -- | a way to throw the schedule away by accident. What is left is the one
+  -- | number the schedule cannot supply: how long the sound takes to come
+  -- | back. Set it by looking — the tiles show a clipped attack as a low peak
+  -- | and a lead too long as silence at the head.
+  scheduled =
+    HH.div [ HP.class_ (HH.ClassName "ws-dividers") ]
+      [ HH.span [ HP.class_ (HH.ClassName "ws-arm-label") ] [ HH.text "Divide" ]
+      , HH.span [ HP.class_ (HH.ClassName "ws-chips") ]
+          [ HH.span [ HP.class_ (HH.ClassName "ws-chip on") ] [ HH.text "by the schedule" ] ]
+      , HH.label [ HP.class_ (HH.ClassName "ws-field is-tight") ]
+          [ HH.span_ [ HH.text "lead ms" ]
+          , HH.input
+              [ HP.type_ HP.InputNumber, HP.value (show st.sweep.leadMs)
+              , HP.min (-500.0), HP.max 2000.0
+              , HP.title "how long after a trigger its sound is in the take"
+              , HE.onValueChange SetLead ]
+          ]
+      , HH.span [ HP.class_ (HH.ClassName "ws-muted") ]
+          [ HH.text (show (Array.length st.schedule)
+              <> " triggers, timed by the daemon as it recorded them — nothing was \
+                 \detected, so nothing could be missed") ]
+      ]
 
   dividerBtn dv =
     HH.button
@@ -1175,6 +1242,15 @@ render st =
   declaredVsFound
     | not st.swept = HH.text ""
     | Array.null st.regions = HH.text ""
+    -- Under a schedule the two counts are the same object, so a mismatch here
+    -- would mean the take is shorter than the run — which `msm` reports by
+    -- dropping the regions that fall past its end.
+    | not (Array.null st.schedule) =
+        if Array.length st.regions == Array.length st.schedule then HH.text ""
+        else HH.span [ HP.class_ (HH.ClassName "ws-warn") ]
+               [ HH.text ("the run made " <> show (Array.length st.schedule)
+                   <> " hits and the take holds " <> show (Array.length st.regions)
+                   <> " — the recording ended before the run did") ]
     | Array.length st.regions == Encoding.total st.sweep.extent = HH.text ""
     | otherwise =
         HH.span [ HP.class_ (HH.ClassName "ws-warn") ]

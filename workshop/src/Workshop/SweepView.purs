@@ -21,15 +21,15 @@ import Prelude
 
 import Data.Array as Array
 import Data.Int as Int
-import Data.Maybe (Maybe(..), isJust, maybe)
+import Data.Maybe (Maybe(..), maybe)
 import Halogen (AttrName(..), ElemName(..), Namespace(..))
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
-import Workshop.Curve (Curve, isDrawn)
+import Workshop.Curve (isDrawn)
 import Workshop.Curve as Curve
 import Workshop.Encoding as Encoding
-import Workshop.Sweep (Msg(..), Param, Plan, valuesFor)
+import Workshop.Sweep (Msg(..), Plan, valuesFor)
 
 type Handlers act =
   { ports :: Array String

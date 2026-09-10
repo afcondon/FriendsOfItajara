@@ -103,6 +103,16 @@ type Plan =
   -- | Trigger to next trigger. Long enough for the sound to finish, plus enough
   -- | silence to see the join.
   , spacingMs :: Int
+  -- | **How long after a trigger is issued before its sound is in the take**,
+  -- | in milliseconds — the one number a schedule cannot know.
+  -- |
+  -- | UDP to es9-daemon, its next audio callback, the module's attack and the
+  -- | converter round trip, none of which the page can see. Subtracted from
+  -- | every boundary when the schedule divides the take, so the region opens
+  -- | just before its sound. Too small clips the attack; too large puts silence
+  -- | in front of every sample. Both are visible in the tiles — this is a knob
+  -- | to set by looking, not a constant to believe. See `Workshop.Schedule`.
+  , leadMs :: Int
   }
 
 -- | Twelve layers on one voice and one parameter rising — the smallest thing
@@ -117,6 +127,7 @@ emptyPlan =
   , port: ""
   , settleMs: 120
   , spacingMs: 2000
+  , leadMs: 30
   }
 
 param :: String -> Int -> Param
@@ -167,6 +178,7 @@ data Msg
   | SetHold String
   | SetSettle String
   | SetSpacing String
+  | SetLead String
 
 update :: Msg -> Plan -> Plan
 update = case _ of
@@ -219,6 +231,11 @@ update = case _ of
   SetHold v -> onTrig \t -> t { ms = clamp 1 5000 (intOr t.ms v) }
   SetSettle v -> \p -> p { settleMs = clamp 0 5000 (intOr p.settleMs v) }
   SetSpacing v -> \p -> p { spacingMs = clamp 50 20000 (intOr p.spacingMs v) }
+  -- Negative is legal and occasionally right: a module that answers a gate
+  -- before the page hears about it is not a thing, but a trigger read late
+  -- from a stale snapshot is, and the correction for it is a boundary moved
+  -- the other way.
+  SetLead v -> \p -> p { leadMs = clamp (-500) 2000 (intOr p.leadMs v) }
   where
   onParam i f p = p { params = fromMaybe p.params (Array.modifyAt i f p.params) }
   onTrig f p = p { trigger = f p.trigger }
@@ -304,6 +321,7 @@ type Plain =
   , port :: String
   , settleMs :: Int
   , spacingMs :: Int
+  , leadMs :: Int
   }
 
 foreign import savePlain :: Plain -> Effect Unit
@@ -329,6 +347,7 @@ flatten p =
   , port: p.port
   , settleMs: p.settleMs
   , spacingMs: p.spacingMs
+  , leadMs: p.leadMs
   }
   where
   one q =
@@ -370,6 +389,7 @@ unflatten p =
     , port: p.port
     , settleMs: clamp 0 5000 p.settleMs
     , spacingMs: clamp 50 20000 p.spacingMs
+    , leadMs: clamp (-500) 2000 p.leadMs
     }
   where
   some n = if n < 0 then Nothing else Just n

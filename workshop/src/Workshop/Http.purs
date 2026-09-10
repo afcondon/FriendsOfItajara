@@ -52,8 +52,15 @@ type Divisions =
 -- | may be and still be two; back with where the detector thinks things begin.
 -- | A record rather than four positional arguments, because `take` and `as`
 -- | and `by` are all strings and nothing would have caught them being swapped.
+-- |
+-- | **`regions` turns the detector off.** A take the rig ran already has its
+-- | divisions — the page issued every trigger — so it sends them and `msm`
+-- | measures those instead of looking. Empty is the ordinary case and means
+-- | "go and find them". The answer has the same shape either way, so nothing
+-- | downstream of here knows or needs to which it was. See `Workshop.Schedule`.
 foreign import divisions
-  :: { take :: String, as :: String, by :: String, minGap :: Number }
+  :: { take :: String, as :: String, by :: String, minGap :: Number
+     , regions :: Array { start :: Number, end :: Number } }
   -> Effect (Promise Divisions)
 
 -- | **The virtual card, flattened for showing.**

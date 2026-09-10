@@ -503,6 +503,24 @@ function onsets(body) {
   const wav = firstWav(dir);
   if (!wav) return Promise.resolve({ ok: false, output: `${take} holds no audio` });
 
+  // **The schedule divides, where there is one.**
+  //
+  // A swept run knows every trigger time, so it hands the boundaries over and
+  // `msm` measures them instead of looking for them. Same JSON back either
+  // way, so the page draws one thing and neither it nor the card path needs
+  // to know which happened. Detection stays for takes played by hand, which
+  // is every take nothing scheduled.
+  const declared = Array.isArray(body.regions) ? body.regions : null;
+  if (declared && declared.length) {
+    const clean = declared
+      .map((r) => ({ start: Number(r.start), end: Number(r.end) }))
+      .filter((r) => isFinite(r.start) && isFinite(r.end) && r.end > r.start);
+    if (!clean.length) {
+      return Promise.resolve({ ok: false, output: "the schedule named no regions with anything in them" });
+    }
+    return msmJson(["onset", wav, "--json", "--regions", "-"], JSON.stringify(clean));
+  }
+
   const args = ["onset", wav, "--as", String(body.as || "hits").replace(/[^a-z]/g, ""), "--json"];
   // **How close two sounds can be and still be two.**
   //
@@ -524,6 +542,13 @@ function onsets(body) {
   if (body.gapDepth != null && isFinite(Number(body.gapDepth))) {
     args.push("--gap-depth", String(Math.min(40, Math.max(4, Number(body.gapDepth)))));
   }
+  return msmJson(args, null);
+}
+
+// Run msm and expect one JSON object on stdout. `stdin` is written and the
+// pipe closed where it is given — which is how a schedule reaches `--regions -`
+// without a temporary file for something that exists for one call.
+function msmJson(args, stdin) {
   return new Promise((resolve) => {
     let out = "", err = "";
     let child;
@@ -535,6 +560,10 @@ function onsets(body) {
     child.stdout.on("data", (c) => (out += c));
     child.stderr.on("data", (c) => (err += c));
     child.on("error", (e) => resolve({ ok: false, output: e.message }));
+    if (stdin != null) {
+      child.stdin.on("error", () => {});
+      child.stdin.end(stdin);
+    }
     child.on("close", (code) => {
       if (code !== 0) return resolve({ ok: false, output: err || out || `msm exited ${code}` });
       try {
