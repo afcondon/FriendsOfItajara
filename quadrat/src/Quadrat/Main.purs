@@ -94,6 +94,26 @@ main = HA.runHalogenAff do
   runUI component unit body
 
 
+-- | **The two halves of the tool, and they are opposites.**
+-- |
+-- | Finding a transect is slow, one judgement at a time, with you listening,
+-- | and it fails by not converging. Harvesting it is as fast as the instrument
+-- | allows, with nobody present, and it fails *silently*. They want different
+-- | things on screen and they are never done at the same moment, so they are
+-- | two pages and not two panels.
+data Page = Bench | Library
+
+derive instance Eq Page
+
+-- | **Two ways to fill a take**, sharing everything downstream of the take.
+-- |
+-- | A transect is played by the rig from a schedule; by hand is played by you.
+-- | What comes back is the same object either way, which is why this chooses
+-- | only the left half of the bench and nothing else on the page moves.
+data Fill = Swept | Played
+
+derive instance Eq Fill
+
 type State =
   { looper :: Maybe LooperState
   , kind :: Kind
@@ -183,6 +203,8 @@ type State =
   -- | The capture buffer filled and we have said so once. A latch, not a
   -- | reading: the daemon goes on reporting `full` until the next capture.
   , overran :: Boolean
+  , page :: Page
+  , fill :: Fill
   }
 
 data Action
@@ -217,6 +239,8 @@ data Action
   | StopSweep
   | SetLead String
   | RefreshSets
+  | GoTo Page
+  | FillBy Fill
   | RunAgain String
   | PlaceSet String
 
@@ -231,7 +255,8 @@ component = H.mkComponent
       , cardView: Nothing, bank: "WORKSHOP", kit: "", voice: 1, cardBusy: false
       , sweep: Sweep.emptyPlan, sweepOpen: false, sweepAt: Nothing
       , sweepFork: Nothing, midiPorts: [], swept: false, sweepEdit: Nothing
-      , schedule: [], sets: [], overran: false }
+      , schedule: [], sets: [], overran: false
+      , page: Bench, fill: Swept }
   , render
   , eval: H.mkEval H.defaultEval { handleAction = handleAction, initialize = Just Init }
   }
@@ -547,6 +572,16 @@ handleAction = case _ of
   -- | Asked once, on opening, rather than at Run: `requestMIDIAccess` prompts
   -- | the first time, and a permission dialog appearing in the middle of a run
   -- | would cost the take.
+  GoTo pg -> H.modify_ _ { page = pg }
+  -- | **Choosing how to fill the take**, and asking the browser for MIDI the
+  -- | first time a transect is chosen.
+  -- |
+  -- | Asked on choosing rather than at Run: `requestMIDIAccess` prompts the
+  -- | first time, and a permission dialog appearing in the middle of a run
+  -- | would cost the take.
+  FillBy f -> do
+    H.modify_ _ { fill = f }
+    handleAction (OpenSweep (f == Swept))
   OpenSweep b -> do
     H.modify_ _ { sweepOpen = b }
     when b do
@@ -889,20 +924,49 @@ fmt n = show (Int.round (n * 100.0) # \k -> Int.toNumber k / 100.0)
 
 render :: forall m. State -> H.ComponentHTML Action () m
 render st =
-  -- The bench wants width the rest of the page does not, so the container
-  -- widens for it rather than the bench breaking out of the container.
-  HH.div [ HP.class_ (HH.ClassName ("q" <> if st.sweepOpen then " is-wide" else "")) ]
+  HH.div [ HP.class_ (HH.ClassName "q") ]
     [ HH.header [ HP.class_ (HH.ClassName "q-head") ]
         [ HH.h1_ [ HH.text "Quadrat" ]
-        , HH.span [ HP.class_ (HH.ClassName "q-sub") ]
-            [ HH.text "record material, divide it, put it on a card" ]
+        , HH.nav [ HP.class_ (HH.ClassName "q-nav") ]
+            [ pageTab Bench "Bench" "cut a transect and look at what came back"
+            , pageTab Library "Library" "every set kept, re-runnable, and where it can go"
+            ]
+        , HH.span [ HP.class_ (HH.ClassName "q-sub") ] [ HH.text tagline ]
         , connection
         ]
-    , if st.sweepOpen then sweepBench else HH.text ""
-    , if st.sweepOpen then HH.text "" else recordBox
-    , if st.sweepOpen then HH.text "" else caught
-    , if st.sweepOpen then HH.text "" else cardView
-    , if st.sweepOpen then HH.text "" else setsView
+    , case st.page of
+        -- | **A notebook spread: the method on the left, the results on the
+        -- | right.**
+        -- |
+        -- | These were two views and you had to flip between them, which broke
+        -- | the only loop that matters here — run, listen, bend, run again.
+        -- | You cannot judge a curve against a sound you have to leave the
+        -- | page to hear. Side by side they are one gesture.
+        Bench ->
+          HH.div [ HP.class_ (HH.ClassName "q-spread") ]
+            [ HH.section [ HP.class_ (HH.ClassName "q-recto") ]
+                [ HH.h2_ [ HH.text "The run" ]
+                , fillRow
+                , nameField
+                , case st.fill of
+                    Swept -> transectPanel
+                    Played -> handPanel
+                , goRow
+                ]
+            , HH.section [ HP.class_ (HH.ClassName "q-verso") ]
+                [ HH.h2_ [ HH.text "The record" ]
+                , if not (Array.null st.regions) || st.busy || hasTake
+                    then caught
+                    -- **A hand-played take has no plan to draw.** The grid is
+                    -- the transect's shape; showing it here would promise a
+                    -- set of twelve to someone about to play four.
+                    else case st.fill of
+                      Swept -> expected
+                      Played -> waiting
+                ]
+            ]
+        Library ->
+          HH.div_ [ setsView, cardView ]
     , HH.section [ HP.class_ (HH.ClassName "q-log") ]
         (map (\l -> HH.div_ [ HH.text l ]) st.log)
     ]
@@ -918,13 +982,83 @@ render st =
     (st.looper >>= \top -> Array.index top.sources (srcNow - 1))
   hasTake = maybe false _.holds cp
   writing = maybe false _.on cp
-  -- Nothing listens any more: a capture records from the moment it is asked,
-  -- and the threshold only trims the head at write time. See `captureOn`.
-  listening = false
   -- How long this take has been running, from the daemon's own frame count
   -- rather than from a clock here: a page that keeps its own time drifts from
   -- the recording it is describing.
   elapsed = maybe "0" (\c -> fmt c.secs) cp
+
+  -- | **The page's own line**, which changes with the page because the two
+  -- | halves are not doing the same thing and should not claim to be.
+  tagline = case st.page of
+    Bench -> "sample an instrument at chosen points"
+    Library -> "what has been kept, and where it can go"
+
+  pageTab pg label why =
+    HH.button
+      [ HP.class_ (HH.ClassName ("q-tab" <> if st.page == pg then " on" else ""))
+      , HP.title why
+      , HE.onClick \_ -> GoTo pg
+      ]
+      [ HH.text label ]
+
+  -- | **Two ways to fill a take**, and nothing else on the page moves.
+  fillRow =
+    HH.div [ HP.class_ (HH.ClassName "q-fill") ]
+      [ fillTab Swept "Transect"
+          "the rig plays a schedule of positions and records the lot as one take"
+      , fillTab Played "By hand"
+          "you play it; the detector finds where the sounds are afterwards"
+      ]
+
+  fillTab f label why =
+    HH.button
+      [ HP.class_ (HH.ClassName ("q-filltab" <> if st.fill == f then " on" else ""))
+      , HP.disabled (st.armed || writing)
+      , HP.title why
+      , HE.onClick \_ -> FillBy f
+      ]
+      [ HH.text label ]
+
+  -- | The take's name, shared by both ways of filling it: what is recorded is
+  -- | a take either way, and it is written under this name either way.
+  nameField =
+    HH.label [ HP.class_ (HH.ClassName "q-field") ]
+      [ HH.span_ [ HH.text "Call it" ]
+      , HH.input
+          [ HP.type_ HP.InputText, HP.value st.name
+          , HP.disabled (st.armed || writing)
+          , HE.onValueInput SetName ]
+      ]
+
+  -- | **The one button, whatever is about to fill the take.**
+  -- |
+  -- | Arming and going are one gesture for the same reason choosing the input
+  -- | is: the sound has to land inside a take, and a Go button that assumed
+  -- | something was already recording would fail silently by producing sound
+  -- | nobody caught.
+  goRow =
+    HH.div [ HP.class_ (HH.ClassName "q-go") ]
+      ( if st.armed || writing
+          then
+            [ HH.button
+                [ HP.class_ (HH.ClassName "q-big is-stop"), HE.onClick \_ -> Close ]
+                [ HH.text (if writing then "Stop" else "Cancel") ]
+            , HH.span [ HP.class_ (HH.ClassName "q-state") ]
+                [ HH.text ("recording — " <> elapsed <> " s") ]
+            ]
+          else case st.fill of
+            Swept ->
+              [ HH.span [ HP.class_ (HH.ClassName "q-arm-label") ]
+                  [ HH.text (if running then "Running" else "Run on") ] ]
+                <> runOrStop
+            Played ->
+              [ armRow
+              , HH.span [ HP.class_ (HH.ClassName "q-state") ]
+                  [ HH.text (maybe "" (\c -> if c.holds
+                                               then "captured " <> fmt c.secs <> " s"
+                                               else "ready") cp) ]
+              ]
+      )
 
   connection = case st.looper of
     Nothing -> HH.span [ HP.class_ (HH.ClassName "q-warn") ] [ HH.text "no daemon" ]
@@ -983,33 +1117,20 @@ render st =
   -- | Not a second HTML page, which was the other option considered. The point
   -- | was room, and a second page would have meant a second Halogen app and a
   -- | second socket to the daemon to get it.
-  sweepBench =
-    HH.section [ HP.class_ (HH.ClassName "q-bench") ]
-      [ HH.header [ HP.class_ (HH.ClassName "q-modhead") ]
-          [ HH.h2_ [ HH.text "Sweep" ]
-          , HH.span [ HP.class_ (HH.ClassName "q-sub") ]
-              [ HH.text "a curve for every parameter you want to move, and the \
-                        \destination decides the shape of the set" ]
-          , HH.button
-              [ HP.class_ (HH.ClassName "q-plain")
-              , HP.disabled running
-              , HE.onClick \_ -> OpenSweep false
-              ]
-              [ HH.text "back" ]
-          ]
-      , SweepView.body
-          { ports: st.midiPorts
-          , open: st.sweepEdit
-          , plan: st.sweep
-          , msg: SweepMsg
-          , openParam: OpenParam
-          }
-      , HH.div [ HP.class_ (HH.ClassName "q-send") ]
-          ( [ HH.span [ HP.class_ (HH.ClassName "q-arm-label") ]
-                [ HH.text (if running then "Running" else "Run on") ] ]
-              <> runOrStop
-          )
-      ]
+  -- | **The apparatus**: one curve per parameter you want to move, and the
+  -- | destination deciding the shape of the set.
+  -- |
+  -- | No header of its own and no Run row — the column carries both, because
+  -- | they are the same for a take played by hand and the page should not say
+  -- | so twice.
+  transectPanel =
+    SweepView.body
+      { ports: st.midiPorts
+      , open: st.sweepEdit
+      , plan: st.sweep
+      , msg: SweepMsg
+      , openParam: OpenParam
+      }
 
   runOrStop
     | running =
@@ -1045,13 +1166,27 @@ render st =
   -- | comes back as a plan, and the resolution is chosen now rather than then.
   -- | Twelve positions today, sixteen tomorrow, from the same description.
   setsView
-    | Array.null st.sets = HH.text ""
+    | Array.null st.sets =
+        HH.section [ HP.class_ (HH.ClassName "q-sets") ]
+          [ HH.h2_ [ HH.text "Sets" ]
+          , HH.p [ HP.class_ (HH.ClassName "q-muted") ]
+              [ HH.text "Nothing kept yet. Cut a take into a set on the bench \
+                        \and it will be here — with the spec that made it, so \
+                        \it can be run again at a resolution you have not \
+                        \chosen yet." ]
+          ]
     | otherwise =
         HH.section [ HP.class_ (HH.ClassName "q-sets") ]
-          [ HH.h2_ [ HH.text "Sets on disk" ]
-          , HH.table [ HP.class_ (HH.ClassName "q-table") ]
-              [ HH.tbody_ (map setRow st.sets) ]
-          ]
+          ( [ HH.div [ HP.class_ (HH.ClassName "q-sechead") ]
+                [ HH.h2_ [ HH.text "Sets" ]
+                , HH.span [ HP.class_ (HH.ClassName "q-muted") ]
+                    [ HH.text (show (Array.length st.sets) <> " kept, "
+                        <> show (Array.length (Array.filter _.runnable st.sets))
+                        <> " re-runnable") ]
+                ]
+            ]
+              <> map setRow st.sets
+          )
 
   -- | How to play it in a pattern. `n` counts from zero and the files from
   -- | one, which is worth saying once here rather than being discovered.
@@ -1063,78 +1198,86 @@ render st =
             <> "   -- o 0.." <> show (outer - 1) <> ", i 0.." <> show (inner - 1)
         _ -> "s \"" <> r.name <> "\" # n \"0.." <> show (r.count - 1) <> "\""
 
+  -- | **One set as a record entry**, not a table row.
+  -- |
+  -- | The fields are heterogeneous — a name and a date, a count, a sentence
+  -- | about what moved, a line of code to type — and forcing them into
+  -- | columns of one width made every one of them cramped. A ruled entry with
+  -- | its own internal alignment reads the way a notebook page does.
   setRow r =
-    HH.tr_
-      [ HH.td_ [ HH.text r.name ]
-      , HH.td_ [ HH.text (show r.count <> " samples") ]
-      , HH.td [ HP.class_ (HH.ClassName "q-muted") ]
-          [ HH.text
-              (if not r.described then "no description — cut before sets were stored"
-               else if Array.null r.moved then "played by hand"
-               else joinWith ", " r.moved
-                    <> " over " <> joinWith " x " (map show r.extent)
-                    <> (if r.encoding == "" then "" else " (" <> r.encoding <> ")")) ]
-      -- | **Every set is already a SuperDirt bank**, whatever it was recorded
-      -- | for, so this is said for all of them and not only the ones whose
-      -- | encoding names SuperDirt.
-      -- |
-      -- | That is the finding of the second encoding, and it is a negative
-      -- | one: nothing had to be built. A folder of numbered files is a named,
-      -- | indexed set at both ends. `set.json` sitting in the folder shifts no
-      -- | index — SuperDirt filters on extension and skips it — and the names
-      -- | are zero-padded, which is what keeps the tenth sample from sorting
-      -- | between the first and the second.
-      , HH.td [ HP.class_ (HH.ClassName "q-dirt") ] [ HH.code_ [ HH.text (dirt r) ] ]
-      -- | **The two things you do with a set that already exists**: make more
-      -- | of it, or send it somewhere. The SuperDirt column to the left needs
-      -- | no button at all, which is the whole finding.
-      , HH.td_
-          [ HH.div [ HP.class_ (HH.ClassName "q-twoverbs") ]
-              [ if r.runnable
-                  then HH.button
-                         [ HP.class_ (HH.ClassName "q-plain")
-                         , HP.title "load the spec that made this set, so it can be \
-                                    \recorded again at a different resolution"
-                         , HE.onClick \_ -> RunAgain r.name
-                         ]
-                         [ HH.text "Sweep again\x2026" ]
-                  else HH.text ""
-              , if r.described && r.count > 0
-                  then HH.button
-                         [ HP.class_ (HH.ClassName "q-plain")
-                         , HP.disabled st.cardBusy
-                         , HP.title "put this set on the card, at the bank and voice \
-                                    \chosen above — nothing is cut or measured again"
-                         , HE.onClick \_ -> PlaceSet r.name
-                         ]
-                         [ HH.text "Onto the card" ]
-                  else HH.text ""
-              ]
+    HH.article [ HP.class_ (HH.ClassName "q-set") ]
+      [ HH.div [ HP.class_ (HH.ClassName "q-set-id") ]
+          [ HH.div [ HP.class_ (HH.ClassName "q-set-name") ] [ HH.text r.name ]
+          , HH.div [ HP.class_ (HH.ClassName "q-set-when") ]
+              [ HH.text (String.take 10 r.made
+                  <> (if r.take == "" then "" else " · from " <> r.take)) ]
+          ]
+      , HH.div [ HP.class_ (HH.ClassName "q-set-n") ]
+          [ HH.text (show r.count), HH.span_ [ HH.text " samples" ] ]
+      , HH.div [ HP.class_ (HH.ClassName "q-set-what") ]
+          -- Said in three words, not thirteen. A library of legacy sets
+          -- repeated the whole sentence down the page and it became the
+          -- loudest thing on it; the reason belongs in a tooltip.
+          [ HH.div
+              [ HP.title (if not r.described
+                            then "cut before sets were stored, so nothing here \
+                                 \knows how it was made"
+                            else "") ]
+              [ HH.text
+                  (if not r.described then "no description"
+                   else if Array.null r.moved then "played by hand"
+                   else joinWith ", " r.moved
+                        <> " over " <> joinWith " × " (map show r.extent)
+                        <> (if r.encoding == "" then "" else " · " <> r.encoding)) ]
+          -- Every set is already a SuperDirt bank, whatever it was recorded
+          -- for — a folder of numbered files is a named, indexed set at both
+          -- ends. Said for all of them, because that is the finding.
+          , HH.code [ HP.class_ (HH.ClassName "q-set-dirt") ] [ HH.text (dirt r) ]
+          ]
+      , HH.div [ HP.class_ (HH.ClassName "q-set-do") ]
+          [ if r.runnable
+              then HH.button
+                     [ HP.class_ (HH.ClassName "q-plain")
+                     , HP.title "load the spec that made this set, so it can be \
+                                \recorded again at a different resolution"
+                     , HE.onClick \_ -> RunAgain r.name
+                     ]
+                     [ HH.text "Sweep again\x2026" ]
+              else HH.text ""
+          , if r.described && r.count > 0
+              then HH.button
+                     [ HP.class_ (HH.ClassName "q-plain")
+                     , HP.disabled st.cardBusy
+                     , HP.title "put this set on the card, at the bank and voice \
+                                \chosen on the card below — nothing is cut or \
+                                \measured again"
+                     , HE.onClick \_ -> PlaceSet r.name
+                     ]
+                     [ HH.text "Onto the card" ]
+              else HH.text ""
           ]
       ]
 
-  recordBox =
-    HH.section [ HP.class_ (HH.ClassName "q-rec") ]
-      [ HH.h2_ [ HH.text "Record" ]
-      , HH.div [ HP.class_ (HH.ClassName "q-kinds") ]
+  -- | **Playing it yourself is the other way to fill a take.**
+  -- |
+  -- | The kinds are about *material*, not about loops: what the take holds
+  -- | decides how it closes, whether it is divided, and what the divisions
+  -- | mean. Nothing here says Record — the column's Go row does that, the
+  -- | same one a transect uses.
+  handPanel =
+    HH.div [ HP.class_ (HH.ClassName "q-hand") ]
+      [ HH.div [ HP.class_ (HH.ClassName "q-kinds") ]
           (map kindBtn Kind.all)
       , case st.kind of
           Kind.Bars _ ->
-            HH.label [ HP.class_ (HH.ClassName "q-field") ]
-              [ HH.span_ [ HH.text "How many bars" ]
+            HH.label [ HP.class_ (HH.ClassName "q-field is-tight") ]
+              [ HH.span_ [ HH.text "bars" ]
               , HH.input
                   [ HP.type_ HP.InputText, HP.value (show st.bars)
                   , HP.disabled (st.armed || writing)
                   , HE.onValueInput SetBars ]
               ]
           _ -> HH.text ""
-      , HH.label [ HP.class_ (HH.ClassName "q-field") ]
-          [ HH.span_ [ HH.text "Call it" ]
-          , HH.input
-              [ HP.type_ HP.InputText, HP.value st.name
-              , HP.disabled (st.armed || writing)
-              , HE.onValueInput SetName ]
-          ]
       , HH.p [ HP.class_ (HH.ClassName "q-blurb") ]
           [ HH.text (Kind.blurb st.kind)
           , HH.text (" Captured from " <> srcName <> " as it comes"
@@ -1144,31 +1287,6 @@ render st =
               <> (if Kind.voicesOn st.kind == 2
                     then " — where it takes two of the four voices."
                     else "."))
-          ]
-      , HH.div [ HP.class_ (HH.ClassName "q-actions") ]
-          [ if st.armed || writing || listening
-              then HH.button
-                     [ HP.class_ (HH.ClassName "q-big is-stop"), HE.onClick \_ -> Close ]
-                     [ HH.text (if writing then "Stop" else "Cancel") ]
-              else armRow
-          , HH.span [ HP.class_ (HH.ClassName "q-state") ]
-              [ HH.text
-                  (if writing then "recording — " <> elapsed <> " s"
-                   else if listening then Kind.prompt st.kind
-                   else maybe "" (\c -> if c.holds
-                                          then "captured " <> fmt c.secs <> " s"
-                                          else "ready") cp) ]
-          -- | **Playing it yourself is one way to fill a take.** This is the
-          -- | other: hand the schedule to the rig, and get a set that is even
-          -- | where a hand cannot be even.
-          , HH.button
-              [ HP.class_ (HH.ClassName "q-plain")
-              , HP.disabled (st.armed || writing)
-              , HP.title "drive the instrument through a set of positions and \
-                         \record the result as one take"
-              , HE.onClick \_ -> OpenSweep true
-              ]
-              [ HH.text "Sweep\x2026" ]
           ]
       ]
 
@@ -1182,12 +1300,67 @@ render st =
   -- daemon is still holding from before the page was reloaded. A page that
   -- forgot a recording the engine had not forgotten was the difference between
   -- "nothing changed" and "everything is one press away".
+  -- | **The set you are about to record, before there is one.**
+  -- |
+  -- | An empty page here is a wasted half of the spread, and the extent is
+  -- | the one setting whose consequence is hard to picture from a number:
+  -- | `12` and `4 × 8` and `12 × 16` are a column, a block and a wall. Drawn
+  -- | rather than counted, and it fills in as the run passes each cell — so a
+  -- | run in progress is visible from the same place its result will be.
+  expected =
+    let cells = Encoding.cells st.sweep.encoding st.sweep.extent
+        at = fromMaybe (-1) st.sweepAt
+    in
+      HH.div_
+        [ HH.div [ HP.class_ (HH.ClassName "q-gridhead") ]
+            [ HH.span_
+                [ HH.text (show (Array.length cells) <> " samples"
+                    -- The extent only says something a count does not when
+                    -- there is more than one axis: "12 samples, 12" is noise,
+                    -- "32 samples, 4 × 8" is the shape.
+                    <> (if Array.length st.sweep.extent > 1
+                          then ", " <> joinWith " × " (map show st.sweep.extent)
+                          else "")
+                    <> (if running then " — position " <> show (at + 1)
+                        else " to record")) ]
+            ]
+        , HH.div [ HP.class_ (HH.ClassName "q-grid is-planned") ]
+            (Array.mapWithIndex
+              (\i c ->
+                HH.div
+                  [ HP.class_ (HH.ClassName
+                      ("q-cell" <> if running && i <= at then " is-done" else ""
+                                <> if running && i == at then " is-now" else ""))
+                  , HP.title (joinWith ", "
+                      (Array.mapWithIndex (\a n -> "axis " <> show (a + 1)
+                        <> " position " <> show (n + 1)) c))
+                  ]
+                  [ HH.text (show (i + 1)) ])
+              cells)
+        , HH.p [ HP.class_ (HH.ClassName "q-blurb") ]
+            [ HH.text (if running
+                then "Each one fills as it sounds. The take closes itself when \
+                     \the last position has."
+                else "Every one of these becomes a sample. When the run has \
+                     \finished they are replaced by what it caught — the \
+                     \waveform of each, and what it measured — so a set that \
+                     \came out flat is visible here rather than on the module.") ]
+        ]
+
+  -- | The right page before a take played by hand. Says what will appear and
+  -- | where, rather than leaving half the spread blank.
+  waiting =
+    HH.p [ HP.class_ (HH.ClassName "q-blurb") ]
+      [ HH.text ("Nothing recorded yet. Arm on an input: "
+          <> Kind.prompt st.kind
+          <> ". What you caught appears here as one waveform and a tile per \
+             \sound, with what each measured, so you can keep the ones you \
+             \meant before any of it reaches a card.") ]
+
   caught
-    | Array.null st.regions && not st.busy && not hasTake = HH.text ""
     | otherwise =
-        HH.section [ HP.class_ (HH.ClassName "q-caught") ]
-          [ HH.h2_ [ HH.text "What was caught" ]
-          , case st.peaks of
+        HH.div_
+          [ case st.peaks of
               Just pk | Array.length pk.hi > 0 ->
                 HH.div [ HP.class_ (HH.ClassName "q-whole") ]
                   [ Wave.svg pk.lo pk.hi [ Wave.klass "q-whole-svg" ] ]

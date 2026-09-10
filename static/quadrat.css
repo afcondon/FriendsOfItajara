@@ -1,7 +1,15 @@
-/* Quadrat. A different job from the looper page and it should not look
-   like it: one column, a lot of air, and the record box the only thing with
-   any weight on it. Swiss rather than console — this is a bench, not a
-   transport. */
+/* Quadrat — a scientific notebook that collects data, not a transport.
+
+   Swiss rather than console: an off-white ground, hairline rules, one accent
+   held back for what is live, and the hierarchy carried by type scale and
+   weight rather than by boxes and shadows. Every number is tabular, because
+   the page's job is comparison and figures that shift under each other cannot
+   be compared.
+
+   The bench is a NOTEBOOK SPREAD — the method on the left page, the results on
+   the right. They were two views you flipped between, which broke the only
+   loop that matters: run, listen, bend, run again. You cannot judge a curve
+   against a sound you have to leave the page to hear. */
 :root {
   --ink: #16161a; --muted: #7a7a85; --rule: #dcdce2; --ground: #fbfbfc;
   --hot: #c8442a; --live: #2a7d4f;
@@ -12,8 +20,10 @@ body {
   font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
-.q { max-width: 940px; margin: 0 auto; padding: 32px 28px 80px; }
-.q-head { display: flex; align-items: baseline; gap: 14px; border-bottom: 2px solid var(--ink); padding-bottom: 10px; margin-bottom: 28px; }
+/* Wide throughout. This is a data page; the old 940px column was a reading
+   measure, which is the wrong measure for small multiples. */
+.q { max-width: 1440px; margin: 0 auto; padding: 30px 32px 80px; }
+.q-head { display: flex; align-items: baseline; gap: 18px; border-bottom: 2px solid var(--ink); padding-bottom: 10px; margin-bottom: 26px; }
 .q-head h1 { margin: 0; font-size: 26px; font-weight: 600; letter-spacing: -0.01em; }
 .q-sub { color: var(--muted); font-size: 13px; flex: 1; }
 .q-ok { color: var(--live); font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; }
@@ -33,11 +43,7 @@ body {
 .q-chip-db { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .q-chip.on .q-chip-db { color: #b9b9c2; }
 
-.q-toggle { display: inline-flex; border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; }
-.q-tog { padding: 5px 14px; border: 0; background: #fff; cursor: pointer; font: inherit; font-size: 13px; }
-.q-tog.on { background: var(--ink); color: #fff; }
 
-.q-rec { border: 1px solid var(--rule); border-radius: 4px; background: #fff; padding: 20px; }
 .q-kinds { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
 .q-kind { padding: 8px 14px; border: 1px solid var(--rule); background: #fff; border-radius: 3px; cursor: pointer; font: inherit; }
 .q-kind:hover { border-color: var(--ink); }
@@ -47,7 +53,6 @@ body {
 .q-field span { color: var(--muted); min-width: 96px; }
 .q-field input { padding: 6px 9px; border: 1px solid var(--rule); border-radius: 3px; font: inherit; width: 190px; }
 
-.q-actions { display: flex; align-items: center; gap: 16px; border-top: 1px solid var(--rule); padding-top: 16px; }
 .q-big { padding: 12px 30px; border: 0; border-radius: 3px; background: var(--ink); color: #fff;
   font: inherit; font-size: 15px; font-weight: 500; cursor: pointer; }
 .q-big.is-stop { background: var(--hot); }
@@ -55,13 +60,41 @@ body {
 .q-state { color: var(--muted); font-size: 13px; flex: 1; }
 .q-plain { border: 1px solid var(--rule); background: #fff; padding: 8px 14px; border-radius: 3px; cursor: pointer; font: inherit; font-size: 13px; }
 
-.q-card { border-top: 1px solid var(--rule); padding-top: 20px; }
-/* The sets on disk. Same rule and rhythm as the card above it: they are
-   two views of the same shelf, one of them a projection. */
-.q-sets { border-top: 1px solid var(--rule); padding-top: 20px; }
-/* How to play a set in a pattern. Monospace because it is meant to be
-   typed, not read. */
-.q-dirt code { font-size: 12px; color: var(--muted); white-space: nowrap; }
+/* The card: one projection of the library, and so under it. */
+.q-card { border-top: 1px solid var(--rule); padding-top: 22px; margin-top: 30px; }
+/* ── The library ─────────────────────────────────────────────────────────
+   The sets are the artefact this whole page exists to make, and they were a
+   four-column table under the card — which is backwards, since the card is a
+   PROJECTION of the library and not the other way round.
+
+   An entry rather than a row: the fields are heterogeneous (a name and a
+   date, a count, a sentence, a line of code) and columns of one width made
+   every one of them cramped. */
+.q-sets { margin-bottom: 0; }
+.q-set-id { min-width: 0; }
+.q-sechead { display: flex; align-items: baseline; gap: 14px; margin-bottom: 6px; }
+.q-sechead h2 { margin: 0; }
+.q-sechead .q-muted { font-size: 12px; font-variant-numeric: tabular-nums; }
+
+.q-set { display: grid; grid-template-columns: minmax(200px, 2fr) 100px minmax(240px, 3fr) auto;
+  gap: 20px; align-items: baseline;
+  border-top: 1px solid var(--rule); padding: 12px 0; }
+.q-set:last-child { border-bottom: 1px solid var(--rule); }
+.q-set-name { font-size: 15px; font-weight: 600; }
+.q-set-when { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; margin-top: 2px; }
+.q-set-n { font-variant-numeric: tabular-nums; font-size: 15px; text-align: right; }
+.q-set-n span { font-size: 12px; color: var(--muted); }
+.q-set-what { font-size: 13px; color: var(--muted); }
+/* How to play a set in a pattern. Monospace because it is meant to be typed,
+   not read. */
+.q-set-dirt { display: block; margin-top: 3px; font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--ink); }
+.q-set-do { display: flex; gap: 8px; justify-content: flex-end; }
+
+@media (max-width: 900px) {
+  .q-set { grid-template-columns: 1fr auto; gap: 6px 16px; }
+  .q-set-what, .q-set-do { grid-column: 1 / -1; justify-content: flex-start; }
+}
 .q-muted { color: var(--muted); font-size: 13px; max-width: 62ch; }
 .q-log { font: 12px/1.7 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); }
 
@@ -69,7 +102,6 @@ body {
    own tile underneath — small multiples, because the question is comparative:
    which of these forty is the one I meant, and are they the same sound? A list
    of numbers cannot be read that way; a grid of shapes can. */
-.q-caught { border-top: 1px solid var(--rule); padding-top: 20px; }
 .q-whole { border: 1px solid var(--rule); border-radius: 3px; background: #fff; padding: 6px; margin-bottom: 14px; }
 .q-whole-svg { display: block; width: 100%; height: 72px; }
 .q-whole-svg polygon { fill: var(--ink); }
@@ -166,11 +198,54 @@ body {
    parameters at sixteen positions is a mixing desk, and a desk in a dialog is a
    desk you cannot work.
    --------------------------------------------------------------------------- */
-.q.is-wide { max-width: 1400px; }
-.q-bench { border-top: 1px solid var(--rule); padding-top: 18px; }
-.q-modhead { display: flex; align-items: baseline; gap: 14px; border-bottom: 1px solid var(--rule); padding-bottom: 12px; margin-bottom: 16px; }
-.q-modhead h2 { margin: 0; font-size: 19px; font-weight: 600; }
-.q-modhead .q-sub { flex: 1; }
+/* ── The spread ──────────────────────────────────────────────────────────
+   Recto and verso. The right page is given the extra width because it holds
+   the small multiples, and the left is floored at a measure the curve rail
+   and its routing fit on without wrapping. */
+.q-spread { display: grid; grid-template-columns: minmax(430px, 6fr) 7fr; gap: 34px; align-items: start; }
+.q-recto { border-right: 1px solid var(--rule); padding-right: 34px; }
+.q-recto, .q-verso { margin-bottom: 30px; }
+@media (max-width: 1180px) {
+  .q-spread { grid-template-columns: 1fr; gap: 0; }
+  .q-recto { border-right: 0; padding-right: 0; }
+}
+
+/* Two pages, named. A text nav rather than boxed tabs: the rule under the
+   masthead is the only frame it needs. */
+.q-nav { display: flex; gap: 16px; }
+.q-tab { border: 0; background: none; padding: 0 0 2px; font: inherit; font-size: 13px;
+  color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -12px; }
+.q-tab:hover { color: var(--ink); }
+.q-tab.on { color: var(--ink); font-weight: 600; border-bottom-color: var(--ink); }
+
+/* Two ways to fill a take, and nothing else on the page moves. */
+.q-fill { display: inline-flex; border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; margin-bottom: 14px; }
+.q-filltab { border: 0; background: #fff; padding: 6px 14px; font: inherit; font-size: 13px;
+  color: var(--muted); cursor: pointer; }
+.q-filltab + .q-filltab { border-left: 1px solid var(--rule); }
+/* `:not(.on)` earns its keep: without it the hover rule out-specifies `.on`
+   and the selected tab goes black text on a black ground — invisible, and
+   only while the pointer is on it, which is exactly when you look. */
+.q-filltab:hover:not(:disabled):not(.on) { color: var(--ink); }
+.q-filltab.on { background: var(--ink); color: #fff; }
+.q-filltab:disabled { cursor: default; opacity: 0.55; }
+
+.q-hand { margin-bottom: 4px; }
+.q-go { display: flex; align-items: center; flex-wrap: wrap; gap: 12px;
+  border-top: 1px solid var(--rule); padding-top: 14px; margin-top: 16px; }
+
+/* The set you are about to record. Numbered cells on the same grid the tiles
+   will use, so the shape of the run is the shape of the result. */
+/* **The same grid the tiles will use**, so the page does not reflow when the
+   run finishes: the empty cell and the specimen that replaces it are the same
+   size and in the same place. A smaller placeholder would have made the shape
+   of the run unreadable and then jumped. */
+.q-grid.is-planned { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); }
+.q-cell { display: flex; align-items: center; justify-content: center;
+  height: 74px; border: 1px dashed var(--rule); border-radius: 3px;
+  font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; background: #fff; }
+.q-cell.is-done { border-style: solid; border-color: var(--ink); color: var(--ink); }
+.q-cell.is-now { border-color: var(--hot); color: var(--hot); background: #fff6f3; }
 
 .q-swrow { display: flex; align-items: center; flex-wrap: wrap; gap: 14px; margin-bottom: 12px; }
 .q-swrow.is-trig { border-top: 1px solid var(--rule); padding-top: 14px; margin-top: 6px; }
@@ -182,6 +257,10 @@ body {
    which is the only place saying it can save anything. */
 .q-swnote { font-size: 12px; color: var(--muted); margin: 0 0 14px; }
 .q-swnote.is-bad { color: #a8442a; font-weight: 500; }
+
+/* The apparatus, inside the left page. No frame of its own: the spread's
+   rule is the only division the two halves need. */
+.q-sweep { margin-bottom: 4px; }
 
 /* A curve and the parameter it moves, on one row, so the arrow between them
    needs no drawing. */

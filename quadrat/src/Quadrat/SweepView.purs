@@ -132,7 +132,10 @@ body h =
     case Encoding.objections p.encoding p.extent of
       [] ->
         HH.div [ cls "q-swnote" ]
-          [ HH.text (show (Encoding.total p.extent) <> " samples, about "
+          -- Not the count: the right page of the spread draws it, and a
+          -- number said twice a hand's breadth apart is a number you check
+          -- against itself instead of reading.
+          [ HH.text ("about "
               <> show (Int.round (Int.toNumber
                    (Encoding.total p.extent * (p.settleMs + p.spacingMs)) / 1000.0))
               <> " s to record")
