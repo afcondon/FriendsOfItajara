@@ -290,6 +290,33 @@ body {
    A meter and not only a number, because a meter MOVES: play a note and the
    bar jumps, which answers "is this the right input" in the one way that
    cannot be misread. Empty below -60 dB, where nobody is playing into it. */
+/* **The pivot: one position, every parameter.** The transpose of the curve
+   drawer — that one is a row of the table, this is a column. Horizontal
+   sliders because a parameter is a named thing you read along, where the
+   drawer's are vertical because they ARE the curve. */
+.q-pivot { border: 1px solid var(--ink); border-radius: 4px; background: #fff;
+  padding: 14px 16px 12px; margin: 0 0 16px; }
+.q-pivotrows { display: flex; flex-direction: column; gap: 9px; margin: 12px 0 14px; }
+.q-pivotrow { display: grid; grid-template-columns: 120px 1fr 150px; align-items: center; gap: 12px; }
+.q-pivotname { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.q-pivotslider { width: 100%; accent-color: var(--ink); }
+.q-pivotsays { font-size: 12px; color: var(--muted); text-align: right;
+  font-variant-numeric: tabular-nums; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.q-pivotfoot { display: flex; gap: 8px; align-items: center;
+  border-top: 1px solid var(--rule); padding-top: 12px; }
+
+/* A cell and a tile's number are both a way into the preset behind them. */
+.q-cell { cursor: pointer; font: inherit; }
+.q-cell:hover:not(:disabled) { border-style: solid; border-color: var(--ink); color: var(--ink); }
+.q-cell.is-open { border-style: solid; border-color: var(--ink); background: var(--ink); color: #fff; }
+.q-tile-n { border: 0; background: none; font: inherit; font-weight: 600; color: var(--ink);
+  cursor: pointer; padding: 0 2px; border-radius: 2px; }
+.q-tile-n:hover { text-decoration: underline; }
+.q-tile-n.is-open { background: var(--ink); color: #fff; }
+
+/* The whole take, end to end — the one listen the tiles cannot give you. */
+.q-wholebar { display: flex; align-items: center; gap: 8px; padding: 6px 2px 0; }
+
 .q-listen { display: flex; align-items: flex-end; gap: 12px;
   border-top: 1px solid var(--rule); padding-top: 14px; margin-top: 16px; }
 .q-listen select { padding: 6px 8px; border: 1px solid var(--rule); border-radius: 3px;
@@ -332,6 +359,7 @@ body {
 .q-cell { display: flex; align-items: center; justify-content: center;
   height: 74px; border: 1px dashed var(--rule); border-radius: 3px;
   font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; background: #fff; }
+.q-cell:disabled { cursor: default; }
 .q-cell.is-done { border-style: solid; border-color: var(--ink); color: var(--ink); }
 .q-cell.is-now { border-color: var(--hot); color: var(--hot); background: #fff6f3; }
 

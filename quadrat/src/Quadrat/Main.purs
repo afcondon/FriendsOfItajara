@@ -205,6 +205,14 @@ type State =
   , overran :: Boolean
   , page :: Page
   , fill :: Fill
+  -- | **Which cell is open as a preset**, if any.
+  -- |
+  -- | The transpose of `sweepEdit`. That opens one PARAMETER and shows its
+  -- | value at every position — a row of the table. This opens one POSITION
+  -- | and shows every parameter's value there — a column. Same table, same
+  -- | edits, and the second one is how you fix the one hit that came out
+  -- | wrong without hunting through eight drawers to do it.
+  , pivot :: Maybe Int
   -- | **Which input the next take listens to**, 1-based, or zero for the
   -- | first available.
   -- |
@@ -252,6 +260,12 @@ data Action
   | GoTo Page
   | FillBy Fill
   | PickSource String
+  | OpenPivot (Maybe Int)
+  -- | Set every bus for one cell and strike it, so the change you just made
+  -- | is audible on the instrument before anything is recorded.
+  | Hear Int
+  | PlayWhole
+  | StopAudio
   | RunAgain String
   | PlaceSet String
 
@@ -267,7 +281,7 @@ component = H.mkComponent
       , sweep: Sweep.emptyPlan, sweepOpen: false, sweepAt: Nothing
       , sweepFork: Nothing, midiPorts: [], swept: false, sweepEdit: Nothing
       , schedule: [], sets: [], overran: false
-      , page: Bench, fill: Swept, source: 0 }
+      , page: Bench, fill: Swept, source: 0, pivot: Nothing }
   , render
   , eval: H.mkEval H.defaultEval { handleAction = handleAction, initialize = Just Init }
   }
@@ -568,6 +582,39 @@ handleAction = case _ of
   HoverPlay i -> do
     st <- H.get
     when st.hoverPlays (handleAction (Play i))
+  -- | **The transect end to end**, which is the one listen the tiles cannot
+  -- | give you: twelve samples heard in order, with the gaps, is how you hear
+  -- | a sweep as a sweep rather than as twelve sounds.
+  PlayWhole -> do
+    st <- H.get
+    when (st.showing /= "") $ liftEffect
+      (Audio.playRange ("/api/take-audio?take=" <> st.showing) 0.0
+        (maybe 1.0e6 _.secs (cap st)))
+    H.modify_ _ { playing = Nothing }
+  OpenPivot j -> do
+    H.modify_ _ { pivot = j }
+    -- Opening a preset leaves the instrument standing at it, so the first
+    -- thing you hear after a tweak is that tweak and not the last position of
+    -- the last run. Nothing is struck until you ask.
+    for_ j \k -> setCellCv k
+  -- | **Hear one cell**, exactly as the run would play it: set the buses,
+  -- | wait the settle the plan specifies, strike with the plan's own trigger.
+  -- |
+  -- | The same three lines `runSweep` uses, which is the point — a preview
+  -- | that differed from the run in any particular would be a preview of
+  -- | something else.
+  Hear j -> do
+    setCellCv j
+    st <- H.get
+    H.liftAff (delay (Milliseconds (Int.toNumber st.sweep.settleMs)))
+    for_ st.sweep.trigger.gate \b -> void $ H.liftAff (attempt (toAffE (Rig.pulse
+      { bus: b, level: st.sweep.trigger.gateLevel, ms: st.sweep.trigger.ms })))
+    when (st.sweep.port /= "") $ for_ st.sweep.trigger.note \n -> liftEffect $
+      Rig.sendNote { port: st.sweep.port, channel: st.sweep.trigger.channel, note: n
+                   , velocity: st.sweep.trigger.velocity, ms: st.sweep.trigger.ms }
+  StopAudio -> do
+    liftEffect Audio.stop
+    H.modify_ _ { playing = Nothing }
   Play i -> do
     st <- H.get
     for_ (Array.index st.regions i) \r -> do
@@ -767,6 +814,19 @@ runSweep = do
   H.modify_ (note ("swept " <> show (Encoding.total p.extent) <> " samples")
     <<< _ { sweepAt = Nothing, sweepFork = Nothing, sweepOpen = false, swept = true })
   handleAction Close
+
+-- | **Stand the instrument at one cell of the transect**, without striking it.
+-- |
+-- | Read from `Sweep.steps` rather than recomputed, so a preset previewed and
+-- | the same preset recorded cannot disagree about what they mean.
+setCellCv :: forall o m. MonadAff m => Int -> H.HalogenM State Action () o m Unit
+setCellCv j = do
+  st <- H.get
+  for_ (Array.index (Sweep.steps st.sweep) j) \step -> do
+    unless (Array.null step.cv) $ void $
+      H.liftAff (attempt (toAffE (Rig.setCv { set: step.cv })))
+    when (st.sweep.port /= "") $ liftEffect $ for_ step.cc \c ->
+      Rig.sendCc { port: st.sweep.port, channel: c.channel, cc: c.cc, value: c.value }
 
 -- | **Put every bus this sweep touched back to nothing.**
 -- |
@@ -990,6 +1050,9 @@ render st =
                 [ HH.h2_ [ HH.text (case st.fill of
                     Swept -> "What moves, and what strikes it"
                     Played -> "The instrument") ]
+                , case st.pivot of
+                    Just j | st.fill == Swept -> pivotPanel j
+                    _ -> HH.text ""
                 , case st.fill of
                     Swept -> transectPanel
                     Played -> HH.p [ HP.class_ (HH.ClassName "q-blurb") ]
@@ -1150,6 +1213,90 @@ render st =
       -- position 7 is the odd one out — and they cost a narrow column rather
       -- than the width of the screen.
       _ -> [ HP.class_ (HH.ClassName ("q-grid is-line" <> extra)) ]
+
+  -- | **One position, every parameter — the table read down instead of across.**
+  -- |
+  -- | Andrew, 2026-09-10: *"if you identify one hit in the transect that isn't
+  -- | what you want, you're going to want to tweak perhaps many parameters of
+  -- | that one hit"*. The curve drawer answers "what does morph do across the
+  -- | run"; this answers "what is happening at hit 7", which is the question
+  -- | you have when hit 7 is wrong.
+  -- |
+  -- | **It needed no new model.** A curve becomes `Drawn` the moment any one
+  -- | of its points is edited, so a transect authored entirely as presets is
+  -- | one where every curve is drawn — which `Sweep` has always supported and
+  -- | `set.json` has always stored. Which makes this a second way to author
+  -- | the same object rather than a feature beside it: **define twelve
+  -- | presets and record them**, with the curves as a way to seed them.
+  -- |
+  -- | Every move is heard on release, not on drag: a preview per pixel would
+  -- | be a machine gun, and `input` fires per pixel where `change` fires when
+  -- | you let go.
+  pivotPanel j =
+    HH.div [ HP.class_ (HH.ClassName "q-pivot") ]
+      [ HH.div [ HP.class_ (HH.ClassName "q-deskhead") ]
+          [ HH.text ("position " <> show (j + 1) <> " of "
+              <> show (Encoding.total st.sweep.extent)
+              <> " — every parameter at this one hit") ]
+      , HH.div [ HP.class_ (HH.ClassName "q-pivotrows") ]
+          (Array.mapWithIndex (pivotRow j) st.sweep.params)
+      , HH.div [ HP.class_ (HH.ClassName "q-pivotfoot") ]
+          [ HH.button
+              [ HP.class_ (HH.ClassName "q-plain is-go")
+              , HP.title "set every bus for this cell and strike it"
+              , HE.onClick \_ -> Hear j
+              ]
+              [ HH.text "\x25b6 hear it" ]
+          , HH.button
+              [ HP.class_ (HH.ClassName "q-plain")
+              , HP.disabled (j <= 0)
+              , HE.onClick \_ -> OpenPivot (Just (j - 1)) ]
+              [ HH.text "\x2190 previous" ]
+          , HH.button
+              [ HP.class_ (HH.ClassName "q-plain")
+              , HP.disabled (j + 1 >= Encoding.total st.sweep.extent)
+              , HE.onClick \_ -> OpenPivot (Just (j + 1)) ]
+              [ HH.text "next \x2192" ]
+          , HH.button
+              [ HP.class_ (HH.ClassName "q-plain"), HE.onClick \_ -> OpenPivot Nothing ]
+              [ HH.text "close" ]
+          ]
+      ]
+
+  -- | One parameter at this position: what it is called, where it is going in
+  -- | the instrument's own terms, and a slider that says so as you move it.
+  pivotRow j i q =
+    let vs = Sweep.valuesFor st.sweep q
+        onAxis = fromMaybe 0 (Array.index (cellAt j) q.axis)
+        v = fromMaybe 0.0 (Array.index vs onAxis)
+        pc = Int.round (v * 100.0)
+        level = q.cvLo + (q.cvHi - q.cvLo) * v
+    in
+      HH.div [ HP.class_ (HH.ClassName "q-pivotrow") ]
+        [ HH.span [ HP.class_ (HH.ClassName "q-pivotname") ] [ HH.text q.name ]
+        , HH.input
+            [ HP.class_ (HH.ClassName "q-pivotslider")
+            , HP.type_ HP.InputRange
+            , HP.min 0.0, HP.max 100.0, HP.step (HP.Step 1.0)
+            , HP.value (show pc)
+            , HE.onValueInput (SweepMsg <<< Sweep.SetValue i onAxis)
+            -- On release, not on drag. See `pivotPanel`.
+            , HE.onValueChange \_ -> Hear j
+            ]
+        , HH.span [ HP.class_ (HH.ClassName "q-pivotsays") ]
+            [ HH.text (case q.cv of
+                Just b -> "cv " <> show b <> "  " <> fmt level
+                    <> " (" <> fmt (level * 10.0) <> " V)"
+                Nothing -> case q.cc of
+                  Just c -> "cc " <> show c <> "  "
+                    <> show (Int.round (Int.toNumber q.ccLo
+                         + (Int.toNumber q.ccHi - Int.toNumber q.ccLo) * v))
+                  Nothing -> "not routed") ]
+        ]
+
+  -- The cell at this index, in the encoding's own recording order.
+  cellAt j = fromMaybe []
+    (Array.index (Encoding.cells st.sweep.encoding st.sweep.extent) j)
 
   -- | **What it is listening to, and whether anything is coming in.**
   -- |
@@ -1422,14 +1569,23 @@ render st =
             ]
         , HH.div shapedPlan
             (Array.mapWithIndex
+              -- **The index is the address, so clicking it opens that address.**
+              -- Before a run these are the only thing on the page that stands
+              -- for a sample, which makes them the natural way to reach one —
+              -- and it means a transect can be authored preset by preset
+              -- without recording anything first.
               (\i c ->
-                HH.div
+                HH.button
                   [ HP.class_ (HH.ClassName
-                      ("q-cell" <> if running && i <= at then " is-done" else ""
-                                <> if running && i == at then " is-now" else ""))
-                  , HP.title (joinWith ", "
-                      (Array.mapWithIndex (\a n -> "axis " <> show (a + 1)
-                        <> " position " <> show (n + 1)) c))
+                      ("q-cell" <> (if running && i <= at then " is-done" else "")
+                                <> (if running && i == at then " is-now" else "")
+                                <> (if st.pivot == Just i then " is-open" else "")))
+                  , HP.disabled running
+                  , HP.title ("open position " <> show (i + 1) <> " — "
+                      <> joinWith ", "
+                        (Array.mapWithIndex (\a n -> "axis " <> show (a + 1)
+                          <> " position " <> show (n + 1)) c))
+                  , HE.onClick \_ -> OpenPivot (if st.pivot == Just i then Nothing else Just i)
                   ]
                   [ HH.text (show (i + 1)) ])
               cells)
@@ -1459,7 +1615,22 @@ render st =
           [ case st.peaks of
               Just pk | Array.length pk.hi > 0 ->
                 HH.div [ HP.class_ (HH.ClassName "q-whole") ]
-                  [ Wave.svg pk.lo pk.hi [ Wave.klass "q-whole-svg" ] ]
+                  [ Wave.svg pk.lo pk.hi [ Wave.klass "q-whole-svg" ]
+                  , HH.div [ HP.class_ (HH.ClassName "q-wholebar") ]
+                      [ HH.button
+                          [ HP.class_ (HH.ClassName "q-plain")
+                          , HP.title "the whole take, end to end, gaps and all"
+                          , HE.onClick \_ -> PlayWhole
+                          ]
+                          [ HH.text "\x25b6 all of it" ]
+                      , HH.button
+                          [ HP.class_ (HH.ClassName "q-plain")
+                          , HE.onClick \_ -> StopAudio ]
+                          [ HH.text "stop" ]
+                      , HH.span [ HP.class_ (HH.ClassName "q-muted") ]
+                          [ HH.text (maybe "" (\c -> fmt c.secs <> " s") (cap st)) ]
+                      ]
+                  ]
               _ -> HH.text ""
           , HH.div [ HP.class_ (HH.ClassName "q-gridhead") ]
               [ HH.span_
@@ -1817,7 +1988,14 @@ render st =
                        [ Wave.klass "q-tile-svg" ]
             ]
         , HH.div [ HP.class_ (HH.ClassName "q-tile-foot") ]
-            [ HH.span [ HP.class_ (HH.ClassName "q-tile-n") ] [ HH.text (show (i + 1)) ]
+            -- The number opens the preset behind the sound, which is the
+            -- gesture you want the moment you hear the one that is wrong.
+            [ HH.button
+                [ HP.class_ (HH.ClassName ("q-tile-n" <> if st.pivot == Just i then " is-open" else ""))
+                , HP.title ("open position " <> show (i + 1) <> " — every parameter at this hit")
+                , HE.onClick \_ -> OpenPivot (if st.pivot == Just i then Nothing else Just i)
+                ]
+                [ HH.text (show (i + 1)) ]
             , HH.span [ HP.class_ (HH.ClassName "q-tile-len") ]
                 [ HH.text (fmt (r.end - r.start)) ]
             , HH.button
