@@ -1074,13 +1074,9 @@ runSweep = do
   -- take rather than a wait for something to start it — which is what `by
   -- attack` wants in front of the first onset anyway.
   H.liftAff (delay (Milliseconds 400.0))
+  -- The grid every step is timed against, fixed before the first one.
+  t0 <- liftEffect Rig.nowMs
   for_ (Sweep.steps p) \s -> do
-    -- **Pace by the clock, not by hope.** The spacing used to be delayed in
-    -- full AFTER the sends, so the period was sends PLUS spacing: a run asking
-    -- for 3000 ms stepped every 3130 ms and a "36.0 s" take took 37.6 s.
-    -- Nothing was wrong downstream — the schedule is measured — but the number
-    -- you typed was not the number you got.
-    t0 <- liftEffect Rig.nowMs
     H.modify_ _ { sweepAt = Just s.index }
     unless (Array.null s.cv && Array.null s.esx) $ void $
       H.liftAff (attempt (toAffE (Rig.setCv { set: s.cv, esx: s.esx })))
@@ -1101,8 +1097,20 @@ runSweep = do
     when (p.port /= "") $ for_ p.trigger.note \n -> liftEffect $
       Rig.sendNote { port: p.port, channel: p.trigger.channel, note: n
                    , velocity: p.trigger.velocity, ms: p.trigger.ms }
-    t1 <- liftEffect Rig.nowMs
-    H.liftAff (delay (Milliseconds (max 0.0 (Int.toNumber p.spacingMs - (t1 - t0)))))
+    -- **Wait until the next slot, not for an interval.**
+    --
+    -- Pacing by "spacing minus what this step took" measures the WHOLE step,
+    -- including the sends that happen after the trigger has already fired. A
+    -- stall in that tail shortens the next delay and advances the phase for
+    -- good: measured 2026-09-11, one 116 ms jump at the sixth step of twelve,
+    -- in the same place at 3000 ms and at 5000 ms, after which every hit sat
+    -- 120 ms before its boundary and every slice caught the next attack.
+    --
+    -- An absolute target cannot accumulate or persist an error. A late step
+    -- shortens its own delay and the one after is back on the grid.
+    now <- liftEffect Rig.nowMs
+    let due = t0 + Int.toNumber (p.spacingMs * (s.index + 1))
+    H.liftAff (delay (Milliseconds (max 0.0 (due - now))))
   -- The last hit gets the same gap as the others and then a little more, so
   -- that closing the take is never the thing that ends its decay. A final
   -- sample that is short because the recording stopped is indistinguishable
