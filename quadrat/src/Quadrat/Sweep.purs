@@ -552,13 +552,19 @@ flatten p =
     , noteLo: maybe 0 _.noteLo q.pitch
     , noteHi: maybe 0 _.noteHi q.pitch
     , pitchTable: maybe [] _.table q.pitch
-    , kind: if Curve.isDrawn q.curve then "drawn" else "named"
+    -- **Three constructors, three names.** A held curve written as "named"
+    -- would come back as a Linear ramp — a parameter that was deliberately
+    -- NOT moving would start moving on the next reload, silently.
+    , kind: case q.curve of
+        Drawn _ -> "drawn"
+        Held _ -> "held"
+        Named _ _ -> "named"
     , shape: case q.curve of
         Named sh _ -> shapeName sh
-        Drawn _ -> shapeName Linear
+        _ -> shapeName Linear
     , flipped: case q.curve of
         Named _ f -> f
-        Drawn _ -> false
+        _ -> false
     , values: Curve.valuesOf 32 q.curve
     }
 
@@ -612,5 +618,9 @@ unflatten p =
           }
     , curve:
         if q.kind == "drawn" then Drawn (map (clamp 0.0 1.0) q.values)
+        -- A held curve's one value is the first of the samples it wrote, so an
+        -- older plan with no "held" kind still reads correctly as a shape.
+        else if q.kind == "held"
+          then Held (clamp 0.0 1.0 (fromMaybe 0.5 (Array.head q.values)))
         else Named (fromMaybe Linear (shapeOf q.shape)) q.flipped
     }

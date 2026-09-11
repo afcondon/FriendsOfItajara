@@ -141,6 +141,14 @@ at sh t = clamp 0.0 1.0 (raw sh (clamp 0.0 1.0 t))
 data Curve
   = Named Shape Boolean
   | Drawn (Array Number)
+  -- | **A constant.**
+  -- |
+  -- | Not an easing — an easing runs 0 to 1 and flat is not a way of doing
+  -- | that. It is here so a parameter that should not move can still be SENT,
+  -- | which means the module's front panel need not be touched and the take's
+  -- | own description carries every value that made it. A knob set by hand is
+  -- | a value the set cannot record and a later re-run cannot reproduce.
+  | Held Number
 
 derive instance Eq Curve
 
@@ -149,6 +157,7 @@ label = case _ of
   Named sh false -> shapeName sh
   Named sh true -> shapeName sh <> " ↔"
   Drawn _ -> "drawn"
+  Held _ -> "Hold"
 
 isDrawn :: Curve -> Boolean
 isDrawn = case _ of
@@ -162,6 +171,7 @@ valuesOf n = case _ of
     let vs = sampled sh n
     in if rev then Array.reverse vs else vs
   Drawn vs -> resample n vs
+  Held v -> Array.replicate (max 1 n) (clamp 0.0 1.0 v)
 
 sampled :: Shape -> Int -> Array Number
 sampled sh n
@@ -177,17 +187,22 @@ sampled sh n
 -- | bug wearing a different hat — the thumbnail changing from a line to a set
 -- | of bars is the page telling you that this is now yours rather than the
 -- | library's.
+-- | **On a held curve every slider moves together**, because there is only one
+-- | value and each slider is a view of it. Moving one to mean "just this cell"
+-- | would be asking for a drawing, which is what the drawn constructor is for.
 setAt :: Int -> Int -> Number -> Curve -> Curve
-setAt n i v c =
-  Drawn (fromMaybe vs (Array.updateAt i (clamp 0.0 1.0 v) vs))
-  where
-  vs = valuesOf n c
+setAt n i v = case _ of
+  Held _ -> Held (clamp 0.0 1.0 v)
+  c -> Drawn (fromMaybe (valuesOf n c)
+        (Array.updateAt i (clamp 0.0 1.0 v) (valuesOf n c)))
 
 -- | Reverse it, keeping a named shape named.
 flipped :: Int -> Curve -> Curve
 flipped n = case _ of
   Named sh rev -> Named sh (not rev)
   Drawn vs -> Drawn (Array.reverse (resample n vs))
+  -- A constant reversed is the same constant.
+  Held v -> Held v
 
 -- | **Click steps through the shapes — but never over a drawing.**
 -- |
@@ -197,6 +212,11 @@ flipped n = case _ of
 nextShape :: Curve -> Curve
 nextShape = case _ of
   Drawn vs -> Drawn vs
+  -- **Hold sits one click from Linear**, which is where a parameter you want
+  -- merely SET rather than swept should be easy to reach — at the far end of
+  -- sixteen easings it would never be found.
+  Named Linear _ -> Held 0.5
+  Held _ -> Named QuadIn false
   Named sh rev ->
     let i = fromMaybe 0 (Array.findIndex (_ == sh) shapes)
         next = fromMaybe Linear (Array.index shapes ((i + 1) `mod` Array.length shapes))

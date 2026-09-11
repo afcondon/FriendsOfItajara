@@ -533,7 +533,7 @@ body {
    in a line of prose is a form with prose between it, which is the thing
    this replaces. So: no borders, inherited type, and a dotted underline
    that says "this is settable" without saying "this is a widget". */
-.q-say { padding: 20px 0 18px; border-bottom: 1px solid var(--rule); margin-bottom: 20px; }
+.q-say { padding: 20px 0 14px; margin-bottom: 6px; }
 .q-sayline {
   margin: 0; font-size: 23px; line-height: 1.55; font-weight: 300;
   letter-spacing: -0.01em;
@@ -667,3 +667,9 @@ body {
 .q-tape:hover:enabled { border-color: var(--ink); }
 .q-tape:disabled { opacity: 0.35; cursor: not-allowed; }
 .q-taketime { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; margin-left: 4px; }
+
+/* A held curve draws as a flat line, which is what it is. Keeping it in the
+   same thumbnail as the easings means no new vocabulary — and moving any
+   slider moves them all, because there is one value and each slider is a
+   view of it. */
+.q-modal .q-keep { flex-direction: column; align-items: flex-start; gap: 10px; }

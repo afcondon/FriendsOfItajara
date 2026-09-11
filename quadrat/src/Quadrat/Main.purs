@@ -255,7 +255,7 @@ type State =
   }
 
 -- | The two panels that became modals.
-data Modal = DivisionModal | TriggerModal | PitchModal | ExportModal
+data Modal = DivisionModal | TriggerModal | PitchModal | SaveModal | ExportModal
 
 derive instance Eq Modal
 
@@ -1345,7 +1345,6 @@ render st =
             -- | Each was a panel competing with the waveform for the page.
             -- | Behind a door they cost one line, and the line says what is
             -- | inside it rather than showing you.
-            , sendRow
             , HH.section [ HP.class_ (HH.ClassName "q-curverow") ]
                 [ SweepView.curves sweepHandlers
                 , case st.pivot of
@@ -1366,6 +1365,7 @@ render st =
                 -- second door is a door too many.
                 Just PitchModal -> modalBox "Pitch"
                   (SweepView.pitchView (sweepHandlers { open = pitchIx }))
+                Just SaveModal -> modalBox "Save to disk" keepBlock
                 Just ExportModal -> modalBox "Export to card" placeBlock
                 Nothing -> HH.text ""
             ]
@@ -1427,6 +1427,10 @@ render st =
           (not (Array.null st.regions) || hasTake)
       , door TriggerModal "Trigger" triggerSays true
       , door PitchModal "Pitch" pitchSays2 true
+      , door SaveModal "Save to disk"
+          (if st.kept then "kept as " <> setName
+           else "\x2192 samples/" <> setName)
+          (not (Set.isEmpty st.keep))
       , door ExportModal "Export to card"
           (if placeable then "bank " <> st.bank <> " · voice " <> show st.voice
            else "SuperDirt — already a bank")
@@ -2377,38 +2381,6 @@ render st =
       [ HH.text (Divider.label dv) ]
 
   -- | Where the kept tiles go. Beside them, because it acts on them.
-  -- | **Three verbs, three moments.**
-  -- |
-  -- | Run leaves a scratch take; KEEP writes the set; PLACE gives that set an
-  -- | address on a card. These were one row holding two name fields and two
-  -- | write buttons, and on 2026-09-11 a name typed into KIT never reached the
-  -- | set — which was written under the take's name, silently. The fault was
-  -- | not the labels: it was that three different objects with three different
-  -- | lifetimes were sharing one row of controls.
-  -- |
-  -- | So: one name (the take's, set before the run), one button that writes,
-  -- | and the card kept separate — because a set exists whether or not it has
-  -- | an address, and `server.mjs` has said so all along.
-  sendRow
-    | Array.null st.regions = HH.text ""
-    | otherwise =
-        HH.div [ HP.class_ (HH.ClassName "q-acts") ]
-          [ keepBlock
-          -- **Exporting is a later, separate act.** A set exists whether or
-          -- not it has an address; putting one on a card is a thing you do
-          -- afterwards, often to a set made an hour ago. So it is a door
-          -- rather than a panel — and for SuperDirt there is no door, because
-          -- the set as stored is already the bank.
-          , if not placeable then noPlace
-            else
-              HH.button
-                [ HP.class_ (HH.ClassName "q-plain")
-                , HP.disabled (Set.isEmpty st.keep)
-                , HE.onClick \_ -> OpenModal (Just ExportModal)
-                ]
-                [ HH.text "Export to card…" ]
-          ]
-
   setName = if st.name == "" then "set" else st.name
 
   -- | **Placing is a Rample idea.** A SuperDirt set IS the bank as stored, so
@@ -2457,14 +2429,6 @@ render st =
           else
             HH.span [ HP.class_ (HH.ClassName "q-scratch") ]
               [ HH.text "scratch — the next run replaces this take" ]
-      ]
-
-  noPlace =
-    HH.div [ HP.class_ (HH.ClassName "q-place is-moot") ]
-      [ HH.span [ HP.class_ (HH.ClassName "q-acthead") ] [ HH.text "Export" ]
-      , HH.span [ HP.class_ (HH.ClassName "q-scratch") ]
-          [ HH.text "SuperDirt — the set as stored is already the bank, so there \
-                    \is nothing to place it in" ]
       ]
 
   placeBlock =
