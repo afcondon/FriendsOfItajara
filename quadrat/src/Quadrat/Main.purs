@@ -421,6 +421,21 @@ settledFor pk total rs =
 overlapping :: Settled -> { start :: Number, end :: Number } -> Boolean
 overlapping x r = x.decay >= 0.98 * max 0.001 (r.end - r.start)
 
+-- | **How finely the daemon draws the take** — and therefore how finely the
+-- | dry run can measure a decay, because both read the same envelope.
+-- |
+-- | The resolution is `take length / buckets`, so it gets WORSE as a transect
+-- | gets bigger: 12 cells at 3000 ms is 40 ms a bucket at 900, but a 48-cell
+-- | two-dimensional transect paced at 9 s to clear its longest decay is a 7
+-- | minute take, and 900 buckets across that is 480 ms — useless for measuring
+-- | anything. At the daemon's ceiling of 4000 the same take reads to 108 ms,
+-- | which the 300 ms of room added to every measured spacing absorbs.
+-- |
+-- | Costs nothing to raise: peaks are asked for once and answered once, not
+-- | carried in the 30 Hz snapshot.
+buckets :: Int
+buckets = 4000
+
 note :: String -> State -> State
 note m s = s { log = Array.takeEnd 10 (Array.snoc s.log m) }
 
@@ -551,7 +566,7 @@ handleAction = case _ of
     now <- H.get
     let had = maybe false _.holds (cap before)
         has = maybe false _.holds (cap now)
-    when (has && not had) (send (CapturePeaks 900))
+    when (has && not had) (send (CapturePeaks buckets))
     -- **A capture that closed itself at its count.** One field, where the
     -- looper needed four read together — a loop that stopped recording could
     -- be armed, writing, sized or empty and only the combination said which.
@@ -1393,7 +1408,7 @@ analyse write = do
   divide st = do
       H.modify_ _ { busy = true, regions = [], keep = Set.empty }
       when write do
-        send (CapturePeaks 900)
+        send (CapturePeaks buckets)
         send (WriteCapture st.name)
         -- The daemon writes on its own thread and the ack lands in a snapshot;
         -- the folder is there a moment later.
