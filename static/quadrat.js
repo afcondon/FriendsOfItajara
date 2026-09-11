@@ -12407,8 +12407,8 @@
   var el2 = function(nm) {
     return elementNS("http://www.w3.org/2000/svg")(nm);
   };
-  var cls = function($76) {
-    return class_(ClassName($76));
+  var cls = function($79) {
+    return class_(ClassName($79));
   };
   var settings = function(h) {
     var objections2 = (function() {
@@ -12426,8 +12426,8 @@
         return function(act) {
           return function(w) {
             return function(title4) {
-              return label4([cls("q-stack"), title2(title4)])([span_([text5(lbl)]), input2([type_19(InputText.value), value13(v), style3("width: " + (show12((w * 11 | 0) + 18 | 0) + "px")), onValueInput(function($77) {
-                return h.msg(act($77));
+              return label4([cls("q-stack"), title2(title4)])([span_([text5(lbl)]), input2([type_19(InputText.value), value13(v), style3("width: " + (show12((w * 11 | 0) + 18 | 0) + "px")), onValueInput(function($80) {
+                return h.msg(act($80));
               })])]);
             };
           };
@@ -12439,17 +12439,17 @@
         return label4([cls("q-stack"), title2(ax.name + (" \u2014 picked by " + ax.picked))])([span_([text5(ax.name + "s")]), (function() {
           if (ax.free) {
             return input2([type_19(InputNumber.value), value13(show12(fromMaybe(1)(index2(h.plan.extent)(i2)))), min5(toNumber(fromMaybe(1)(head(ax.sizes)))), max6(toNumber(fromMaybe(1)(last2(ax.sizes)))), onValueInput((function() {
-              var $78 = SetExtent.create(i2);
-              return function($79) {
-                return h.msg($78($79));
+              var $81 = SetExtent.create(i2);
+              return function($82) {
+                return h.msg($81($82));
               };
             })())]);
           }
           ;
           return select3([onValueChange((function() {
-            var $80 = SetExtent.create(i2);
-            return function($81) {
-              return h.msg($80($81));
+            var $83 = SetExtent.create(i2);
+            return function($84) {
+              return h.msg($83($84));
             };
           })())])(map29(function(n) {
             return option([value13(show12(n)), selected2(eq3(index2(h.plan.extent)(i2))(new Just(n)))])([text5(show12(n))]);
@@ -12458,8 +12458,8 @@
       };
     };
     var axs = axes(h.plan.encoding);
-    var encodingRow = div3([cls("q-swrow")])(append13([label4([cls("q-stack")])([span_([text5("encoding")]), select3([onValueChange(function($82) {
-      return h.msg(PickEncoding.create($82));
+    var encodingRow = div3([cls("q-swrow")])(append13([label4([cls("q-stack")])([span_([text5("encoding")]), select3([onValueChange(function($85) {
+      return h.msg(PickEncoding.create($85));
     })])(map29(function(e) {
       return option([value13(name17(e)), selected2(eq12(e)(h.plan.encoding))])([text5(label7(e))]);
     })(all5))])])(append13(mapWithIndex2(extentField)(axs))([field("settle ms")(show12(h.plan.settleMs))(SetSettle.create)(4)("after setting the parameters, before the trigger \u2014 too short and a cell is a blend of itself and its neighbour"), field("spacing ms")(show12(h.plan.spacingMs))(SetSpacing.create)(5)("trigger to trigger; long enough for the sound to finish AND for a gap to be visible after it")])));
@@ -12516,8 +12516,8 @@
         return function(v) {
           return function(act) {
             return function(title4) {
-              return label4([cls("q-stack is-tiny"), title2(title4)])([span_([text5(lbl)]), input2([type_19(InputText.value), value13(v), style3("width: " + (show12((w * 10 | 0) + 16 | 0) + "px")), onValueInput(function($83) {
-                return h.msg(act($83));
+              return label4([cls("q-stack is-tiny"), title2(title4)])([span_([text5(lbl)]), input2([type_19(InputText.value), value13(v), style3("width: " + (show12((w * 10 | 0) + 16 | 0) + "px")), onValueInput(function($86) {
+                return h.msg(act($86));
               })])]);
             };
           };
@@ -12541,15 +12541,26 @@
         ;
         throw new Error("Failed pattern match at Quadrat.SweepView (line 349, column 15 - line 352, column 61): " + [q2.pitch.constructor.name]);
       })();
+      var jackOf = function(b2) {
+        if (b2 >= 8 && b2 <= 15) {
+          return " (ES-9 jack " + (show12(b2 - 7 | 0) + ")");
+        }
+        ;
+        if (otherwise) {
+          return "";
+        }
+        ;
+        throw new Error("Failed pattern match at Quadrat.SweepView (line 361, column 7 - line 363, column 25): " + [b2.constructor.name]);
+      };
       var parts = catMaybes2([map111(function(b2) {
-        return "cv " + (show12(b2) + volts);
+        return "cv " + (show12(b2) + (jackOf(b2) + volts));
       })(q2.cv), map111(function(k) {
         return "esx " + (show12(k) + volts);
       })(q2.esx), map111(function(c) {
         return "cc " + (show12(c) + (" ch " + (show12(q2.channel) + ("  " + (show12(q2.ccLo) + (" \u2192 " + show12(q2.ccHi)))))));
       })(q2.cc)]);
-      var $51 = $$null2(parts);
-      if ($51) {
+      var $54 = $$null2(parts);
+      if ($54) {
         return "not routed \u2014 this parameter moves nothing";
       }
       ;
@@ -12568,8 +12579,8 @@
       return function(label9) {
         return function(why) {
           return label4([cls("q-swopt" + (function() {
-            var $56 = h.rigFires === want;
-            if ($56) {
+            var $59 = h.rigFires === want;
+            if ($59) {
               return " on";
             }
             ;
@@ -12597,8 +12608,8 @@
         return function(act) {
           return function(w) {
             return function(title4) {
-              return label4([cls("q-stack"), title2(title4)])([span_([text5(lbl)]), input2([type_19(InputText.value), value13(v), style3("width: " + (show12((w * 11 | 0) + 18 | 0) + "px")), onValueInput(function($84) {
-                return h.msg(act($84));
+              return label4([cls("q-stack"), title2(title4)])([span_([text5(lbl)]), input2([type_19(InputText.value), value13(v), style3("width: " + (show12((w * 11 | 0) + 18 | 0) + "px")), onValueInput(function($87) {
+                return h.msg(act($87));
               })])]);
             };
           };
@@ -12611,11 +12622,11 @@
       }
       ;
       return " is-moot";
-    })())])([span3([cls("q-arm-label")])([text5("Trigger")]), field("gate bus")(maybe("")(show12)(h.plan.trigger.gate))(SetGate.create)(3)("an es9-daemon bus pulsed to fire the sound; 15 is ES-9 panel jack 8"), field("level")(num(h.plan.trigger.gateLevel))(SetGateLevel.create)(4)("how high that pulse goes, -1 to 1"), field("es5 gate")(maybe("")(show12)(h.plan.trigger.es5))(SetEs5.create)(3)("one of the ES-5's own eight gates, 0-7. No level \u2014 they have none. Fires alongside the bus gate if both are set"), field("note")(maybe("")(show12)(h.plan.trigger.note))(SetNote.create)(4)("a MIDI note to play instead of, or as well as, the gate"), field("ch")(show12(h.plan.trigger.channel))(SetTrigChannel.create)(3)("MIDI channel for the note"), field("vel")(show12(h.plan.trigger.velocity))(SetVelocity.create)(4)("how hard"), field("hold ms")(show12(h.plan.trigger.ms))(SetHold.create)(4)("how long it is held"), label4([cls("q-stack")])([span_([text5("midi out")]), select3([onValueChange(function($85) {
-      return h.msg(SetPort.create($85));
+    })())])([span3([cls("q-arm-label")])([text5("Trigger")]), field("gate bus")(maybe("")(show12)(h.plan.trigger.gate))(SetGate.create)(3)("an es9-daemon bus pulsed to fire the sound; 15 is ES-9 panel jack 8"), field("level")(num(h.plan.trigger.gateLevel))(SetGateLevel.create)(4)("how high that pulse goes, -1 to 1"), field("es5 gate")(maybe("")(show12)(h.plan.trigger.es5))(SetEs5.create)(3)("one of the ES-5's own eight gates, 0-7. No level \u2014 they have none. Fires alongside the bus gate if both are set"), field("note")(maybe("")(show12)(h.plan.trigger.note))(SetNote.create)(4)("a MIDI note to play instead of, or as well as, the gate"), field("ch")(show12(h.plan.trigger.channel))(SetTrigChannel.create)(3)("MIDI channel for the note"), field("vel")(show12(h.plan.trigger.velocity))(SetVelocity.create)(4)("how hard"), field("hold ms")(show12(h.plan.trigger.ms))(SetHold.create)(4)("how long it is held"), label4([cls("q-stack")])([span_([text5("midi out")]), select3([onValueChange(function($88) {
+      return h.msg(SetPort.create($88));
     })])(cons2(option([value13(""), selected2(h.plan.port === "")])([text5((function() {
-      var $58 = $$null2(h.ports);
-      if ($58) {
+      var $61 = $$null2(h.ports);
+      if ($61) {
         return "none yet";
       }
       ;
@@ -12628,14 +12639,14 @@
       return function(ps) {
         var want = (ps.noteHi - ps.noteLo | 0) + 1 | 0;
         var have = fromMaybe(0)(index2(h.plan.extent)(q2.axis));
-        var $59 = want < 1 || have === want;
-        if ($59) {
+        var $62 = want < 1 || have === want;
+        if ($62) {
           return text5("");
         }
         ;
         return span3([cls("q-swwarn")])([text5(show12(have) + (" cells over " + (show12(want) + (" degrees \u2014 " + (function() {
-          var $60 = have < want;
-          if ($60) {
+          var $63 = have < want;
+          if ($63) {
             return show12(want - have | 0) + " skipped";
           }
           ;
@@ -12654,13 +12665,13 @@
         })(h.tables)))]), (function() {
           if (q2.pitch instanceof Nothing) {
             return span3([cls("q-swhint")])([text5((function() {
-              var $62 = h.tablesErr !== "";
-              if ($62) {
+              var $65 = h.tablesErr !== "";
+              if ($65) {
                 return h.tablesErr;
               }
               ;
-              var $63 = $$null2(h.tables);
-              if ($63) {
+              var $66 = $$null2(h.tables);
+              if ($66) {
                 return "no calibration tables \u2014 run `deepstar tune`";
               }
               ;
@@ -12672,7 +12683,7 @@
             return span_([tiny("from")(4)(show12(q2.pitch.value0.noteLo))(SetPitchLo.create(i2))("lowest note as a MIDI number \u2014 60 is C4, 12 to an octave"), tiny("to")(4)(show12(q2.pitch.value0.noteHi))(SetPitchHi.create(i2))("highest note as a MIDI number. Steps ROUND to whole semitones, so every position lands in tune \u2014 but a count that is not one per semitone SKIPS degrees or REPEATS them, which the line below says."), span3([cls("q-swhint")])([text5(noteName(q2.pitch.value0.noteLo) + ("\u2013" + (noteName(q2.pitch.value0.noteHi) + (" \xB7 " + reach(q2.pitch.value0)))))]), degreeGuard(q2)(q2.pitch.value0)]);
           }
           ;
-          throw new Error("Failed pattern match at Quadrat.SweepView (line 421, column 9 - line 445, column 16): " + [q2.pitch.constructor.name]);
+          throw new Error("Failed pattern match at Quadrat.SweepView (line 432, column 9 - line 456, column 16): " + [q2.pitch.constructor.name]);
         })()]);
       };
     };
@@ -12681,9 +12692,9 @@
         return function(v) {
           var pc = round2(v * 100);
           return div3([cls("q-swcell")])([input2([cls("q-swslider"), type_19(InputRange.value), min5(0), max6(100), step3(new Step(1)), value13(show12(pc)), title2(show12(j2 + 1 | 0) + (": " + (show12(pc) + "%"))), onValueInput((function() {
-            var $86 = SetValue.create(i2)(j2);
-            return function($87) {
-              return h.msg($86($87));
+            var $89 = SetValue.create(i2)(j2);
+            return function($90) {
+              return h.msg($89($90));
             };
           })())]), span3([cls("q-swval")])([text5(show12(pc))]), span3([cls("q-swidx")])([text5(show12(j2 + 1 | 0))])]);
         };
@@ -12725,8 +12736,8 @@
     var row = function(i2) {
       return function(q2) {
         return append13([div3([cls("q-curvecard")])([button([cls("q-curveface"), title2((function() {
-          var $67 = isDrawn(q2.curve);
-          if ($67) {
+          var $70 = isDrawn(q2.curve);
+          if ($70) {
             return "drawn by hand \u2014 open it to change the values";
           }
           ;
@@ -12734,38 +12745,38 @@
         })()), onClick(function(v) {
           return h.msg(new NextShape(i2));
         })])([thumb(valuesFor(h.plan)(q2))(isDrawn(q2.curve))]), div3([cls("q-curvefoot")])([span3([cls("q-curvelabel")])([text5(label8(q2.curve))]), mini("\u2194")("reverse it \u2014 the falling half of a pair")(h.msg(new FlipCurve(i2))), mini((function() {
-          var $68 = eq3(h.open)(new Just(i2));
-          if ($68) {
+          var $71 = eq3(h.open)(new Just(i2));
+          if ($71) {
             return "close";
           }
           ;
           return "open";
         })())("place every value by hand")(h.openParam((function() {
-          var $69 = eq3(h.open)(new Just(i2));
-          if ($69) {
+          var $72 = eq3(h.open)(new Just(i2));
+          if ($72) {
             return Nothing.value;
           }
           ;
           return new Just(i2);
         })())), (function() {
-          var $70 = isDrawn(q2.curve);
-          if ($70) {
+          var $73 = isDrawn(q2.curve);
+          if ($73) {
             return mini("curve")("back to a named shape \u2014 this discards the values")(h.msg(new ToCurve(i2)));
           }
           ;
           return text5("");
         })()])]), div3([cls("q-curveparam")])([div3([cls("q-swtop")])([input2([cls("q-swname"), type_19(InputText.value), value13(q2.name), title2("what this parameter is called on the instrument"), onValueInput((function() {
-          var $88 = SetName.create(i2);
-          return function($89) {
-            return h.msg($88($89));
+          var $91 = SetName.create(i2);
+          return function($92) {
+            return h.msg($91($92));
           };
         })())]), button([cls("q-swmini is-drop"), title2("remove this parameter"), onClick(function(v) {
           return h.msg(new DropParam(i2));
         })])([text5("\xD7")])]), div3([cls("q-swsays")])([text5(routing(q2)), span3([cls("q-swaxis")])([text5(" \xB7 " + maybe("")(function(v) {
           return v.name;
         })(index2(axs)(q2.axis)))])])])])((function() {
-          var $71 = eq3(h.open)(new Just(i2));
-          if ($71) {
+          var $74 = eq3(h.open)(new Just(i2));
+          if ($74) {
             return [sliders(i2)(q2)];
           }
           ;
@@ -12776,8 +12787,8 @@
     var rowsWhere = function(wantPitch) {
       return concat(mapWithIndex2(function(i2) {
         return function(q2) {
-          var $72 = isJust(q2.pitch) === wantPitch;
-          if ($72) {
+          var $75 = isJust(q2.pitch) === wantPitch;
+          if ($75) {
             return row(i2)(q2);
           }
           ;
@@ -12801,10 +12812,10 @@
       ;
       return "is-moot";
     })())])([sectionHead("Pitch sweep")("optional \u2014 a measured table turns notes into the volts this instrument needs for them"), div3([cls("q-curves")])(rowsWhere(true)), (function() {
-      var $75 = any2(function(q2) {
+      var $78 = any2(function(q2) {
         return isJust(q2.pitch);
       })(h.plan.params);
-      if ($75) {
+      if ($78) {
         return text5("");
       }
       ;

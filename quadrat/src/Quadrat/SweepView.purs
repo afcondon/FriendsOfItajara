@@ -350,9 +350,20 @@ body h =
         Just ps -> "  " <> Pitch.noteName ps.noteLo <> " → " <> Pitch.noteName ps.noteHi
                      <> " (" <> ps.label <> ")"
         Nothing -> "  " <> num q.cvLo <> " → " <> num q.cvHi
+      -- | **A bus number names nothing you can see; the jack does.**
+      -- |
+      -- | Bus 8 is ES-9 panel jack 1 and bus 15 is jack 8 — the lower eight
+      -- | reach expanders. On 2026-09-11 a parameter called `morph` sat on
+      -- | cv 8 while the BIA's V/oct was in panel jack 1, so a plain linear
+      -- | ramp swept the module's pitch and the run sounded exactly like the
+      -- | pitch sweep it was not. The page said `cv 8`, which was true and
+      -- | told nobody anything.
+      jackOf b
+        | b >= 8 && b <= 15 = " (ES-9 jack " <> show (b - 7) <> ")"
+        | otherwise = ""
       parts =
         Array.catMaybes
-          [ map (\b -> "cv " <> show b <> volts) q.cv
+          [ map (\b -> "cv " <> show b <> jackOf b <> volts) q.cv
           , map (\k -> "esx " <> show k <> volts) q.esx
           , map (\c -> "cc " <> show c <> " ch " <> show q.channel
                    <> "  " <> show q.ccLo <> " → " <> show q.ccHi) q.cc
