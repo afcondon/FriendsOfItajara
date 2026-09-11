@@ -1311,33 +1311,6 @@ render st =
               ]
       )
 
-  -- | **A grid of two axes is drawn as those axes.**
-  -- |
-  -- | The inner axis varies fastest — see `Encoding.cells` — so it is the one
-  -- | that makes a row. Given as a custom property rather than a class,
-  -- | because the count is data (2…128) and a class per count would be a
-  -- | stylesheet that had to know the encodings.
-  -- |
-  -- | One axis takes neither: a line of N is a vertical stack, and its rule
-  -- | is in the stylesheet under `.is-line`.
-
-  shapedPlan = grids " is-planned"
-
-  grids extra =
-    case st.sweep.extent of
-      [ _, inner ] | inner > 1 ->
-        [ HP.class_ (HH.ClassName ("q-grid is-shaped" <> extra))
-        , HP.style ("--cols: repeat(" <> show inner <> ", minmax(56px, 1fr))")
-        ]
-      -- **A transect is a line, and a line is a column.**
-      --
-      -- Twelve samples laid across the page is a row you read left to right
-      -- and compare by memory. Stacked, they are twelve traces one under
-      -- another with their envelopes aligned — which is how you see that
-      -- position 7 is the odd one out — and they cost a narrow column rather
-      -- than the width of the screen.
-      _ -> [ HP.class_ (HH.ClassName ("q-grid is-line" <> extra)) ]
-
   -- | **One position, every parameter — the table read down instead of across.**
   -- |
   -- | Andrew, 2026-09-10: *"if you identify one hit in the transect that isn't
@@ -1701,28 +1674,16 @@ render st =
                     <> (if running then " — position " <> show (at + 1)
                         else " to record")) ]
             ]
-        , HH.div shapedPlan
-            (Array.mapWithIndex
-              -- **The index is the address, so clicking it opens that address.**
-              -- Before a run these are the only thing on the page that stands
-              -- for a sample, which makes them the natural way to reach one —
-              -- and it means a transect can be authored preset by preset
-              -- without recording anything first.
-              (\i c ->
-                HH.button
-                  [ HP.class_ (HH.ClassName
-                      ("q-cell" <> (if running && i <= at then " is-done" else "")
-                                <> (if running && i == at then " is-now" else "")
-                                <> (if st.pivot == Just i then " is-open" else "")))
-                  , HP.disabled running
-                  , HP.title ("open position " <> show (i + 1) <> " — "
-                      <> joinWith ", "
-                        (Array.mapWithIndex (\a n -> "axis " <> show (a + 1)
-                          <> " position " <> show (n + 1)) c))
-                  , HE.onClick \_ -> OpenPivot (if st.pivot == Just i then Nothing else Just i)
-                  ]
-                  [ HH.text (show (i + 1)) ])
-              cells)
+        -- **The same strip, before there is a take to draw it on.**
+        --
+        -- These were numbered boxes in a grid — the only thing on the page
+        -- standing for a sample that does not exist yet, which made them the
+        -- only way to author a transect preset by preset. That job is real and
+        -- survives; the boxes do not. An empty strip divided into the bands
+        -- the plan implies is the same picture the recording will fill in, so
+        -- a position is reached the same way before and after, and the page
+        -- stops having two grammars for one thing.
+        , HH.div_ (map plannedRow (rowsOf (Array.length cells)))
         , HH.p [ HP.class_ (HH.ClassName "q-blurb") ]
             [ HH.text (if running
                 then "Each one fills as it sounds. The take closes itself when \
@@ -1749,11 +1710,7 @@ render st =
           [ case st.peaks of
               Just pk | Array.length pk.hi > 0 ->
                 HH.div [ HP.class_ (HH.ClassName "q-whole") ]
-                  [ HH.div [ HP.class_ (HH.ClassName "q-strip") ]
-                      [ Wave.svg pk.lo pk.hi [ Wave.klass "q-whole-svg" ]
-                      , HH.div [ HP.class_ (HH.ClassName "q-segs") ]
-                          (Array.mapWithIndex segment st.regions)
-                      ]
+                  [ HH.div_ (map (strip pk) (rowsOf (Array.length st.regions)))
                   , HH.div [ HP.class_ (HH.ClassName "q-wholebar") ]
                       [ HH.button
                           [ HP.class_ (HH.ClassName "q-plain")
@@ -1815,6 +1772,54 @@ render st =
           , sendRow
           ]
 
+  -- | **The rows of a transect.**
+  -- |
+  -- | A one-dimensional run is one row. A two-dimensional one is `outer` rows
+  -- | of `inner` pieces, because the inner axis varies fastest — see
+  -- | `Encoding.cells` — so consecutive pieces of the take are consecutive
+  -- | cells of one row. Drawing them as rows is therefore not an arrangement
+  -- | imposed on the recording; it is the recording's own shape.
+  innerN = case st.sweep.extent of
+    [ _, i ] | i > 1 -> i
+    _ -> 0
+
+  rowsOf n
+    | n <= 0 = []
+    | innerN <= 0 = [ { lo: 0, hi: n } ]
+    | otherwise =
+        map (\k -> { lo: k * innerN, hi: min n ((k + 1) * innerN) })
+            (Array.range 0 ((n - 1) / innerN))
+
+  -- | **One row, drawn on the stretch of the take that made it.**
+  -- |
+  -- | Its picture is a SLICE of the whole take's envelope — `Wave.bucketsFor`
+  -- | again, which is what made a grid of tiles cost one snapshot rather than
+  -- | forty requests, and now makes a stack of rows cost the same.
+  -- |
+  -- | Two overlays rather than nested controls: the bands open a position, the
+  -- | bar along the bottom keeps or drops it. Nested, the keep button would
+  -- | bubble its click into the band behind it and every drop would also open
+  -- | a panel.
+  strip pk rng =
+    let
+      total = max 0.001 (maybe 1.0 _.secs (cap st))
+      rs = Array.slice rng.lo rng.hi st.regions
+      t0 = maybe 0.0 _.start (Array.head rs)
+      t1 = maybe total _.end (Array.last rs)
+      span = max 0.001 (t1 - t0)
+      b = Wave.bucketsFor (Array.length pk.hi) total t0 t1
+      cut xs = Array.slice b.from b.to xs
+      left v = show (100.0 * (v - t0) / span) <> "%"
+      wide v = show (100.0 * v / span) <> "%"
+    in
+      HH.div [ HP.class_ (HH.ClassName "q-strip") ]
+        [ Wave.svg (cut pk.lo) (cut pk.hi) [ Wave.klass "q-whole-svg" ]
+        , HH.div [ HP.class_ (HH.ClassName "q-segs") ]
+            (Array.mapWithIndex (\j r -> segment (rng.lo + j) r left wide) rs)
+        , HH.div [ HP.class_ (HH.ClassName "q-keeps") ]
+            (Array.mapWithIndex (\j r -> keepBar (rng.lo + j) r left wide) rs)
+        ]
+
   -- | **One piece of the take, drawn where it happened.**
   -- |
   -- | A band over the envelope rather than a tile beside it. The division and
@@ -1823,28 +1828,80 @@ render st =
   -- | visible without auditioning anything — and the gaps between bands are
   -- | the silence, drawn by not being covered.
   -- |
-  -- | Hover plays it, click keeps or drops it.
-  segment i r =
+  -- | Hover plays it; clicking opens every parameter at that position. The
+  -- | numbered boxes that used to be the only way to reach a position are
+  -- | gone: the piece itself is a better handle on the sample than a box
+  -- | standing in for it.
+  segment i r left wide =
     let
-      total = max 0.001 (maybe 1.0 _.secs (cap st))
-      pct v = show (100.0 * v / total) <> "%"
       kept = Set.member i st.keep
       w = witness i
     in
       HH.div
         [ HP.class_ (HH.ClassName ("q-seg"
             <> (if kept then "" else " is-dropped")
-            <> (if st.playing == Just i then " is-playing" else "")))
-        , style ("left:" <> pct r.start
-                   <> ";width:" <> pct (max 0.0 (r.end - r.start))
+            <> (if st.playing == Just i then " is-playing" else "")
+            <> (if st.pivot == Just i then " is-open" else "")))
+        , style ("left:" <> left r.start
+                   <> ";width:" <> wide (max 0.0 (r.end - r.start))
                    <> (if kept then ";background:" <> w.tint else ""))
         , HP.title (w.label <> " — " <> fmt (r.end - r.start) <> " s at "
-                      <> fmt r.start <> " s. Click to "
-                      <> (if kept then "drop" else "keep") <> " it.")
+                      <> fmt r.start <> " s. Click for every parameter here.")
         , HE.onMouseEnter \_ -> HoverPlay i
-        , HE.onClick \_ -> ToggleKeep i
+        , HE.onClick \_ -> OpenPivot (if st.pivot == Just i then Nothing else Just i)
         ]
         [ HH.span [ HP.class_ (HH.ClassName "q-seg-n") ] [ HH.text w.label ] ]
+
+  -- | A row of the transect as PLANNED: equal bands, because a schedule is
+  -- | regular by construction until the rig plays it and reports otherwise.
+  plannedRow rng =
+    let
+      k = rng.hi - rng.lo
+      w = 100.0 / Int.toNumber (max 1 k)
+      at = fromMaybe (-1) st.sweepAt
+      steps = Sweep.steps st.sweep
+    in
+      HH.div [ HP.class_ (HH.ClassName "q-strip is-planned") ]
+        [ HH.div [ HP.class_ (HH.ClassName "q-segs") ]
+            (map
+              (\j ->
+                let i = rng.lo + j in
+                HH.div
+                  [ HP.class_ (HH.ClassName ("q-seg is-plan"
+                      <> (if running && i <= at then " is-done" else "")
+                      <> (if running && i == at then " is-now" else "")
+                      <> (if st.pivot == Just i then " is-open" else "")))
+                  , style ("left:" <> show (Int.toNumber j * w) <> "%;width:" <> show w <> "%")
+                  , HP.title ("position " <> show (i + 1)
+                        <> " — every parameter at this hit")
+                  , HE.onClick \_ ->
+                      if running then OpenPivot st.pivot
+                      else OpenPivot (if st.pivot == Just i then Nothing else Just i)
+                  ]
+                  [ HH.span [ HP.class_ (HH.ClassName "q-seg-n") ]
+                      [ HH.text (labelOf steps i) ] ])
+              (if k <= 0 then [] else Array.range 0 (k - 1)))
+        ]
+
+  -- | **A position, named by what it asks for.** The note when the run has a
+  -- | pitch axis, the position number otherwise — `Meaning.note` is -1 on a
+  -- | parameter that is not a pitch, so finding one IS the test.
+  labelOf steps i =
+    case Array.index steps i >>= \sp -> Array.find (\x -> x.note >= 0) sp.means of
+      Just m -> Pitch.noteName m.note
+      Nothing -> show (i + 1)
+
+  keepBar i r left wide =
+    let kept = Set.member i st.keep
+    in
+      HH.button
+        [ HP.class_ (HH.ClassName ("q-keepbar" <> if kept then " on" else ""))
+        , style ("left:" <> left r.start <> ";width:" <> wide (max 0.0 (r.end - r.start)))
+        , HP.title (if kept then "kept — click to drop it"
+                    else "dropped — click to keep it")
+        , HE.onClick \_ -> ToggleKeep i
+        ]
+        []
 
   -- | Steps of the run that made this take, for the meanings. Empty for a take
   -- | played by hand, which has no schedule and so no declared meaning.

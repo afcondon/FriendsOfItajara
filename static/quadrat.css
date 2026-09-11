@@ -118,12 +118,12 @@ body {
    own tile underneath — small multiples, because the question is comparative:
    which of these forty is the one I meant, and are they the same sound? A list
    of numbers cannot be read that way; a grid of shapes can. */
+.q-gridhead { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; font-size: 13px; color: var(--muted); }
+.q-gridhead > span:first-child { flex: 1; font-variant-numeric: tabular-nums; }
 .q-whole { border: 1px solid var(--rule); border-radius: 3px; background: #fff; padding: 6px; margin-bottom: 14px; }
 .q-whole-svg { display: block; width: 100%; height: 128px; }
 .q-whole-svg polygon { fill: var(--ink); }
 
-.q-gridhead { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; font-size: 13px; color: var(--muted); }
-.q-gridhead > span:first-child { flex: 1; font-variant-numeric: tabular-nums; }
 .q-hover { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
 
 /* Auto-fill rather than a fixed count: ten hits and a hundred slices should
@@ -137,22 +137,18 @@ body {
    the screen and the one thing the grid was for is gone. So a two-axis set
    sets its own column count inline, from the inner axis — the one that
    varies fastest, which is what makes it the row. */
-.q-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
 /* Two axes: the inner axis is the row, cells are small, and it scrolls
    sideways rather than squeezing to nothing. Horizontal scroll is a thing to
    avoid in most interfaces and the right answer in this one — a 12 x 16 set
    is a wall by nature, and shrinking it until it fits is what would make it
    unreadable. */
-.q-grid.is-shaped { grid-template-columns: var(--cols); overflow-x: auto; padding-bottom: 6px; gap: 5px; }
 /* 56px, so a 4 x 8 fits the column and only a set that is genuinely a wall
    scrolls. A 12 x 16 does, and should. */
-.q-grid.is-shaped .q-cell { height: 56px; }
 
 /* One axis: a column, not a row. Twelve samples laid across the page is a row
    you read left to right and compare by memory; stacked, they are twelve
    traces one under another with their envelopes aligned, which is how you see
    that position 7 is the odd one out. */
-.q-grid.is-line { grid-template-columns: 1fr; gap: 3px; }
 /* **The foot's children join the row.**
    
    A tile is two elements — the waveform and a foot holding its number, its
@@ -163,7 +159,6 @@ body {
    `display: contents` on the foot dissolves it, so the row is four items and
    each gets its own column: number, trace, length, keep. `order` puts the
    number first, where a stack is scanned. */
-.q-grid.is-line .q-cell { height: 26px; }
 /* Dropped, not gone. It stays in place and keeps its number, because the
    order is the meaning and a grid that reflowed on every click would make
    picking harder than it is. */
@@ -284,9 +279,6 @@ body {
   border-top: 1px solid var(--rule); padding-top: 12px; }
 
 /* A cell and a tile's number are both a way into the preset behind them. */
-.q-cell { cursor: pointer; font: inherit; }
-.q-cell:hover:not(:disabled) { border-style: solid; border-color: var(--ink); color: var(--ink); }
-.q-cell.is-open { border-style: solid; border-color: var(--ink); background: var(--ink); color: #fff; }
 
 /* The whole take, end to end — the one listen the tiles cannot give you. */
 .q-wholebar { display: flex; align-items: center; gap: 8px; padding: 6px 2px 0; }
@@ -307,16 +299,9 @@ body {
 .q-tab.on { color: var(--ink); font-weight: 600; border-bottom-color: var(--ink); }
 
 /* Two ways to fill a take, and nothing else on the page moves. */
-.q-fill { display: inline-flex; border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; margin-bottom: 14px; }
-.q-filltab { border: 0; background: #fff; padding: 6px 14px; font: inherit; font-size: 13px;
-  color: var(--muted); cursor: pointer; }
-.q-filltab + .q-filltab { border-left: 1px solid var(--rule); }
 /* `:not(.on)` earns its keep: without it the hover rule out-specifies `.on`
    and the selected tab goes black text on a black ground — invisible, and
    only while the pointer is on it, which is exactly when you look. */
-.q-filltab:hover:not(:disabled):not(.on) { color: var(--ink); }
-.q-filltab.on { background: var(--ink); color: #fff; }
-.q-filltab:disabled { cursor: default; opacity: 0.55; }
 
 .q-hand { margin-bottom: 4px; }
 .q-go { display: flex; align-items: center; flex-wrap: wrap; gap: 12px;
@@ -330,12 +315,6 @@ body {
    of the run unreadable and then jumped. */
 
 
-.q-cell { display: flex; align-items: center; justify-content: center;
-  height: 74px; border: 1px dashed var(--rule); border-radius: 3px;
-  font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; background: #fff; }
-.q-cell:disabled { cursor: default; }
-.q-cell.is-done { border-style: solid; border-color: var(--ink); color: var(--ink); }
-.q-cell.is-now { border-color: var(--hot); color: var(--hot); background: #fff6f3; }
 
 .q-swrow { display: flex; align-items: center; flex-wrap: wrap; gap: 14px; margin-bottom: 12px; }
 .q-swrow.is-trig { border-top: 1px solid var(--rule); padding-top: 14px; margin-top: 6px; }
@@ -531,3 +510,36 @@ body {
 .q-seg.is-dropped { background: repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(122,122,133,0.16) 4px, rgba(122,122,133,0.16) 8px); }
 .q-seg.is-dropped .q-seg-n { text-decoration: line-through; opacity: 0.6; }
 .q-seg.is-playing { outline: 2px solid var(--hot); outline-offset: -2px; }
+
+/* ── Rows, and reaching a position ───────────────────────────────────────
+   A one-dimensional run is one strip. A two-dimensional one is `outer`
+   strips of `inner` bands, because the inner axis varies fastest — so
+   consecutive pieces of the take ARE consecutive cells of one row, and
+   drawing them as rows is the recording's own shape rather than an
+   arrangement imposed on it. */
+.q-strip + .q-strip { margin-top: 5px; }
+
+/* The planned strip: the same picture before there is a take to draw it
+   on. Numbered boxes in a grid used to be the only way to reach a position
+   that did not exist yet; an empty strip divided into the bands the plan
+   implies says the same thing in the shape the recording will fill. */
+.q-strip.is-planned {
+  height: 44px; border: 1px dashed var(--rule); border-radius: 3px; background: #fff;
+}
+.q-seg.is-plan { border-left-color: var(--rule); align-items: center; }
+.q-seg.is-plan .q-seg-n { padding-bottom: 0; }
+.q-seg.is-done { background: rgba(42,125,79,0.10) !important; }
+.q-seg.is-now { background: rgba(200,68,42,0.16) !important; outline: 1px solid var(--hot); outline-offset: -1px; }
+.q-seg.is-open { outline: 2px solid var(--ink); outline-offset: -2px; z-index: 2; }
+
+/* Keep/drop lives in its own layer along the bottom, NOT nested inside the
+   band. Nested, its click would bubble into the band behind it and every
+   drop would also open a panel. */
+.q-keeps { position: absolute; left: 0; right: 0; bottom: 0; height: 9px; }
+.q-keepbar {
+  position: absolute; top: 0; bottom: 0; padding: 0; cursor: pointer;
+  border: 0; border-left: 1px solid transparent;
+  background: repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(122,122,133,0.35) 3px, rgba(122,122,133,0.35) 6px);
+}
+.q-keepbar.on { background: var(--live); }
+.q-keepbar:hover { outline: 1px solid var(--ink); outline-offset: -1px; }
