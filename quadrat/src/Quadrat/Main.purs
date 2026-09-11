@@ -1321,8 +1321,7 @@ render st =
         Bench ->
           HH.div_
             [ HH.section [ HP.class_ (HH.ClassName "q-hero") ]
-                [ inputRow
-                , goRow
+                [ HH.div [ HP.class_ (HH.ClassName "q-actbar") ] [ goRow, doors ]
                 , if not (Array.null st.regions) || st.busy || hasTake
                     then caught
                     else case st.fill of
@@ -1337,19 +1336,6 @@ render st =
             -- | Each was a panel competing with the waveform for the page.
             -- | Behind a door they cost one line, and the line says what is
             -- | inside it rather than showing you.
-            , HH.div [ HP.class_ (HH.ClassName "q-doors") ]
-                [ door DivisionModal "Division"
-                    (if Array.null st.regions then "nothing divided yet"
-                     else show (Set.size st.keep) <> " of "
-                            <> show (Array.length st.regions) <> " kept")
-                    (not (Array.null st.regions) || hasTake)
-                , door TriggerModal "Trigger" triggerSays true
-                , door PitchModal "Pitch" pitchSays2 true
-                , door ExportModal "Export to card"
-                    (if placeable then "bank " <> st.bank <> " · voice " <> show st.voice
-                     else "SuperDirt — already a bank")
-                    (placeable && not (Set.isEmpty st.keep))
-                ]
             , sendRow
             , HH.section [ HP.class_ (HH.ClassName "q-curverow") ]
                 [ SweepView.curves sweepHandlers
@@ -1394,6 +1380,23 @@ render st =
   -- rather than from a clock here: a page that keeps its own time drifts from
   -- the recording it is describing.
   elapsed = maybe "0" (\c -> fmt c.secs) cp
+
+  -- | **Peers of Record.** They are all things you do to this take, and a
+  -- | separate row for four of them implied a separation that is not there.
+  doors =
+    HH.div [ HP.class_ (HH.ClassName "q-doors") ]
+      [ door DivisionModal "Division"
+          (if Array.null st.regions then "nothing divided yet"
+           else show (Set.size st.keep) <> " of "
+                  <> show (Array.length st.regions) <> " kept")
+          (not (Array.null st.regions) || hasTake)
+      , door TriggerModal "Trigger" triggerSays true
+      , door PitchModal "Pitch" pitchSays2 true
+      , door ExportModal "Export to card"
+          (if placeable then "bank " <> st.bank <> " · voice " <> show st.voice
+           else "SuperDirt — already a bank")
+          (placeable && not (Set.isEmpty st.keep))
+      ]
 
   -- | A door: what is behind it, and what it currently says. The summary is
   -- | the point — a button that only says "Trigger" makes you open it to
@@ -1476,7 +1479,7 @@ render st =
       [ HH.p [ HP.class_ (HH.ClassName "q-sayline") ]
           [ HH.text "Making ", slotExtent
           , HH.text " ", slotPitched
-          , HH.text " samples from ", slotSource
+          , HH.text " samples from ", slotSource, listening
           , HH.text ", triggered by ", slotTrigger
           , HH.text ", kept as ", slotName
           , HH.text " for ", slotEncoding
@@ -1488,6 +1491,26 @@ render st =
               <> sweptSays
               <> [ HH.text " · about ", HH.text runSecs, HH.text " to record" ] )
       ]
+
+  -- | **The level, beside the input it measures.**
+  -- |
+  -- | It was a row of its own under the sentence, naming the source a second
+  -- | time and drawing two rules across the page to hold three words. The
+  -- | sentence already says WHICH input; what it could not say is whether
+  -- | anything is arriving on it, and twenty polls of history says that in
+  -- | the width of a word.
+  -- |
+  -- | The long warning goes with the row. It existed because the button named
+  -- | the input and naming was not enough — but a sparkline lying flat in the
+  -- | middle of the sentence is the same news, delivered where the decision is
+  -- | made rather than as a paragraph beside the act.
+  listening =
+    HH.span
+      [ HP.class_ (HH.ClassName ("q-spark" <> if quiet then " is-quiet" else ""))
+      , HP.title (fmt srcDb <> " dB — the last two seconds of input level"
+                    <> (if quiet then ". Nothing is playing into it." else ""))
+      ]
+      [ HH.text sparkline ]
 
   -- | One axis is a number you can say; two are a shape, and the shape belongs
   -- | with the axes that make it rather than in the middle of a sentence.
@@ -1681,26 +1704,23 @@ render st =
                   [ HH.span [ HP.class_ (HH.ClassName "q-recdot") ] []
                   , HH.text "Record"
                   ]
-              -- | **The input is silent, said before the run and not after.**
+              -- | **The silent-input warning moved into the sentence.**
               -- |
-              -- | A whole transect went to an input with nothing patched to
-              -- | it: twenty-six seconds of correct schedule, correct
-              -- | division, correct measurement, all of digital silence. The
-              -- | button named the input — "Run on board" — and naming was
-              -- | not enough, because the name only tells you the input is
-              -- | wrong if you already knew which was right. The LEVEL tells
-              -- | you, and the daemon has been reporting it all along.
-              , if quiet
-                  then HH.span [ HP.class_ (HH.ClassName "q-warn") ]
-                    [ HH.text (srcName <> " is reading " <> fmt srcDb
-                        <> " dB — nothing is playing into it. Check the patch, \
-                           \or choose another input above.") ]
-                  else HH.span [ HP.class_ (HH.ClassName "q-state") ]
-                    [ HH.text (case st.fill of
-                        Swept -> "the take closes itself when the last position has sounded"
-                        Played -> maybe "" (\c -> if c.holds
-                                                    then "captured " <> fmt c.secs <> " s"
-                                                    else Kind.prompt st.kind) cp) ]
+              -- | A whole transect once went to an input with nothing patched
+              -- | to it — twenty-six seconds of correct schedule, correct
+              -- | division, correct measurement, all of digital silence — so
+              -- | the fact has to be carried somewhere. It is carried by the
+              -- | sparkline lying flat next to the input's own name, which is
+              -- | where the decision is made. Repeating it here as a sentence
+              -- | of red capitals said the same thing twice and was the
+              -- | loudest thing on the page for a condition that is normal
+              -- | between takes.
+              , HH.span [ HP.class_ (HH.ClassName "q-state") ]
+                  [ HH.text (case st.fill of
+                      Swept -> "the take closes itself when the last position has sounded"
+                      Played -> maybe "" (\c -> if c.holds
+                                                  then "captured " <> fmt c.secs <> " s"
+                                                  else Kind.prompt st.kind) cp) ]
               ]
       )
 
@@ -1789,53 +1809,6 @@ render st =
   -- The cell at this index, in the encoding's own recording order.
   cellAt j = fromMaybe []
     (Array.index (Encoding.cells st.sweep.encoding st.sweep.extent) j)
-
-  -- | **What it is listening to, and whether anything is coming in.**
-  -- |
-  -- | This was five chips, then a chooser in the masthead, and the masthead
-  -- | was worse: a whole transect went to an input with nothing patched to
-  -- | it. Off in a corner, subtle, and read once at the start of a session
-  -- | when it was still right. It belongs where the decision is SPENT —
-  -- | directly above the button that spends it.
-  -- |
-  -- | And the number is not enough on its own. A meter MOVES: play a note and
-  -- | the bar jumps, which answers "is this the right input" in the only way
-  -- | that cannot be misread. The daemon has been metering every source
-  -- | separately all along; nothing here is new except showing it.
-  inputRow = case st.looper of
-    Nothing -> HH.text ""
-    Just top ->
-      HH.div [ HP.class_ (HH.ClassName "q-listen") ]
-        -- **The choice is in the statement; the MEASUREMENT stays here.**
-        --
-        -- A number is not enough on its own and never was: a meter MOVES, so
-        -- playing a note answers "is this the right input" in the only way
-        -- that cannot be misread. Which input it is belongs in the sentence
-        -- with the rest of the specification; whether anything is coming in
-        -- belongs directly above the button that spends it.
-        [ HH.label [ HP.class_ (HH.ClassName "q-stack") ]
-            [ HH.span_ [ HH.text "listening to" ]
-            , HH.span [ HP.class_ (HH.ClassName "q-srcname") ]
-                [ HH.text (srcName <> (if maybe true _.available
-                                            (top.sources # \ss -> Array.index ss (srcNow - 1))
-                                         then "" else " — off")) ]
-            ]
-        -- | **A sparkline, not a meter.**
-        -- |
-        -- | A full-width bar is the loudest thing on the page and says only
-        -- | how loud the input is at this instant — which, between two hits,
-        -- | is nothing at all. Two seconds of history in eight characters
-        -- | answers the question that is actually being asked: has anything
-        -- | arrived? The hits are visible as they land.
-        , HH.span
-            [ HP.class_ (HH.ClassName ("q-spark" <> if quiet then " is-quiet" else ""))
-            , HP.title "the last two seconds of input level"
-            ]
-            [ HH.text sparkline ]
-        , HH.span
-            [ HP.class_ (HH.ClassName ("q-meterdb" <> if quiet then " is-quiet" else "")) ]
-            [ HH.text (fmt srcDb <> " dB") ]
-        ]
 
   -- | Eight block characters, oldest to newest. Empty history draws the
   -- | floor rather than nothing, so the line does not appear and disappear.

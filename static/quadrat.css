@@ -169,7 +169,6 @@ body {
 /* Arming IS choosing the input. One row, and the thing you press says what it
    is about to listen to — the mistake it removes is arming on an input you did
    not choose, which is silent and costs a whole take. */
-.q-arm { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .q-arm-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); font-weight: 600; }
 .q-chip.is-arm { min-width: 88px; border-color: var(--ink); }
 .q-chip.is-arm:hover { background: var(--ink); color: #fff; }
@@ -277,13 +276,6 @@ body {
 /* The whole take, end to end — the one listen the tiles cannot give you. */
 .q-wholebar { display: flex; align-items: center; gap: 8px; padding: 6px 2px 0; }
 
-.q-listen { display: flex; align-items: flex-end; gap: 12px;
-  border-top: 1px solid var(--rule); padding-top: 14px; margin-top: 16px; }
-.q-listen select { padding: 6px 8px; border: 1px solid var(--rule); border-radius: 3px;
-  background: #fff; font: inherit; font-size: 14px; min-width: 128px; }
-.q-meterdb { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums;
-  min-width: 66px; text-align: right; margin-bottom: 3px; }
-.q-meterdb.is-quiet { color: var(--hot); font-weight: 600; }
 .q-tab { border: 0; background: none; padding: 0 0 2px; font: inherit; font-size: 13px;
   color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -12px; }
 .q-tab:hover { color: var(--ink); }
@@ -448,22 +440,12 @@ body {
    a different time. They were one column of controls with no divisions, so
    the page read as a single form and nothing said which parts you could
    simply leave alone. */
-.q-swrule { border: 0; border-top: 1px solid var(--rule); margin: 22px 0 18px; }
 .q-swsec { display: flex; align-items: baseline; gap: 12px; margin-bottom: 10px; }
 .q-swsec .q-muted { font-size: 11px; line-height: 1.4; max-width: 62ch; }
 
 /* The trigger radio — one fact, one control. Choosing "I play it" is what
    makes the take a hand-played one, so what it disables has to be visible
    rather than merely absent. */
-.q-swradio { display: flex; gap: 10px; margin-bottom: 12px; }
-.q-swopt {
-  display: inline-flex; align-items: center; gap: 7px; cursor: pointer;
-  border: 1px solid var(--rule); border-radius: 3px; padding: 7px 13px;
-  font-size: 13px; background: #fff; color: var(--muted);
-}
-.q-swopt.on { border-color: var(--ink); color: var(--ink); font-weight: 500; }
-.q-swopt:hover { border-color: var(--ink); }
-.q-swopt input { margin: 0; accent-color: var(--ink); }
 
 /* Greyed, not hidden: the fields are still the rig's instructions and still
    say what would be sent — they are simply not being used. */
@@ -586,7 +568,6 @@ body {
 
 /* The input is chosen in the sentence; only the measurement stays by the
    Run button, because a meter moves and a name does not. */
-.q-srcname { font-weight: 500; }
 
 /* An interval that is not a semitone is legitimate and is almost never
    what you meant, so it is stated in the hot colour with the repair
@@ -643,7 +624,6 @@ body {
    again. Behind a door each costs one line — and the line says what is
    inside rather than making you open it to find out, which is the whole
    difference between a door and a panel with extra steps. */
-.q-doors { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0 14px; }
 .q-door {
   flex: 1 1 190px; text-align: left; cursor: pointer;
   border: 1px solid var(--rule); border-radius: 3px; background: #fff;
@@ -671,3 +651,14 @@ body {
   color: var(--live); white-space: pre;
 }
 .q-spark.is-quiet { color: var(--rule); }
+
+/* Record and the four doors are peers: all of them are things you do to
+   this take, and a row each implied a separation that is not there. */
+.q-actbar { display: flex; align-items: stretch; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.q-actbar .q-go { margin: 0; flex: 0 0 auto; align-items: center; }
+.q-doors { display: flex; flex-wrap: wrap; gap: 10px; flex: 1 1 auto; }
+.q-doors .q-door { flex: 1 1 150px; }
+
+/* The level sits inside the sentence, next to the input it measures —
+   quiet enough to be part of a line of prose. */
+.q-sayline .q-spark { font-size: 13px; margin-left: 6px; vertical-align: baseline; }
