@@ -1587,8 +1587,6 @@ render st =
           , HE.onClick \_ -> StopAudio
           ]
           [ HH.text "\x25a0" ]
-      , HH.span [ HP.class_ (HH.ClassName "q-taketime") ]
-          [ HH.text (maybe "" (\c -> fmt c.secs <> " s") (cap st)) ]
       ]
 
   -- | **Peers of Record.** They are all things you do to this take, and a
@@ -2296,6 +2294,17 @@ render st =
               Just pk | Array.length pk.hi > 0 ->
                 HH.div [ HP.class_ (HH.ClassName "q-whole") ]
                   [ HH.div_ (map (strip pk) (rowsOf (Array.length st.regions)))
+                  -- | **The take's length, on the take.**
+                  -- |
+                  -- | It sat among Record/play/stop and grew a digit as the
+                  -- | recording ran, which pushed every door along the row a
+                  -- | few pixels at a time. A control row that moves while you
+                  -- | are reaching for it is worse than one number short, and
+                  -- | the length was never a control anyway — it is a fact
+                  -- | about the thing drawn immediately above it, which is
+                  -- | also where your eye already is while it is counting.
+                  , HH.div [ HP.class_ (HH.ClassName "q-taketime") ]
+                      [ HH.text (maybe "" (\c -> fmt c.secs <> " s") (cap st)) ]
                   ]
               _ -> HH.text ""
           , if Array.null st.regions && hasTake && not st.busy
