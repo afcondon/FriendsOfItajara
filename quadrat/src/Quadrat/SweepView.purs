@@ -348,14 +348,48 @@ body h =
               [ tiny "from" 4 (show ps.noteLo) (SetPitchLo i)
                   "lowest note as a MIDI number — 60 is C4, 12 to an octave"
               , tiny "to" 4 (show ps.noteHi) (SetPitchHi i)
-                  "highest note as a MIDI number. Steps ROUND to whole semitones, \
-                  \so any number of positions lands in tune — fewer positions than \
-                  \semitones gives a subset of the notes, not a detuned scale."
+                  "highest note as a MIDI number. Steps ROUND to whole semitones, so \
+                  \every position lands in tune — but a count that is not one per \
+                  \semitone SKIPS degrees or REPEATS them, which the line below says."
               , HH.span [ cls "q-swhint" ]
                   [ HH.text (Pitch.noteName ps.noteLo <> "–" <> Pitch.noteName ps.noteHi
                               <> " · " <> reach ps) ]
+              , degreeGuard q ps
               ]
       ]
+
+  -- | **Extent and span are two numbers, and for a pitch axis a mismatch is
+  -- | always a bug.**
+  -- |
+  -- | Every other parameter is continuous, so any number of cells over its
+  -- | range is a legitimate choice of resolution. A pitch axis is not: its
+  -- | span has a natural granularity, and a count that is not one cell per
+  -- | degree cannot be honoured. Rounding is monotonic, so the failure is
+  -- | exactly one of two, and it is silent in both directions.
+  -- |
+  -- | Measured on 2026-09-11, both on the same afternoon: 12 cells over
+  -- | C4–C5 dropped F#4 without a word, and 16 cells over C4–B4 played four
+  -- | notes twice. Neither run looked wrong on the page.
+  degreeGuard q ps =
+    let
+      want = ps.noteHi - ps.noteLo + 1
+      have = fromMaybe 0 (Array.index h.plan.extent q.axis)
+    in
+      if want < 1 || have == want then HH.text ""
+      else
+        HH.span [ cls "q-swwarn" ]
+          [ HH.text
+              ( show have <> " cells over " <> show want <> " degrees — "
+                  <> if have < want
+                       then show (want - have) <> " skipped"
+                       else show (have - want) <> " repeat" )
+          , HH.button
+              [ cls "q-swfix"
+              , HP.title "set this axis to one cell per degree"
+              , HE.onClick \_ -> h.msg (SetExtent q.axis (show want))
+              ]
+              [ HH.text ("use " <> show want) ]
+          ]
 
   -- What a table can actually reach, because outside its span the realiser
   -- clamps and a transect comes out on one pitch.

@@ -461,3 +461,45 @@ body {
 .q-bar-fill { height: 100%; background: var(--ink); }
 .q-bar.is-bright .q-bar-fill { background: #7a7a85; }
 .q-tile.is-dropped .q-bar-fill { background: var(--muted); }
+
+/* ── Keep and Place — three verbs, three moments ─────────────────────────
+   The old `.q-send` was one flex row holding a save button, a second name
+   field, three address fields and two more write buttons. Everything was
+   equally weighted and equally spaced, so nothing said which control wrote
+   what — and a name typed into KIT reached the card and not the set.
+
+   Two blocks, ruled apart, each with a heading that is a verb. Keep writes
+   the set and says where it lands; Place addresses a set that already
+   exists. The rule between them is the point: they are not alternatives on
+   one row, they are consecutive acts. */
+.q-acts { display: flex; flex-wrap: wrap; gap: 28px; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--rule); }
+.q-keep, .q-place { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.q-place { padding-left: 28px; border-left: 1px solid var(--rule); }
+.q-acthead {
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.12em;
+  color: var(--muted); font-weight: 600; margin-right: 2px;
+}
+/* The destination, shown at the moment of writing — the one place a path
+   appears, so the name and the directory cannot drift apart again. */
+.q-dest { font-size: 12px; color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+/* Scratch versus kept. A take exists on disk either way; only this says
+   whether it is going to survive the next run. */
+.q-scratch { font-size: 11px; color: var(--muted); letter-spacing: 0.02em; }
+.q-scratch.is-kept {
+  color: var(--live); font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+.q-place.is-moot { opacity: 0.55; }
+
+/* ── The degree guard ────────────────────────────────────────────────────
+   Loud, because both of its failures are silent. Sits under the pitch
+   fields it contradicts, in the same hot colour as the pitch rule itself. */
+.q-swwarn {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: 11px; color: var(--hot); letter-spacing: 0.02em; margin-left: 6px;
+}
+.q-swfix {
+  border: 1px solid var(--hot); background: #fff; color: var(--hot);
+  border-radius: 3px; cursor: pointer; font: inherit; font-size: 11px; padding: 2px 7px;
+}
+.q-swfix:hover { background: var(--hot); color: #fff; }

@@ -230,6 +230,18 @@ type State =
   -- | but to put it where it cannot be missed: in the masthead, with the
   -- | level it is reading right now, and named on the button that uses it.
   , source :: Int
+  -- | **Has this take been written as a set yet?**
+  -- |
+  -- | A run always leaves a take on disk, and until 2026-09-11 nothing on the
+  -- | page distinguished that from having kept it — so a take that looked
+  -- | finished was one more button away from existing, and the difference was
+  -- | invisible. False from the moment a run starts; true only after a set is
+  -- | actually written.
+  , kept :: Boolean
+  -- | **The overwrite question, held open.** A set whose name is already taken
+  -- | is replaced wholesale (`msm cut --overwrite` deletes the directory
+  -- | first), so the one destructive act on this page asks before it acts.
+  , confirmKeep :: Boolean
   }
 
 data Action
@@ -256,6 +268,11 @@ data Action
   | SetKit String
   | SetVoice String
   | SendToCard { place :: Boolean, append :: Boolean }
+  -- | **Keep, with the overwrite question asked first.** Falls straight
+  -- | through to `SendToCard` when the name is free; otherwise arms the
+  -- | confirmation and waits.
+  | AskKeep
+  | CancelKeep
   | SetLayerMode String
   | WriteCard String
   | Play Int
@@ -292,7 +309,8 @@ component = H.mkComponent
       , sweep: Sweep.emptyPlan, sweepOpen: false, sweepAt: Nothing
       , sweepFork: Nothing, midiPorts: [], swept: false, sweepEdit: Nothing
       , schedule: [], sets: [], tables: [], tablesErr: "", overran: false
-      , page: Bench, fill: Swept, source: 0, pivot: Nothing }
+      , page: Bench, fill: Swept, source: 0, pivot: Nothing
+      , kept: false, confirmKeep: false }
   , render
   , eval: H.mkEval H.defaultEval { handleAction = handleAction, initialize = Just Init }
   }
@@ -601,8 +619,27 @@ handleAction = case _ of
               { cardBusy = false
               , kit = if s.kit == "" then setName else s.kit
               , kitMine = true
+              , kept = true
+              , confirmKeep = false
               }
         handleAction RefreshCard
+        handleAction RefreshSets
+
+  -- | **Ask before the one act on this page that destroys something.**
+  -- |
+  -- | `msm cut --overwrite` deletes the set's whole directory before writing,
+  -- | so keeping under a name that is taken is not a merge. The question is
+  -- | asked from `sets`, which is already fetched — no round trip, and no
+  -- | dialog: the button becomes the question and cancel is beside it.
+  AskKeep -> do
+    st <- H.get
+    let setName = if st.name == "" then "set" else st.name
+    if Array.any (\r -> r.name == setName) st.sets
+      then H.modify_ _ { confirmKeep = true }
+      else handleAction (SendToCard { place: false, append: false })
+
+  CancelKeep -> H.modify_ _ { confirmKeep = false }
+
   Analyse -> analyse true
   Divide -> analyse false
   SetGap v -> do
@@ -796,6 +833,11 @@ captureOn trimHead src = do
   -- every kind but `Bars`.
   send (CaptureStop (closeAfter st))
   send (Capture src)
+  -- **A new take is scratch until it is kept.** Cleared here rather than in
+  -- either caller, because this is the one place both ways of filling a take
+  -- go through, and a stale "kept" badge on a fresh recording is exactly the
+  -- confusion the flag exists to remove.
+  H.modify_ _ { kept = false, confirmKeep = false }
   -- A fresh name unless you gave it one that has not been used yet. This is
   -- the whole of the overwrite fix: the write is `cw <name>`, so a name that
   -- already belongs to a take on disk is a name that destroys it.
@@ -1815,112 +1857,168 @@ render st =
       [ HH.text (Divider.label dv) ]
 
   -- | Where the kept tiles go. Beside them, because it acts on them.
+  -- | **Three verbs, three moments.**
+  -- |
+  -- | Run leaves a scratch take; KEEP writes the set; PLACE gives that set an
+  -- | address on a card. These were one row holding two name fields and two
+  -- | write buttons, and on 2026-09-11 a name typed into KIT never reached the
+  -- | set — which was written under the take's name, silently. The fault was
+  -- | not the labels: it was that three different objects with three different
+  -- | lifetimes were sharing one row of controls.
+  -- |
+  -- | So: one name (the take's, set before the run), one button that writes,
+  -- | and the card kept separate — because a set exists whether or not it has
+  -- | an address, and `server.mjs` has said so all along.
   sendRow
     | Array.null st.regions = HH.text ""
     | otherwise =
-        HH.div [ HP.class_ (HH.ClassName "q-send") ]
-          -- | **Cutting a set is the act; a card is one place to put it.**
-          -- |
-          -- | These were one button until SuperDirt arrived, because until
-          -- | then a set had exactly one destination and the fusion cost
-          -- | nothing. SuperDirt has no voice to be placed in — the set as
-          -- | stored is already the bank — so the set has to be able to exist
-          -- | without an address on a card. Which was always true, and had
-          -- | simply never been asked.
-          [ HH.button
-              [ HP.class_ (HH.ClassName "q-plain")
+        HH.div [ HP.class_ (HH.ClassName "q-acts") ]
+          [ keepBlock
+          , if placeable then placeBlock else noPlace
+          ]
+
+  setName = if st.name == "" then "set" else st.name
+
+  -- | **Placing is a Rample idea.** A SuperDirt set IS the bank as stored, so
+  -- | bank/kit/voice beside one is a question with no answer. Only asked of a
+  -- | swept take: a take played by hand has no encoding to consult.
+  placeable = st.fill /= Swept || Encoding.onCard st.sweep.encoding
+
+  keepBlock =
+    HH.div [ HP.class_ (HH.ClassName "q-keep") ]
+      [ HH.span [ HP.class_ (HH.ClassName "q-acthead") ] [ HH.text "Keep" ]
+      , if st.confirmKeep
+          then
+            HH.span [ HP.class_ (HH.ClassName "q-twoverbs") ]
+              [ HH.button
+                  [ HP.class_ (HH.ClassName "q-plain is-replacing")
+                  , HP.disabled st.cardBusy
+                  , HP.title "the whole directory is deleted first — this is a \
+                             \replacement, not a merge"
+                  , HE.onClick \_ -> SendToCard { place: false, append: false }
+                  ]
+                  [ HH.text ("overwrite " <> setName) ]
+              , HH.button
+                  [ HP.class_ (HH.ClassName "q-plain")
+                  , HE.onClick \_ -> CancelKeep
+                  ]
+                  [ HH.text "cancel" ]
+              ]
+          else
+            HH.button
+              [ HP.class_ (HH.ClassName "q-plain is-go")
               , HP.disabled (st.cardBusy || Set.isEmpty st.keep)
-              , HP.title "cut the kept regions into a set and write its \
-                         \description beside them — no card, no voice"
-              , HE.onClick \_ -> SendToCard { place: false, append: false }
+              , HP.title "cut the kept pieces into a set, measure them, and write \
+                         \the description beside them"
+              , HE.onClick \_ -> AskKeep
               ]
-              [ HH.text "Save as a set" ]
-          , HH.span [ HP.class_ (HH.ClassName "q-arm-label") ] [ HH.text "or send to" ]
-          , small "bank" st.bank SetBank
-          , small "kit" (if st.kit == "" then st.name else st.kit) SetKit
-          , HH.label [ HP.class_ (HH.ClassName "q-field is-tight") ]
-              [ HH.span_ [ HH.text "voice" ]
-              , HH.select [ HE.onValueChange SetVoice ]
-                  (map (\n -> HH.option
-                          [ HP.value (show n), HP.selected (n == st.voice) ]
-                          [ HH.text (show n
-                              <> (if Kind.foldsTo st.kind /= ToMono
-                                    then " + " <> show (n + 1) else "")) ])
-                      [ 1, 2, 3, 4 ])
+              [ HH.text ("Keep " <> show (Set.size st.keep) <> " samples") ]
+      -- **Say where it lands, at the moment of landing it.** The one place a
+      -- path is shown, so the name in `The take` and the directory on disk
+      -- cannot drift apart again.
+      , HH.span [ HP.class_ (HH.ClassName "q-dest") ]
+          [ HH.text ("→ samples/" <> setName) ]
+      , if st.kept
+          then
+            HH.span [ HP.class_ (HH.ClassName "q-scratch is-kept") ]
+              [ HH.text "kept" ]
+          else
+            HH.span [ HP.class_ (HH.ClassName "q-scratch") ]
+              [ HH.text "scratch — the next run replaces this take" ]
+      ]
+
+  noPlace =
+    HH.div [ HP.class_ (HH.ClassName "q-place is-moot") ]
+      [ HH.span [ HP.class_ (HH.ClassName "q-acthead") ] [ HH.text "Place" ]
+      , HH.span [ HP.class_ (HH.ClassName "q-scratch") ]
+          [ HH.text "SuperDirt — the set as stored is already the bank, so there \
+                    \is nothing to place it in" ]
+      ]
+
+  placeBlock =
+    HH.div [ HP.class_ (HH.ClassName "q-place") ]
+      [ HH.span [ HP.class_ (HH.ClassName "q-acthead") ] [ HH.text "Place on a card" ]
+      , small "bank" st.bank SetBank
+      , small "kit" (if st.kit == "" then setName else st.kit) SetKit
+      , HH.label [ HP.class_ (HH.ClassName "q-field is-tight") ]
+          [ HH.span_ [ HH.text "voice" ]
+          , HH.select [ HE.onValueChange SetVoice ]
+              (map (\n -> HH.option
+                      [ HP.value (show n), HP.selected (n == st.voice) ]
+                      [ HH.text (show n
+                          <> (if Kind.foldsTo st.kind /= ToMono
+                                then " + " <> show (n + 1) else "")) ])
+                  [ 1, 2, 3, 4 ])
+          ]
+      -- **Two verbs where there was one.**
+      --
+      -- A voice used to hold one set, so sending could only mean "put it
+      -- here". It can now hold a stack, and the two things you might mean
+      -- are opposites: stand beside what is there, or take its place. The
+      -- additive one is offered first and plainly; the destructive one has
+      -- to be aimed at.
+      , case occupant of
+          Nothing ->
+            HH.button
+              [ HP.class_ (HH.ClassName "q-plain is-go")
+              , HP.disabled (st.cardBusy || Set.isEmpty st.keep)
+              , HE.onClick \_ -> SendToCard { place: true, append: false }
               ]
-          -- **Two verbs where there was one.**
-          --
-          -- A voice used to hold one set, so sending could only mean "put it
-          -- here". It can now hold a stack, and the two things you might mean
-          -- are opposites: stand beside what is there, or take its place. The
-          -- additive one is offered first and plainly; the destructive one has
-          -- to be aimed at.
-          , case occupant of
-              Nothing ->
-                HH.button
+              [ HH.text (show (Set.size st.keep) <> " to the kit") ]
+          Just r ->
+            HH.div [ HP.class_ (HH.ClassName "q-twoverbs") ]
+              [ HH.button
                   [ HP.class_ (HH.ClassName "q-plain is-go")
+                  , HP.disabled (st.cardBusy || Set.isEmpty st.keep)
+                  , HP.title "the layer selector picks between them"
+                  , HE.onClick \_ -> SendToCard { place: true, append: true }
+                  ]
+                  [ HH.text ("add as layer " <> show (Array.length r.sets + 1)) ]
+              , HH.button
+                  [ HP.class_ (HH.ClassName "q-plain is-replacing")
                   , HP.disabled (st.cardBusy || Set.isEmpty st.keep)
                   , HE.onClick \_ -> SendToCard { place: true, append: false }
                   ]
-                  [ HH.text (show (Set.size st.keep) <> " to the kit") ]
-              Just r ->
-                HH.div [ HP.class_ (HH.ClassName "q-twoverbs") ]
-                  [ HH.button
-                      [ HP.class_ (HH.ClassName "q-plain is-go")
-                      , HP.disabled (st.cardBusy || Set.isEmpty st.keep)
-                      , HP.title "the layer selector picks between them"
-                      , HE.onClick \_ -> SendToCard { place: true, append: true }
-                      ]
-                      [ HH.text ("add as layer "
-                          <> show (Array.length r.sets + 1)) ]
-                  , HH.button
-                      [ HP.class_ (HH.ClassName "q-plain is-replacing")
-                      , HP.disabled (st.cardBusy || Set.isEmpty st.keep)
-                      , HE.onClick \_ -> SendToCard { place: true, append: false }
-                      ]
-                      [ HH.text "replace" ]
-                  ]
-          -- **Say what is about to be destroyed, before it is.**
-          --
-          -- A kit's voice is an address, and sending to one that is taken
-          -- replaces what is there. That happened four times in a row without
-          -- a word being said, because the kit name stuck to the first take
-          -- and every later send addressed the same slot. The samples all
-          -- reached the disk; only the card's record of them collided. Naming
-          -- the occupant costs one line and makes the whole class of mistake
-          -- visible at the moment it can still be avoided.
-          -- **How the layer selector moves.** Only worth asking once a voice
-          -- holds more than one thing to choose between — and it is the whole
-          -- reason to use layers rather than slices, since these are the modes
-          -- where the module decides for itself.
-          , case occupant of
-              Just r | Array.length r.sets >= 1 ->
-                HH.label [ HP.class_ (HH.ClassName "q-field is-tight") ]
-                  [ HH.span_ [ HH.text "picked by" ]
-                  , HH.select [ HE.onValueChange SetLayerMode ]
-                      (map (\m -> HH.option
-                              [ HP.value m
-                              , HP.selected (m == (if st.layerMode == "" then r.mode else st.layerMode)) ]
-                              [ HH.text m ])
-                          [ "manual", "velocity", "random", "cyclic" ])
-                  ]
-              _ -> HH.text ""
-          , case occupant of
-              Nothing -> HH.text ""
-              Just r ->
-                HH.span [ HP.class_ (HH.ClassName "q-warn") ]
-                  [ HH.text ("voice " <> show st.voice <> " holds "
-                      <> joinWith ", " r.sets
-                      <> (if r.slicer > 0 then " in " <> show r.slicer <> " slots" else "")
-                      <> " — add stands beside them, replace puts this in their place") ]
-          ]
+                  [ HH.text "replace" ]
+              ]
+      -- **How the layer selector moves.** Only worth asking once a voice holds
+      -- more than one thing to choose between — and it is the whole reason to
+      -- use layers rather than slices, since these are the modes where the
+      -- module decides for itself.
+      , case occupant of
+          Just r | Array.length r.sets >= 1 ->
+            HH.label [ HP.class_ (HH.ClassName "q-field is-tight") ]
+              [ HH.span_ [ HH.text "picked by" ]
+              , HH.select [ HE.onValueChange SetLayerMode ]
+                  (map (\m -> HH.option
+                          [ HP.value m
+                          , HP.selected (m == (if st.layerMode == "" then r.mode else st.layerMode)) ]
+                          [ HH.text m ])
+                      [ "manual", "velocity", "random", "cyclic" ])
+              ]
+          _ -> HH.text ""
+      -- **Say what is about to be destroyed, before it is.**
+      --
+      -- A kit's voice is an address, and sending to one that is taken replaces
+      -- what is there. That happened four times in a row without a word being
+      -- said, because the kit name stuck to the first take and every later send
+      -- addressed the same slot. Naming the occupant costs one line and makes
+      -- the whole class of mistake visible while it can still be avoided.
+      , case occupant of
+          Nothing -> HH.text ""
+          Just r ->
+            HH.span [ HP.class_ (HH.ClassName "q-warn") ]
+              [ HH.text ("voice " <> show st.voice <> " holds "
+                  <> joinWith ", " r.sets
+                  <> (if r.slicer > 0 then " in " <> show r.slicer <> " slots" else "")
+                  <> " — add stands beside them, replace puts this in their place") ]
+      ]
 
   -- | What already sits at the address this send would write to — and only
   -- | when it is something else, since re-sending the same set is a refresh
   -- | rather than a loss.
   occupant =
     let kitName = if st.kit == "" then st.name else st.kit
-        setName = if st.name == "" then "set" else st.name
     in do
       v <- st.cardView
       Array.find

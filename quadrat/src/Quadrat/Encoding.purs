@@ -31,6 +31,7 @@ module Quadrat.Encoding
   , defaultExtent
   , total
   , voicesPer
+  , onCard
   , objections
   , Cell
   , cells
@@ -187,6 +188,21 @@ defaultExtent = case _ of
 -- | not after: a twelve-by-sixteen grid is **192 hits**.
 total :: Array Int -> Int
 total = Array.foldl (*) 1
+
+-- | **Can a set on this encoding be given an address?**
+-- |
+-- | A Rample set goes to a bank, a kit and a voice, and is nowhere until it
+-- | does. A SuperDirt set *is* the bank as stored — there is no voice to put
+-- | it in and no second act to perform. So placing is offered for one family
+-- | and meaningless for the other, and a page that shows bank/kit/voice beside
+-- | a SuperDirt set is asking a question with no answer.
+onCard :: Encoding -> Boolean
+onCard = case _ of
+  RampleLayers -> true
+  RampleSlices -> true
+  RampleGrid -> true
+  DirtBank -> false
+  DirtGrid -> false
 
 -- | How many of the module's four voices one such set occupies, before stereo
 -- | doubles it. Always one: every encoding here lives on a single voice, which
