@@ -241,6 +241,11 @@ type State =
   -- | divided, and where a set goes on a card — are each a handful of controls
   -- | consulted rarely and read never. On the page they crowded the two things
   -- | you look at constantly: the waveform and the sentence.
+  -- | **The last few seconds of input level**, for the sparkline beside the
+  -- | source. A single bar says how loud it is NOW, which is nothing at all
+  -- | between two hits; a short history says whether anything has arrived,
+  -- | which is the question actually being asked.
+  , levels :: Array Number
   , modal :: Maybe Modal
   , kept :: Boolean
   -- | **The overwrite question, held open.** A set whose name is already taken
@@ -250,7 +255,7 @@ type State =
   }
 
 -- | The two panels that became modals.
-data Modal = DivisionModal | ExportModal
+data Modal = DivisionModal | TriggerModal | PitchModal | ExportModal
 
 derive instance Eq Modal
 
@@ -330,7 +335,7 @@ component = H.mkComponent
       , sweepFork: Nothing, midiPorts: [], swept: false, sweepEdit: Nothing
       , schedule: [], sets: [], tables: [], tablesErr: "", overran: false
       , page: Bench, fill: Swept, source: 0, pivot: Nothing
-      , modal: Nothing, kept: false, confirmKeep: false }
+      , levels: [], modal: Nothing, kept: false, confirmKeep: false }
   , render
   , eval: H.mkEval H.defaultEval { handleAction = handleAction, initialize = Just Init }
   }
@@ -458,6 +463,10 @@ handleAction = case _ of
       pure (Aff.launchAff_ (Aff.killFiber (Aff.error "stopped") fiber))
   Poll -> do
     before <- H.get
+    -- The sparkline's history. Capped here rather than at render, so the
+    -- array cannot grow without bound over a long session.
+    H.modify_ \s0 ->
+      s0 { levels = Array.takeEnd 40 (Array.snoc s0.levels (levelNow s0)) }
     snap <- liftEffect Socket.latest
     pk <- liftEffect Socket.latestPeaks
     H.modify_ _ { looper = snap, peaks = pk }
@@ -1101,6 +1110,17 @@ restCv = do
 -- | `write` is false when the take is already on disk and only the dividing
 -- | is being asked again — which is what moving the slider does, and it should
 -- | not cost a re-export every time.
+-- | The chosen source's level as 0…1, from the daemon's own dB. -60 is the
+-- | floor: below it nothing is playing, and the sparkline says so by lying flat.
+levelNow :: State -> Number
+levelNow s =
+  let
+    ix = fromMaybe 1 (if s.source > 0 then Just s.source
+                      else map (_ + 1) (s.looper >>= \t -> Array.findIndex _.available t.sources))
+    db = maybe (-120.0) _.db (s.looper >>= \t -> Array.index t.sources (ix - 1))
+  in
+    max 0.0 (min 1.0 ((db + 60.0) / 60.0))
+
 analyse :: forall o m. MonadAff m => Boolean -> H.HalogenM State Action () o m Unit
 analyse write = do
   st <- H.get
@@ -1309,20 +1329,28 @@ render st =
                       Swept -> expected
                       Played -> waiting
                 ]
-            , HH.div [ HP.class_ (HH.ClassName "q-cols") ]
-                [ HH.section [ HP.class_ (HH.ClassName "q-col is-narrow") ]
-                    [ HH.h2_ [ HH.text "Division" ]
-                    , divisionSummary
-                    , sendRow
-                    ]
-                , HH.section [ HP.class_ (HH.ClassName "q-col") ]
-                    [ HH.h2_ [ HH.text "The take" ]
-                    , case st.fill of
-                        Swept -> SweepView.settings (sweepHandlers)
-                        Played -> handPanel
-                    , SweepView.body sweepHandlers
-                    ]
+            -- | **Four doors, and the curves.**
+            -- |
+            -- | Everything between the take and the curves is consulted, set,
+            -- | and then not read again: how the take was divided, what
+            -- | strikes it, what pitches it plays, where it goes afterwards.
+            -- | Each was a panel competing with the waveform for the page.
+            -- | Behind a door they cost one line, and the line says what is
+            -- | inside it rather than showing you.
+            , HH.div [ HP.class_ (HH.ClassName "q-doors") ]
+                [ door DivisionModal "Division"
+                    (if Array.null st.regions then "nothing divided yet"
+                     else show (Set.size st.keep) <> " of "
+                            <> show (Array.length st.regions) <> " kept")
+                    (not (Array.null st.regions) || hasTake)
+                , door TriggerModal "Trigger" triggerSays true
+                , door PitchModal "Pitch" pitchSays2 true
+                , door ExportModal "Export to card"
+                    (if placeable then "bank " <> st.bank <> " · voice " <> show st.voice
+                     else "SuperDirt — already a bank")
+                    (placeable && not (Set.isEmpty st.keep))
                 ]
+            , sendRow
             , HH.section [ HP.class_ (HH.ClassName "q-curverow") ]
                 [ SweepView.curves sweepHandlers
                 , case st.pivot of
@@ -1331,6 +1359,18 @@ render st =
                 ]
             , case st.modal of
                 Just DivisionModal -> modalBox "Division details" divisionPanel
+                Just TriggerModal -> modalBox "Trigger"
+                  (HH.div_
+                    [ case st.fill of
+                        Swept -> SweepView.settings sweepHandlers
+                        Played -> handPanel
+                    , SweepView.triggerView sweepHandlers
+                    ])
+                -- Opened with the pitch parameter ALREADY expanded: the reason
+                -- to come in here is the values, and a door that opens onto a
+                -- second door is a door too many.
+                Just PitchModal -> modalBox "Pitch"
+                  (SweepView.pitchView (sweepHandlers { open = pitchIx }))
                 Just ExportModal -> modalBox "Export to card" placeBlock
                 Nothing -> HH.text ""
             ]
@@ -1354,6 +1394,33 @@ render st =
   -- rather than from a clock here: a page that keeps its own time drifts from
   -- the recording it is describing.
   elapsed = maybe "0" (\c -> fmt c.secs) cp
+
+  -- | A door: what is behind it, and what it currently says. The summary is
+  -- | the point — a button that only says "Trigger" makes you open it to
+  -- | learn anything, which is the panel it replaced with extra steps.
+  door m label says live =
+    HH.button
+      [ HP.class_ (HH.ClassName ("q-door" <> if live then "" else " is-moot"))
+      , HE.onClick \_ -> OpenModal (Just m)
+      ]
+      [ HH.span [ HP.class_ (HH.ClassName "q-doorname") ] [ HH.text label ]
+      , HH.span [ HP.class_ (HH.ClassName "q-doorsays") ] [ HH.text says ]
+      ]
+
+  triggerSays = case triggerBy of
+    "hand" -> "you play it"
+    "es5" -> "ES-5 gate " <> maybe "?" show st.sweep.trigger.es5
+    "es9" -> "bus " <> maybe "?" show st.sweep.trigger.gate
+               <> maybe "" (\b -> " · ES-9 jack " <> show (b - 7)) st.sweep.trigger.gate
+    _ -> "note " <> maybe "?" show st.sweep.trigger.note
+           <> (if st.sweep.port == "" then " · no MIDI port" else " · " <> st.sweep.port)
+
+  pitchSays2 = case Array.findMap _.pitch st.sweep.params of
+    Nothing -> "unpitched"
+    Just ps -> ps.label <> " · " <> Pitch.noteName ps.noteLo
+                 <> "–" <> Pitch.noteName ps.noteHi
+
+  pitchIx = Array.findIndex (\q -> Maybe.isJust q.pitch) st.sweep.params
 
   sweepHandlers =
     { ports: st.midiPorts, open: st.sweepEdit, plan: st.sweep
@@ -1388,36 +1455,6 @@ render st =
           , inner
           ]
       ]
-
-  -- | What the division came to, in the column — the numbers you read, with
-  -- | the controls that produced them a click away.
-  divisionSummary
-    | Array.null st.regions =
-        HH.p [ HP.class_ (HH.ClassName "q-muted") ]
-          [ HH.text (if hasTake then "Recorded, not divided yet."
-                     else "Nothing recorded yet.") ]
-    | otherwise =
-        HH.div [ HP.class_ (HH.ClassName "q-divsum") ]
-          [ HH.p [ HP.class_ (HH.ClassName "q-divcount") ]
-              [ HH.text (show (Set.size st.keep) <> " of "
-                  <> show (Array.length st.regions) <> " kept") ]
-          , HH.p [ HP.class_ (HH.ClassName "q-muted") ]
-              [ HH.text (if Array.null st.schedule
-                          then "divided by " <> Divider.name st.divider
-                          else "divided by the schedule that made it") ]
-          , HH.div [ HP.class_ (HH.ClassName "q-divbtns") ]
-              [ HH.button
-                  [ HP.class_ (HH.ClassName "q-plain"), HE.onClick \_ -> KeepAll true ]
-                  [ HH.text "Keep all" ]
-              , HH.button
-                  [ HP.class_ (HH.ClassName "q-plain"), HE.onClick \_ -> KeepAll false ]
-                  [ HH.text "Keep none" ]
-              , HH.button
-                  [ HP.class_ (HH.ClassName "q-plain")
-                  , HE.onClick \_ -> OpenModal (Just DivisionModal) ]
-                  [ HH.text "Division details…" ]
-              ]
-          ]
 
   -- | **The whole specification, as one sentence.**
   -- |
@@ -1567,11 +1604,22 @@ render st =
     let n = Encoding.total st.sweep.extent
     in fmt (Int.toNumber (n * st.sweep.spacingMs) / 1000.0) <> " s"
 
-  -- | A dropdown that reads as a word in a sentence rather than as a control.
+  -- | **A dropdown that is exactly as wide as the word it is showing.**
+  -- |
+  -- | A native `select` sizes itself to its WIDEST option, so "Rample ·
+  -- | layers" was underlined to the width of "SuperDirt · a grid, flattened"
+  -- | and the sentence trailed blank underscores after half its slots. The
+  -- | visible word is therefore a span, which sizes to its content, with the
+  -- | select laid transparently over it — native menu, native keyboard
+  -- | handling, correct width.
   sel k cur act opts =
-    HH.select
-      [ HP.class_ (HH.ClassName k), HE.onValueChange act ]
-      (map (\o -> HH.option [ HP.value o.v, HP.selected (o.v == cur) ] [ HH.text o.t ]) opts)
+    HH.span [ HP.class_ (HH.ClassName ("q-slotwrap " <> k)) ]
+      [ HH.span [ HP.class_ (HH.ClassName "q-slottext") ]
+          [ HH.text (fromMaybe cur (map _.t (Array.find (\o -> o.v == cur) opts))) ]
+      , HH.select
+          [ HP.class_ (HH.ClassName "q-slotsel"), HE.onValueChange act ]
+          (map (\o -> HH.option [ HP.value o.v, HP.selected (o.v == cur) ] [ HH.text o.t ]) opts)
+      ]
 
   -- | **The page's own line**, which changes with the page because the two
   -- | halves are not doing the same thing and should not claim to be.
@@ -1618,13 +1666,21 @@ render st =
               -- one press, and the press still says out loud which input it
               -- is about to arm — which is the property the chips were there
               -- for and the only one worth keeping.
+              -- **A verb, not a sentence.** The button used to name the input
+              -- — "Run on board" — because nothing else did. The statement
+              -- names it now, and better, so what is left here is the act.
               [ HH.button
-                  [ HP.class_ (HH.ClassName "q-big is-go")
+                  [ HP.class_ (HH.ClassName "q-big is-rec")
                   , HP.disabled (st.looper == Nothing)
+                  , HP.title (if st.fill == Swept
+                                then "play the schedule and record the lot as one take"
+                                else "arm, and record what you play")
                   , HE.onClick \_ ->
                       if st.fill == Swept then RunSweep srcNow else ArmOn srcNow
                   ]
-                  [ HH.text ((if st.fill == Swept then "Run on " else "Arm on ") <> srcName) ]
+                  [ HH.span [ HP.class_ (HH.ClassName "q-recdot") ] []
+                  , HH.text "Record"
+                  ]
               -- | **The input is silent, said before the run and not after.**
               -- |
               -- | A whole transect went to an input with nothing patched to
@@ -1764,21 +1820,34 @@ render st =
                                             (top.sources # \ss -> Array.index ss (srcNow - 1))
                                          then "" else " — off")) ]
             ]
-        , HH.div [ HP.class_ (HH.ClassName "q-meter") ]
-            [ HH.div
-                [ HP.class_ (HH.ClassName ("q-meterbar" <> if quiet then " is-quiet" else ""))
-                , HP.style ("width: " <> show (Int.round (meterPc * 100.0)) <> "%")
-                ]
-                []
+        -- | **A sparkline, not a meter.**
+        -- |
+        -- | A full-width bar is the loudest thing on the page and says only
+        -- | how loud the input is at this instant — which, between two hits,
+        -- | is nothing at all. Two seconds of history in eight characters
+        -- | answers the question that is actually being asked: has anything
+        -- | arrived? The hits are visible as they land.
+        , HH.span
+            [ HP.class_ (HH.ClassName ("q-spark" <> if quiet then " is-quiet" else ""))
+            , HP.title "the last two seconds of input level"
             ]
+            [ HH.text sparkline ]
         , HH.span
             [ HP.class_ (HH.ClassName ("q-meterdb" <> if quiet then " is-quiet" else "")) ]
             [ HH.text (fmt srcDb <> " dB") ]
         ]
 
-  -- | Where the bar sits, 0 at -60 dB and full at 0. Below -60 nobody is
-  -- | playing into it, so the bar is empty and says so by being empty.
-  meterPc = clampN 0.0 1.0 ((srcDb + 60.0) / 60.0)
+  -- | Eight block characters, oldest to newest. Empty history draws the
+  -- | floor rather than nothing, so the line does not appear and disappear.
+  sparkline =
+    let
+      blocks = [ "\x2581", "\x2582", "\x2583", "\x2584", "\x2585", "\x2586", "\x2587", "\x2588" ]
+      pick v = fromMaybe "\x2581"
+        (Array.index blocks (clamp 0 7 (Int.round (clampN 0.0 1.0 v * 7.0))))
+      recent = Array.takeEnd 20 st.levels
+      padded = Array.replicate (20 - Array.length recent) 0.0 <> recent
+    in
+      Array.fold (map pick padded)
 
   -- Whichever is chosen, or the first the daemon says is available.
   srcNow =

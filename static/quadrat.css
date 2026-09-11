@@ -281,9 +281,6 @@ body {
   border-top: 1px solid var(--rule); padding-top: 14px; margin-top: 16px; }
 .q-listen select { padding: 6px 8px; border: 1px solid var(--rule); border-radius: 3px;
   background: #fff; font: inherit; font-size: 14px; min-width: 128px; }
-.q-meter { flex: 1; height: 10px; background: #eeeef1; border-radius: 2px; overflow: hidden; margin-bottom: 5px; }
-.q-meterbar { height: 100%; background: var(--live); transition: width .08s linear; }
-.q-meterbar.is-quiet { background: var(--hot); }
 .q-meterdb { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums;
   min-width: 66px; text-align: right; margin-bottom: 3px; }
 .q-meterdb.is-quiet { color: var(--hot); font-weight: 600; }
@@ -568,6 +565,15 @@ body {
   border-radius: 0; padding: 0 2px; cursor: pointer;
   -webkit-appearance: none; appearance: none;
 }
+/* A native select sizes to its WIDEST option, so the sentence trailed blank
+   underscores after half its slots. The visible word is a span (which sizes
+   to its content) with the select laid transparently over it. */
+.q-slotwrap { position: relative; display: inline-block; }
+.q-slottext { pointer-events: none; }
+.q-slotsel {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  opacity: 0; cursor: pointer; font: inherit; border: 0; padding: 0;
+}
 .q-slot:hover { border-bottom-color: var(--ink); background: rgba(22,22,26,0.04); }
 .q-slot:focus { outline: 0; border-bottom: 1px solid var(--hot); }
 .q-slot.is-num { width: 2.6em; text-align: right; -moz-appearance: textfield; }
@@ -600,17 +606,10 @@ body {
    being read. */
 .q-hero { margin-bottom: 22px; }
 .q-hero .q-whole { margin-bottom: 10px; }
-.q-cols { display: grid; grid-template-columns: minmax(230px, 300px) 1fr; gap: 32px; align-items: start; }
-.q-col { min-width: 0; }
-.q-col h2 { margin: 0 0 12px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); font-weight: 600; }
 .q-curverow { margin-top: 26px; padding-top: 20px; border-top: 1px solid var(--rule); }
 
 /* The division, as numbers. The controls that produced them are a click
    away — decided once, read never. */
-.q-divsum { display: flex; flex-direction: column; gap: 6px; }
-.q-divcount { margin: 0; font-size: 19px; font-variant-numeric: tabular-nums; }
-.q-divsum p.q-muted { margin: 0; font-size: 12px; }
-.q-divbtns { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 .q-divpanel { display: flex; flex-direction: column; gap: 14px; }
 
 /* Cards in a line: the shape above, what it means below. Side by side they
@@ -638,3 +637,37 @@ body {
 .q-modalhead { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; }
 .q-modalhead h2 { margin: 0; flex: 1; font-size: 13px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); font-weight: 600; }
 .q-modal .q-place { padding-left: 0; border-left: 0; }
+
+/* ── Four doors ──────────────────────────────────────────────────────────
+   Everything between the take and the curves is set once and then not read
+   again. Behind a door each costs one line — and the line says what is
+   inside rather than making you open it to find out, which is the whole
+   difference between a door and a panel with extra steps. */
+.q-doors { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0 14px; }
+.q-door {
+  flex: 1 1 190px; text-align: left; cursor: pointer;
+  border: 1px solid var(--rule); border-radius: 3px; background: #fff;
+  padding: 9px 13px; font: inherit; display: flex; flex-direction: column; gap: 2px;
+}
+.q-door:hover { border-color: var(--ink); }
+.q-doorname { font-size: 13px; font-weight: 500; }
+.q-doorsays { font-size: 11px; color: var(--muted); }
+
+/* Record is the one irreversible-feeling act on the page and the only red
+   thing on it. The dot is the convention; the word is the verb. */
+.q-big.is-rec {
+  background: var(--hot); color: #fff; border-color: var(--hot);
+  display: inline-flex; align-items: center; gap: 9px;
+}
+.q-big.is-rec:hover:enabled { background: #b03a22; border-color: #b03a22; }
+.q-recdot { width: 10px; height: 10px; border-radius: 50%; background: #fff; display: inline-block; }
+
+/* The input, as two seconds of history in eight characters rather than as
+   the loudest bar on the page. A single bar says how loud it is NOW, which
+   between two hits is nothing at all. */
+.q-spark {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 15px; line-height: 1; letter-spacing: -0.06em;
+  color: var(--live); white-space: pre;
+}
+.q-spark.is-quiet { color: var(--rule); }

@@ -14,7 +14,8 @@
 -- | dialog is a desk you cannot work.
 module Quadrat.SweepView
   ( Handlers
-  , body
+  , triggerView
+  , pitchView
   , curves
   , settings
   ) where
@@ -135,19 +136,23 @@ settings h =
           , HE.onValueInput (h.msg <<< act) ]
       ]
 
--- | The take's apparatus: what strikes the instrument and at what pitch.
-body :: forall w act. Handlers act -> HH.HTML w act
-body h = part h false
-
--- | **The curves, given a row of their own.**
+-- | **Three surfaces from one renderer.**
 -- |
--- | Split out rather than moved, because every helper a curve needs lives in
--- | one where-clause and duplicating them to gain a second entry point would
--- | be two renderers to keep in step. One function, one flag, two surfaces.
-curves :: forall w act. Handlers act -> HH.HTML w act
-curves h = part h true
+-- | Trigger, pitch and curves each answer a different question at a different
+-- | moment, and two of the three now live behind their own door. Split by a
+-- | tag rather than by moving code: every helper they need lives in one
+-- | where-clause, and duplicating those to gain three entry points would be
+-- | three renderers to keep in step.
+triggerView :: forall w act. Handlers act -> HH.HTML w act
+triggerView h = part h 0
 
-part :: forall w act. Handlers act -> Boolean -> HH.HTML w act
+pitchView :: forall w act. Handlers act -> HH.HTML w act
+pitchView h = part h 1
+
+curves :: forall w act. Handlers act -> HH.HTML w act
+curves h = part h 2
+
+part :: forall w act. Handlers act -> Int -> HH.HTML w act
 -- | **Three optional sections, ruled apart: what strikes it, what pitch it is
 -- | struck at, and what else moves.**
 -- |
@@ -157,10 +162,12 @@ part :: forall w act. Handlers act -> Boolean -> HH.HTML w act
 -- | three is independently optional and they are answered at different times:
 -- | the trigger when the cable went in, the pitch when you chose the
 -- | instrument, the curves every single run.
-part h onlyCurves =
+part h which =
   HH.div [ cls "q-sweep" ]
-    ( if onlyCurves then [ paramsSection ]
-      else [ triggerSection, HH.hr [ cls "q-swrule" ], pitchSection ] )
+    ( case which of
+        0 -> [ triggerSection ]
+        1 -> [ pitchSection ]
+        _ -> [ paramsSection ] )
   where
   p = h.plan
 
