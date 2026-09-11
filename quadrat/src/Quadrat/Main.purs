@@ -1353,6 +1353,7 @@ render st =
           ]
       , HH.p [ HP.class_ (HH.ClassName "q-sayfine") ]
           ( [ HH.text "Calibration scheme: ", slotCalib ]
+              <> pitchSays
               <> sweptSays
               <> [ HH.text " · about ", HH.text runSecs, HH.text " to record" ] )
       ]
@@ -1418,6 +1419,47 @@ render st =
           (map (\t -> { v: t.label, t: t.label <> " · " <> t.module }) st.tables) )
 
   pitchLabel = map _.label (Array.findMap _.pitch st.sweep.params)
+
+  -- | **What the notes actually are**, said where the specification is read.
+  -- |
+  -- | A range and a cell count are two numbers, and the interval between the
+  -- | notes is the thing you hear — but it is neither of them, it is their
+  -- | quotient. `bia-bass` measures G1-D6, so twelve cells over its span step
+  -- | five semitones and the run climbs in FOURTHS. That is a legitimate thing
+  -- | to ask for (twelve samples across five octaves is how you fill a sparse
+  -- | sampler) and a terrible thing to get by accident, which is exactly the
+  -- | case for saying it rather than preventing it.
+  -- |
+  -- | Not auto-corrected for the same reason. A pitch axis picked fresh
+  -- | defaults to one degree per cell; one restored from an older plan keeps
+  -- | the range it was given, and gets told.
+  pitchSays = case Array.findIndex (\q -> Maybe.isJust q.pitch) st.sweep.params of
+    Nothing -> []
+    Just i -> case Array.index st.sweep.params i >>= _.pitch of
+      Nothing -> []
+      Just ps ->
+        let
+          n = max 1 (Encoding.total st.sweep.extent)
+          span = ps.noteHi - ps.noteLo
+          step = Int.toNumber span / Int.toNumber (max 1 (n - 1))
+        in
+          [ HH.text (" · " <> Pitch.noteName ps.noteLo <> "–"
+                       <> Pitch.noteName ps.noteHi <> " ") ]
+            <> if span == n - 1
+                 then [ HH.text "chromatic" ]
+                 else
+                   [ HH.span [ HP.class_ (HH.ClassName "q-sayodd") ]
+                       [ HH.text ("in steps of " <> fmt step <> " semitones") ]
+                   , HH.button
+                       [ HP.class_ (HH.ClassName "q-sayfix")
+                       , HP.title ("one semitone per sample — "
+                             <> Pitch.noteName ps.noteLo <> "–"
+                             <> Pitch.noteName (ps.noteLo + n - 1))
+                       , HE.onClick \_ ->
+                           SweepMsg (Sweep.SetPitchHi i (show (ps.noteLo + n - 1)))
+                       ]
+                       [ HH.text "make it chromatic" ]
+                   ]
 
   -- | What is being moved, by name only. The shapes and the ranges are in the
   -- | panel; this says how many knobs are in play, which is the part you want

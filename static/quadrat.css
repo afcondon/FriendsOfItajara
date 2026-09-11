@@ -587,3 +587,14 @@ body {
 /* The input is chosen in the sentence; only the measurement stays by the
    Run button, because a meter moves and a name does not. */
 .q-srcname { font-weight: 500; }
+
+/* An interval that is not a semitone is legitimate and is almost never
+   what you meant, so it is stated in the hot colour with the repair
+   beside it — rather than prevented, which would remove a real use. */
+.q-sayodd { color: var(--hot); font-weight: 600; }
+.q-sayfix {
+  border: 1px solid var(--hot); background: #fff; color: var(--hot);
+  border-radius: 3px; cursor: pointer; font: inherit; font-size: 11px;
+  padding: 1px 7px; margin-left: 6px;
+}
+.q-sayfix:hover { background: var(--hot); color: #fff; }
