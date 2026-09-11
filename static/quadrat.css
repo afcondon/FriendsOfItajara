@@ -686,3 +686,13 @@ body {
    slider moves them all, because there is one value and each slider is a
    view of it. */
 .q-modal .q-keep { flex-direction: column; align-items: flex-start; gap: 10px; }
+
+
+/* A slice whose sound had not finished when the slice did. Hatched rather than
+   coloured: it is a caution about how the sample may be USED, not a fault in
+   the take, and the keep/drop colours still have to read through it. */
+.q-seg.is-ringing {
+  background-image: repeating-linear-gradient(
+    135deg, rgba(200,80,31,.30) 0 4px, rgba(200,80,31,0) 4px 9px);
+  box-shadow: inset 0 -2px 0 #c8501f;
+}

@@ -127,6 +127,19 @@ type Meant =
   , rms :: Number
   , zcr :: Number
   , tilt :: Number
+  -- | **How long this cell took to go quiet**, in seconds from the region's
+  -- | start, against `floor` — the take's noise floor as a fraction of its peak.
+  -- | Two numbers and no verdict, because "long enough" depends on what the
+  -- | sample is for.
+  -- |
+  -- | Stored because it is the input to the NEXT run: a sweep measured once can
+  -- | be re-run with a per-cell spacing fitted to what each cell actually
+  -- | needed. That is the only way to size a transect whose own Decay or
+  -- | velocity is one of the swept parameters — a uniform worst-case spacing
+  -- | pays the longest decay on every cell, and two probes at the extremes
+  -- | cannot see the middle.
+  , decay :: Number
+  , floor :: Number
   -- `note` is the MIDI note a pitch parameter landed on, `-1` otherwise. It
   -- rides with the measurements rather than being derivable from `level`,
   -- because deriving it needs the calibration table and a stored set has to be

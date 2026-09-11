@@ -352,6 +352,67 @@ send v = do
   ok <- liftEffect (Socket.send (c <> "@0"))
   unless ok $ H.modify_ (note ("no daemon — " <> c <> " went nowhere"))
 
+-- | **Does a region end quiet, or is it still sounding when it is cut?**
+-- |
+-- | "Clean, with no overlap" is a property of the RECORDING, not something a
+-- | spacing gives you for free. Measured 2026-09-11: at 3000 ms on a BIA the
+-- | tail was still at 0.031 against a noise floor of 0.022 when the next hit
+-- | landed — so every sample carried the front of its successor, and any layer
+-- | stitched from them would click at every join.
+-- |
+-- | Read off the envelope the daemon already drew, so it costs no second pass
+-- | over the audio and no round trip. `tail` is the loudest the region's last
+-- | 60 ms got; `floor` is the quietest the whole take ever got; both are
+-- | fractions of the take's own peak, so they mean the same thing whatever the
+-- | gain was.
+-- |
+-- | **Stored rather than judged.** How much tail is too much depends on what
+-- | the sample is for: a layer stitched into a column wants silence at the
+-- | join, a one-shot fired from a pad does not care. So the set records two
+-- | numbers and the page draws the comparison — the decision stays with whoever
+-- | is sampling, which is where it belongs.
+type Settled = { decay :: Number, floor :: Number }
+
+settledFor
+  :: Socket.Peaks -> Number
+  -> Array { start :: Number, end :: Number }
+  -> Array Settled
+settledFor pk total rs =
+  let
+    n = Array.length pk.hi
+    mag v = if v < 0 then -v else v
+    ampAt i = max (mag (fromMaybe 0 (Array.index pk.hi i)))
+                  (mag (fromMaybe 0 (Array.index pk.lo i)))
+    amps = map ampAt (Array.range 0 (max 0 (n - 1)))
+    sorted = Array.sort amps
+    loudest = Int.toNumber (fromMaybe 1 (Array.last sorted))
+    quietest = fromMaybe 0 (Array.head sorted)
+    scale = if loudest <= 0.0 then 1.0 else loudest
+    -- **Three times the take's OWN floor, never an absolute level.** The ES-9's
+    -- inputs are DC-coupled and that offset alone reads as -32.6 dBFS, so
+    -- anything measured against a constant is measuring the wiring.
+    thr = 3 * max 1 quietest
+    one r =
+      let span = max 0.001 (r.end - r.start)
+          bk = Wave.bucketsFor n total r.start r.end
+          inside = Array.slice bk.from bk.to amps
+          m = max 1 (Array.length inside)
+      in { decay: maybe 0.0
+             (\i -> span * Int.toNumber (i + 1) / Int.toNumber m)
+             (Array.findLastIndex (\v -> v > thr) inside)
+         , floor: Int.toNumber quietest / scale
+         }
+  in
+    map one rs
+
+-- | **Still sounding when it was cut**, so this sample carries the front of its
+-- | successor and a layer stitched from it will click at the join.
+-- |
+-- | The comparison is the page's opinion; the set stores the numbers. A
+-- | one-shot fired from a pad does not care.
+overlapping :: Settled -> { start :: Number, end :: Number } -> Boolean
+overlapping x r = x.decay >= 0.98 * max 0.001 (r.end - r.start)
+
 note :: String -> State -> State
 note m s = s { log = Array.takeEnd 10 (Array.snoc s.log m) }
 
@@ -627,6 +688,10 @@ handleAction = case _ of
         -- storing; what is missing is a description of an instrument that was
         -- never driven.
         runSteps = if Array.null st.schedule then [] else Sweep.steps st.sweep
+        settles = case st.peaks of
+          Nothing -> []
+          Just pk -> settledFor pk (max 0.001 (maybe 1.0 _.secs (cap st)))
+                       (map (\r -> { start: r.start, end: r.end }) st.regions)
         kept = Array.catMaybes
           (Array.mapWithIndex
             (\i r ->
@@ -635,6 +700,11 @@ handleAction = case _ of
                 { cell: maybe [] _.cell (Array.index runSteps i)
                 , start: r.start, end: r.end
                 , peak: r.peak, rms: r.rms, zcr: r.zcr, tilt: r.tilt
+                -- **Whether the sound had finished when the region did.** See
+                -- `settledFor`: two numbers, no verdict, because the verdict
+                -- belongs to whoever is going to use the sample.
+                , decay: maybe 0.0 _.decay (Array.index settles i)
+                , floor: maybe 0.0 _.floor (Array.index settles i)
                 , means: maybe [] _.means (Array.index runSteps i)
                 })
             st.regions)
@@ -2345,21 +2415,38 @@ render st =
   -- | numbered boxes that used to be the only way to reach a position are
   -- | gone: the piece itself is a better handle on the sample than a box
   -- | standing in for it.
+  ringingSays =
+    " STILL SOUNDING at its own end, so this sample carries the front of the next one and a layer stitched from it will click at the join. Give the sweep more space, or keep it as a one-shot."
+
   segment i r left wide =
     let
       kept = Set.member i st.keep
       w = witness i
+      -- **Whether the sound had finished when this region did.** Shown on the
+      -- object it is about rather than in a panel: a sample still sounding at
+      -- its own end carries the front of the next one, and stitched into a
+      -- layer it clicks at the join. See `settledFor`.
+      still = case st.peaks of
+        Nothing -> false
+        Just pk ->
+          maybe false (\x -> overlapping x { start: r.start, end: r.end })
+            (Array.index
+              (settledFor pk (max 0.001 (maybe 1.0 _.secs (cap st)))
+                 (map (\q -> { start: q.start, end: q.end }) st.regions)) i)
     in
       HH.div
         [ HP.class_ (HH.ClassName ("q-seg"
             <> (if kept then "" else " is-dropped")
             <> (if st.playing == Just i then " is-playing" else "")
-            <> (if st.pivot == Just i then " is-open" else "")))
+            <> (if st.pivot == Just i then " is-open" else "")
+            <> (if still then " is-ringing" else "")))
         , style ("left:" <> left r.start
                    <> ";width:" <> wide (max 0.0 (r.end - r.start))
                    <> (if kept then ";background:" <> w.tint else ""))
         , HP.title (w.label <> " — " <> fmt (r.end - r.start) <> " s at "
-                      <> fmt r.start <> " s. Click for every parameter here.")
+                      <> fmt r.start <> " s."
+                      <> (if still then ringingSays else "")
+                      <> " Click for every parameter here.")
         , HE.onMouseEnter \_ -> HoverPlay i
         , HE.onClick \_ -> OpenPivot (if st.pivot == Just i then Nothing else Just i)
         ]
