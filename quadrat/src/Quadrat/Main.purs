@@ -732,7 +732,23 @@ handleAction = case _ of
             handleAction (SweepMsg (Sweep.SetCv i "8"))
             handleAction (PickPitch i label)
 
-  OpenModal m -> H.modify_ _ { modal = m }
+  -- | **Opening the pitch door expands its parameter as STATE**, not as an
+  -- | override.
+  -- |
+  -- | The modal used to force `open = pitchIx` in the handlers it passed down,
+  -- | which meant the desk was always showing and the close button beside it
+  -- | could not win: it set `sweepEdit = Nothing` and the next render forced
+  -- | the value straight back. A button that cannot change anything is worse
+  -- | than an absent one.
+  OpenModal m -> do
+    st <- H.get
+    let ix = Array.findIndex (\q -> Maybe.isJust q.pitch) st.sweep.params
+    H.modify_ _
+      { modal = m
+      , sweepEdit = case m of
+          Just PitchModal -> ix
+          _ -> st.sweepEdit
+      }
 
   SetPitched v -> do
     st <- H.get
@@ -1041,6 +1057,12 @@ runSweep = do
   -- attack` wants in front of the first onset anyway.
   H.liftAff (delay (Milliseconds 400.0))
   for_ (Sweep.steps p) \s -> do
+    -- **Pace by the clock, not by hope.** The spacing used to be delayed in
+    -- full AFTER the sends, so the period was sends PLUS spacing: a run asking
+    -- for 3000 ms stepped every 3130 ms and a "36.0 s" take took 37.6 s.
+    -- Nothing was wrong downstream — the schedule is measured — but the number
+    -- you typed was not the number you got.
+    t0 <- liftEffect Rig.nowMs
     H.modify_ _ { sweepAt = Just s.index }
     unless (Array.null s.cv && Array.null s.esx) $ void $
       H.liftAff (attempt (toAffE (Rig.setCv { set: s.cv, esx: s.esx })))
@@ -1061,7 +1083,8 @@ runSweep = do
     when (p.port /= "") $ for_ p.trigger.note \n -> liftEffect $
       Rig.sendNote { port: p.port, channel: p.trigger.channel, note: n
                    , velocity: p.trigger.velocity, ms: p.trigger.ms }
-    H.liftAff (delay (Milliseconds (Int.toNumber p.spacingMs)))
+    t1 <- liftEffect Rig.nowMs
+    H.liftAff (delay (Milliseconds (max 0.0 (Int.toNumber p.spacingMs - (t1 - t0)))))
   -- The last hit gets the same gap as the others and then a little more, so
   -- that closing the take is never the thing that ends its decay. A final
   -- sample that is short because the recording stopped is indistinguishable
@@ -1363,8 +1386,7 @@ render st =
                 -- Opened with the pitch parameter ALREADY expanded: the reason
                 -- to come in here is the values, and a door that opens onto a
                 -- second door is a door too many.
-                Just PitchModal -> modalBox "Pitch"
-                  (SweepView.pitchView (sweepHandlers { open = pitchIx }))
+                Just PitchModal -> modalBox "Pitch" (SweepView.pitchView sweepHandlers)
                 Just SaveModal -> modalBox "Save to disk" keepBlock
                 Just ExportModal -> modalBox "Export to card" placeBlock
                 Nothing -> HH.text ""
@@ -1461,8 +1483,6 @@ render st =
     Nothing -> "unpitched"
     Just ps -> ps.label <> " · " <> Pitch.noteName ps.noteLo
                  <> "–" <> Pitch.noteName ps.noteHi
-
-  pitchIx = Array.findIndex (\q -> Maybe.isJust q.pitch) st.sweep.params
 
   sweepHandlers =
     { ports: st.midiPorts, open: st.sweepEdit, plan: st.sweep

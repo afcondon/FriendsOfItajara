@@ -87,3 +87,12 @@ export const pulse = (req) => () =>
 // form for them, so `server.mjs` holds it. See its note.
 export const es5pulse = (req) => () =>
   post("/api/cv", { es5pulse: { bit: req.bit, ms: req.ms } });
+
+// **A monotonic clock, for pacing the run.**
+//
+// `runSweep` used to delay the full spacing AFTER doing its sends, so the
+// period was sends PLUS spacing: measured 2026-09-11, a run asking for 3000 ms
+// stepped every 3125-3136 ms and a "36.0 s" take took 37.6 s. The schedule is
+// measured so nothing was WRONG — but the number you typed was not the number
+// you got, and the estimate beside it was a 4% lie.
+export const nowMs = () => performance.now();

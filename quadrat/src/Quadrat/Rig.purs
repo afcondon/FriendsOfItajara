@@ -28,6 +28,7 @@ module Quadrat.Rig
   , setCv
   , pulse
   , es5pulse
+  , nowMs
   ) where
 
 import Data.Unit (Unit)
@@ -85,3 +86,7 @@ foreign import pulse
 -- | bit and a state, so the hold happens in `server.mjs` rather than here,
 -- | where a round trip would land inside the gate.
 foreign import es5pulse :: { bit :: Int, ms :: Int } -> Effect (Promise Sent)
+
+-- | A monotonic clock in milliseconds, so a run can pace itself by the time it
+-- | has already spent rather than by hope. See `Rig.js`.
+foreign import nowMs :: Effect Number
