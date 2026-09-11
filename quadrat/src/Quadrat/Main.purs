@@ -1273,6 +1273,20 @@ runSweep = do
   -- wanted, but it IS written to disk on the way through, because the division
   -- is done by `msm` over a file.
   when st1.dry do
+    -- **Wait until the daemon says the capture is drawable.**
+    --
+    -- `holds` is FALSE while a capture is running and true once it has closed
+    -- — measured 2026-09-11, mid-capture: `on: true, frames: 76288, holds:
+    -- false`. The page's snapshot is up to a thirtieth of a second behind that,
+    -- so dividing straight after `Close` asks `analyse` to work on a capture
+    -- the page still believes is empty, and it correctly refuses. The dry run
+    -- then measured nothing, silently, and left the pacing switch disabled.
+    let settle n = do
+          stw <- H.get
+          unless (n <= 0 || maybe false _.holds (cap stw)) do
+            H.liftAff (delay (Milliseconds 100.0))
+            settle (n - 1)
+    settle 40
     handleAction Analyse
     st2 <- H.get
     case st2.peaks of
@@ -1296,7 +1310,9 @@ runSweep = do
             cut = Array.length
                     (Array.filter identity (Array.zipWith overlapping ds bounds))
         if Array.null paced
-          then H.modify_ (note "dry run: nothing was divided, so nothing measured"
+          then H.modify_ (note "dry run: the take did not divide, so no timings \
+                                \were measured — divide it by hand and look at \
+                                \what came back"
                             <<< _ { dry = false })
           else do
             let said = "dry run: paced " <> show (Array.length paced) <> " cells, "
@@ -1976,9 +1992,12 @@ render st =
     in if Array.null ns then []
        else [ HH.text (" · sweeping " <> joinWith ", " ns) ]
 
+  -- | **What the run will actually take**, which with measured pacing is a sum
+  -- | and not a multiple. Read off the same function the run paces itself by,
+  -- | so the estimate cannot disagree with the thing it estimates.
   runSecs =
     let n = Encoding.total st.sweep.extent
-    in fmt (Int.toNumber (n * st.sweep.spacingMs) / 1000.0) <> " s"
+    in fmt (Int.toNumber (Sweep.startsAt st.sweep n) / 1000.0) <> " s"
 
   -- | **A dropdown that is exactly as wide as the word it is showing.**
   -- |
