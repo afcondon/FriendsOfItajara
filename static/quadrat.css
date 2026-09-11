@@ -503,3 +503,29 @@ body {
   border-radius: 3px; cursor: pointer; font: inherit; font-size: 11px; padding: 2px 7px;
 }
 .q-swfix:hover { background: var(--hot); color: #fff; }
+
+/* ── Three sections, ruled apart ─────────────────────────────────────────
+   Trigger, pitch, parameters: each independently optional, each answered at
+   a different time. They were one column of controls with no divisions, so
+   the page read as a single form and nothing said which parts you could
+   simply leave alone. */
+.q-swrule { border: 0; border-top: 1px solid var(--rule); margin: 22px 0 18px; }
+.q-swsec { display: flex; align-items: baseline; gap: 12px; margin-bottom: 10px; }
+.q-swsec .q-muted { font-size: 11px; line-height: 1.4; max-width: 62ch; }
+
+/* The trigger radio — one fact, one control. Choosing "I play it" is what
+   makes the take a hand-played one, so what it disables has to be visible
+   rather than merely absent. */
+.q-swradio { display: flex; gap: 10px; margin-bottom: 12px; }
+.q-swopt {
+  display: inline-flex; align-items: center; gap: 7px; cursor: pointer;
+  border: 1px solid var(--rule); border-radius: 3px; padding: 7px 13px;
+  font-size: 13px; background: #fff; color: var(--muted);
+}
+.q-swopt.on { border-color: var(--ink); color: var(--ink); font-weight: 500; }
+.q-swopt:hover { border-color: var(--ink); }
+.q-swopt input { margin: 0; accent-color: var(--ink); }
+
+/* Greyed, not hidden: the fields are still the rig's instructions and still
+   say what would be sent — they are simply not being used. */
+.is-moot { opacity: 0.38; pointer-events: none; }

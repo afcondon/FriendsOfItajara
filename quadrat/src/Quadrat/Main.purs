@@ -1135,18 +1135,22 @@ render st =
         -- | came OUT of it share the left page — they are the same subject —
         -- | and the right page is given to the thing that needs width and is
         -- | actually being worked: the trigger, and a curve per parameter.
+        -- | **Left is what came back; right is what was asked for.**
+        -- |
+        -- | They were the other way round, with the specification split across
+        -- | both pages: the name and the encoding on the left, the trigger and
+        -- | the curves on the right, and a Transect/By-hand tab above the lot
+        -- | asking a question the trigger asked again. So no page was about
+        -- | one thing, and the take's own description had no single home.
+        -- |
+        -- | The specification needs width — an encoding row, a trigger row,
+        -- | eight curves — and it is all one subject, so it takes the wide
+        -- | page whole. What came back is a vertical stack of traces and a run
+        -- | button, which wants a narrow column and no more.
         Bench ->
           HH.div [ HP.class_ (HH.ClassName "q-spread") ]
             [ HH.section [ HP.class_ (HH.ClassName "q-recto") ]
-                [ HH.h2_ [ HH.text "The take" ]
-                , fillRow
-                , nameField
-                , case st.fill of
-                    Swept -> SweepView.settings
-                      { ports: st.midiPorts, open: st.sweepEdit, plan: st.sweep
-                      , msg: SweepMsg, openParam: OpenParam
-                      , tables: st.tables, tablesErr: st.tablesErr, pickPitch: PickPitch }
-                    Played -> handPanel
+                [ HH.h2_ [ HH.text "What came back" ]
                 , inputRow
                 , goRow
                 , if not (Array.null st.regions) || st.busy || hasTake
@@ -1156,18 +1160,20 @@ render st =
                       Played -> waiting
                 ]
             , HH.section [ HP.class_ (HH.ClassName "q-verso") ]
-                [ HH.h2_ [ HH.text (case st.fill of
-                    Swept -> "What moves, and what strikes it"
-                    Played -> "The instrument") ]
+                [ HH.h2_ [ HH.text "The take" ]
+                , nameField
+                , case st.fill of
+                    Swept -> SweepView.settings
+                      { ports: st.midiPorts, open: st.sweepEdit, plan: st.sweep
+                      , msg: SweepMsg, openParam: OpenParam
+                      , tables: st.tables, tablesErr: st.tablesErr, pickPitch: PickPitch
+                      , rigFires: st.fill == Swept
+                      , setRigFires: \b -> FillBy (if b then Swept else Played) }
+                    Played -> handPanel
                 , case st.pivot of
                     Just j | st.fill == Swept -> pivotPanel j
                     _ -> HH.text ""
-                , case st.fill of
-                    Swept -> transectPanel
-                    Played -> HH.p [ HP.class_ (HH.ClassName "q-blurb") ]
-                      [ HH.text "Nothing is driving the instrument — you are. \
-                                \Switch to Transect to have the rig play a \
-                                \schedule of positions instead." ]
+                , transectPanel
                 ]
             ]
         Library ->
@@ -1202,24 +1208,6 @@ render st =
       [ HP.class_ (HH.ClassName ("q-tab" <> if st.page == pg then " on" else ""))
       , HP.title why
       , HE.onClick \_ -> GoTo pg
-      ]
-      [ HH.text label ]
-
-  -- | **Two ways to fill a take**, and nothing else on the page moves.
-  fillRow =
-    HH.div [ HP.class_ (HH.ClassName "q-fill") ]
-      [ fillTab Swept "Transect"
-          "the rig plays a schedule of positions and records the lot as one take"
-      , fillTab Played "By hand"
-          "you play it; the detector finds where the sounds are afterwards"
-      ]
-
-  fillTab f label why =
-    HH.button
-      [ HP.class_ (HH.ClassName ("q-filltab" <> if st.fill == f then " on" else ""))
-      , HP.disabled (st.armed || writing)
-      , HP.title why
-      , HE.onClick \_ -> FillBy f
       ]
       [ HH.text label ]
 
@@ -1508,6 +1496,11 @@ render st =
       , tables: st.tables
       , tablesErr: st.tablesErr
       , pickPitch: PickPitch
+      -- **One fact, one control.** The Transect/By-hand tab and the trigger
+      -- spec were asking the same question in two places; the tab is gone and
+      -- this is the same `Fill` it used to set.
+      , rigFires: st.fill == Swept
+      , setRigFires: \b -> FillBy (if b then Swept else Played)
       }
 
 

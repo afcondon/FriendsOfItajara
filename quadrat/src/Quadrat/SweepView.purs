@@ -22,7 +22,7 @@ import Prelude
 
 import Data.Array as Array
 import Data.Int as Int
-import Data.Maybe (Maybe(..), fromMaybe, isNothing, maybe)
+import Data.Maybe (Maybe(..), fromMaybe, isJust, isNothing, maybe)
 import Halogen (AttrName(..), ElemName(..), Namespace(..))
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
@@ -48,6 +48,15 @@ type Handlers act =
   , tablesErr :: String
   -- | Choosing one has to FETCH it, so it is an action rather than a `Msg`.
   , pickPitch :: Int -> String -> act
+  -- | **Who fires the sound** — `true` when the rig does, which is what makes
+  -- | a take a transect, and `false` when you play it.
+  -- |
+  -- | One choice, asked once. It used to be asked twice: as a Transect/By-hand
+  -- | tab at the top of the page, AND as a trigger spec that was simply
+  -- | ignored in the second case. Two controls for one fact is two chances to
+  -- | disagree, and the page had no way to say which had won.
+  , rigFires :: Boolean
+  , setRigFires :: Boolean -> act
   }
 
 -- | **What the take is** — the destination, the shape of the set, and the two
@@ -127,29 +136,107 @@ settings h =
       ]
 
 body :: forall w act. Handlers act -> HH.HTML w act
+-- | **Three optional sections, ruled apart: what strikes it, what pitch it is
+-- | struck at, and what else moves.**
+-- |
+-- | It was one undifferentiated column — trigger fields, then eight curve rows
+-- | with the pitch picker buried inside whichever row happened to be a pitch.
+-- | That read as one long form with no structure, when in fact each of the
+-- | three is independently optional and they are answered at different times:
+-- | the trigger when the cable went in, the pitch when you chose the
+-- | instrument, the curves every single run.
 body h =
   HH.div [ cls "q-sweep" ]
-    -- **The trigger first.** It is rig setup — which jack fires the sound —
-    -- set once when the cable went in and then left alone, where the curves
-    -- below it are the thing being worked on. It was at the bottom because it
-    -- was added last, which is not a reason.
-    [ trigger
-    , HH.div [ cls "q-curves" ] (Array.concat (Array.mapWithIndex row p.params))
-    , HH.div [ cls "q-swadd" ]
-        [ HH.button
-            [ cls "q-plain"
-            , HP.disabled (Array.length p.params >= 8)
-            , HP.title "one curve for every parameter you want to move"
-            , HE.onClick \_ -> h.msg AddParam
-            ]
-            [ HH.text "+ curve" ]
-        , HH.span [ cls "q-muted" ]
-            [ HH.text "A parameter with no curve is held. Click a curve to step \
-                      \through the shapes; open it to place every value by hand." ]
-        ]
+    [ triggerSection
+    , HH.hr [ cls "q-swrule" ]
+    , pitchSection
+    , HH.hr [ cls "q-swrule" ]
+    , paramsSection
     ]
   where
   p = h.plan
+
+  -- | Pitch parameters and ordinary ones, each keeping its ORIGINAL index —
+  -- | every message is addressed by position in `p.params`, so filtering
+  -- | without carrying the index would send every edit to the wrong parameter.
+  rowsWhere wantPitch =
+    Array.concat
+      (Array.mapWithIndex
+        (\i q -> if isJust q.pitch == wantPitch then row i q else [])
+        p.params)
+
+  sectionHead label hint =
+    HH.div [ cls "q-swsec" ]
+      [ HH.span [ cls "q-arm-label" ] [ HH.text label ]
+      , HH.span [ cls "q-muted" ] [ HH.text hint ]
+      ]
+
+  -- | **The trigger IS the transect.**
+  -- |
+  -- | Whether the rig fires the sound or you do is the same question as
+  -- | whether this take is a transect, and it was being asked in two places
+  -- | that could disagree. Asked here, once, as the thing it actually decides
+  -- | — and the fields below are the rig's instructions, so they grey out
+  -- | when the rig is not the one playing.
+  triggerSection =
+    HH.div_
+      [ sectionHead "Trigger"
+          "who strikes the instrument — and so whether the take divides by its \
+          \own schedule or by finding the sounds afterwards"
+      , HH.div [ cls "q-swradio" ]
+          [ pick true "The rig fires it"
+              "a schedule of positions, played and recorded as one take, and \
+              \divided by the schedule that made it"
+          , pick false "I play it"
+              "you play it; the onsets are found afterwards. Nothing below is sent"
+          ]
+      , trigger
+      ]
+
+  pick want label why =
+    HH.label
+      [ cls ("q-swopt" <> if h.rigFires == want then " on" else "")
+      , HP.title why
+      ]
+      [ HH.input
+          [ HP.type_ HP.InputRadio
+          , HP.checked (h.rigFires == want)
+          , HE.onClick \_ -> h.setRigFires want
+          ]
+      , HH.span_ [ HH.text label ]
+      ]
+
+  pitchSection =
+    HH.div [ cls (if h.rigFires then "" else "is-moot") ]
+      [ sectionHead "Pitch sweep"
+          "optional — a measured table turns notes into the volts this \
+          \instrument needs for them"
+      , HH.div [ cls "q-curves" ] (rowsWhere true)
+      , if Array.any (\q -> isJust q.pitch) p.params then HH.text ""
+        else
+          HH.span [ cls "q-muted" ]
+            [ HH.text "No parameter is a pitch. Add a curve below and choose a \
+                      \calibration table on it." ]
+      ]
+
+  paramsSection =
+    HH.div [ cls (if h.rigFires then "" else "is-moot") ]
+      [ sectionHead "Parameter sweep"
+          "optional — one curve for every knob you want moved across the take"
+      , HH.div [ cls "q-curves" ] (rowsWhere false)
+      , HH.div [ cls "q-swadd" ]
+          [ HH.button
+              [ cls "q-plain"
+              , HP.disabled (Array.length p.params >= 8)
+              , HP.title "one curve for every parameter you want to move"
+              , HE.onClick \_ -> h.msg AddParam
+              ]
+              [ HH.text "+ curve" ]
+          , HH.span [ cls "q-muted" ]
+              [ HH.text "A parameter with no curve is held. Click a curve to step \
+                        \through the shapes; open it to place every value by hand." ]
+          ]
+      ]
   axs = Encoding.axes p.encoding
 
   -- | **The encoding first, because everything else follows from it.**
@@ -418,7 +505,7 @@ body h =
         ]
 
   trigger =
-    HH.div [ cls "q-swrow is-trig" ]
+    HH.div [ cls ("q-swrow is-trig" <> if h.rigFires then "" else " is-moot") ]
       [ HH.span [ cls "q-arm-label" ] [ HH.text "Trigger" ]
       , field "gate bus" (maybe "" show p.trigger.gate) SetGate 3
           "an es9-daemon bus pulsed to fire the sound; 15 is ES-9 panel jack 8"
