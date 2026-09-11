@@ -237,13 +237,6 @@ type State =
   -- | finished was one more button away from existing, and the difference was
   -- | invisible. False from the moment a run starts; true only after a set is
   -- | actually written.
-  -- | **Is the tile grid open?**
-  -- |
-  -- | It was the primary surface and spent the page on sixteen near-identical
-  -- | rectangles. The division now lives on the take's own waveform, where it
-  -- | can be seen against the sound that produced it; the grid survives as the
-  -- | detail view, for when one sample is the subject.
-  , tiles :: Boolean
   , kept :: Boolean
   -- | **The overwrite question, held open.** A set whose name is already taken
   -- | is replaced wholesale (`msm cut --overwrite` deletes the directory
@@ -280,7 +273,6 @@ data Action
   -- | confirmation and waits.
   | AskKeep
   | CancelKeep
-  | ShowTiles Boolean
   | SetLayerMode String
   | WriteCard String
   | Play Int
@@ -318,7 +310,7 @@ component = H.mkComponent
       , sweepFork: Nothing, midiPorts: [], swept: false, sweepEdit: Nothing
       , schedule: [], sets: [], tables: [], tablesErr: "", overran: false
       , page: Bench, fill: Swept, source: 0, pivot: Nothing
-      , tiles: false, kept: false, confirmKeep: false }
+      , kept: false, confirmKeep: false }
   , render
   , eval: H.mkEval H.defaultEval { handleAction = handleAction, initialize = Just Init }
   }
@@ -665,12 +657,6 @@ handleAction = case _ of
       else handleAction (SendToCard { place: false, append: false })
 
   CancelKeep -> H.modify_ _ { confirmKeep = false }
-
-  -- Hover-play comes on with the grid: the reason to open it is that one
-  -- sample has become the subject, and a detail view you have to arm is a
-  -- detail view you look at without hearing.
-  ShowTiles v -> H.modify_ \s0 ->
-    s0 { tiles = v, hoverPlays = if v then true else s0.hoverPlays }
 
   Analyse -> analyse true
   Divide -> analyse false
@@ -1334,7 +1320,6 @@ render st =
   -- |
   -- | One axis takes neither: a line of N is a vertical stack, and its rule
   -- | is in the stylesheet under `.is-line`.
-  shaped = grids ""
 
   shapedPlan = grids " is-planned"
 
@@ -1825,20 +1810,8 @@ render st =
                       , HE.onChecked SetHoverPlays ]
                   , HH.span_ [ HH.text "hover plays" ]
                   ]
-              -- **The grid, on demand.** Hover-play comes on with it, because
-              -- the reason to open it is that one sample is now the subject.
-              , HH.button
-                  [ HP.class_ (HH.ClassName ("q-plain" <> if st.tiles then " is-go" else ""))
-                  , HP.title "a waveform and its measurements per piece — the detail \
-                             \view, for when one sample is the subject"
-                  , HE.onClick \_ -> ShowTiles (not st.tiles)
-                  ]
-                  [ HH.text (if st.tiles then "hide tiles" else "tiles") ]
               ]
           , dividerRow
-          , if st.tiles
-              then HH.div shaped (Array.mapWithIndex tile st.regions)
-              else HH.text ""
           , sendRow
           ]
 
@@ -2225,75 +2198,9 @@ render st =
               <> " samples and this divided into " <> show (Array.length st.regions)
               <> " — try another divider, or a wider gap, before sending it") ]
 
-  -- The loudest and the brightest in this take, so a tile is read against its
-  -- own neighbours rather than against an absolute nobody carries in their head.
+  -- The loudest in this take, which is what decides whether anything was
+  -- recorded at all.
   loudest = fromMaybe 0.0 (Array.last (Array.sort (map _.peak st.regions)))
-  brightest = fromMaybe 0.0 (Array.last (Array.sort (map _.tilt st.regions)))
-
-  meter r =
-    HH.div [ HP.class_ (HH.ClassName "q-meter") ]
-      [ bar "level" (r.peak / max 1.0e-9 loudest)
-          (fmt (r.peak * 100.0) <> "% of the loudest here")
-      , bar "bright" (r.tilt / max 1.0e-9 brightest)
-          (fmt (r.tilt * 100.0) <> "% of its energy above the high-pass; "
-             <> show (Int.round r.zcr) <> " zero crossings a second")
-      ]
-
-  bar k v title =
-    HH.div [ HP.class_ (HH.ClassName ("q-bar is-" <> k)), HP.title (k <> " — " <> title) ]
-      [ HH.div
-          [ HP.class_ (HH.ClassName "q-bar-fill")
-          , HP.attr (HH.AttrName "style")
-              ("width: " <> show (Int.round (100.0 * clamp 0.0 1.0 v)) <> "%")
-          ]
-          []
-      ]
-
-  -- One sub-sample. Its picture is a SLICE of the take's own envelope, so
-  -- forty tiles cost one snapshot rather than forty requests.
-  tile i r =
-    let
-      total = maybe 1.0 _.secs (cap st)
-      n = maybe 0 (Array.length <<< _.hi) st.peaks
-      b = Wave.bucketsFor n total r.start r.end
-      cut xs = Array.slice b.from b.to xs
-      kept = Set.member i st.keep
-    in
-      HH.div
-        [ HP.class_ (HH.ClassName ("q-tile"
-            <> (if kept then "" else " is-dropped")
-            <> (if st.playing == Just i then " is-playing" else "")))
-        , HE.onMouseEnter \_ -> HoverPlay i
-        ]
-        [ HH.button
-            [ HP.class_ (HH.ClassName "q-tile-face")
-            , HP.title (fmt (r.end - r.start) <> " s at " <> fmt r.start <> " s")
-            , HE.onClick \_ -> Play i
-            ]
-            [ Wave.svg (maybe [] (cut <<< _.lo) st.peaks)
-                       (maybe [] (cut <<< _.hi) st.peaks)
-                       [ Wave.klass "q-tile-svg" ]
-            ]
-        , HH.div [ HP.class_ (HH.ClassName "q-tile-foot") ]
-            -- The number opens the preset behind the sound, which is the
-            -- gesture you want the moment you hear the one that is wrong.
-            [ HH.button
-                [ HP.class_ (HH.ClassName ("q-tile-n" <> if st.pivot == Just i then " is-open" else ""))
-                , HP.title ("open position " <> show (i + 1) <> " — every parameter at this hit")
-                , HE.onClick \_ -> OpenPivot (if st.pivot == Just i then Nothing else Just i)
-                ]
-                [ HH.text (show (i + 1)) ]
-            , HH.span [ HP.class_ (HH.ClassName "q-tile-len") ]
-                [ HH.text (fmt (r.end - r.start)) ]
-            , HH.button
-                [ HP.class_ (HH.ClassName "q-tile-keep")
-                , HP.title (if kept then "drop this one" else "keep this one")
-                , HE.onClick \_ -> ToggleKeep i
-                ]
-                [ HH.text (if kept then "✓" else "·") ]
-            ]
-        , meter r
-        ]
 
   -- | **The card, which is a description until you ask for it.**
   -- |
