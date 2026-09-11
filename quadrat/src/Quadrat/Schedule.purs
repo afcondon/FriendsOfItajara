@@ -77,8 +77,23 @@ at = do
 -- | take; `msm` clamps it to the audio rather than refusing it.
 -- |
 -- | Fewer than two marks is not a division, and comes back empty.
-slots :: Number -> Array Number -> Array { start :: Number, end :: Number }
-slots lead marks
+-- | `guard` closes each region a little EARLY, which `lead` has no counterpart
+-- | for and needs one. `lead` opens the region before the sound it expects;
+-- | nothing was closing it before the sound it does NOT want, so the boundary
+-- | sat exactly where the next attack is most likely to be.
+-- |
+-- | Measured 2026-09-11: a take whose marks were evenly spaced to the
+-- | millisecond, and whose AUDIO carried one 110 ms discontinuity at the sixth
+-- | step. From there every attack landed ~80 ms before its boundary and every
+-- | slice caught the front of its successor. The marks are sampled through a
+-- | 30 Hz socket, so a slip of about one snapshot is a thing that happens
+-- | rather than a thing to be fixed.
+-- |
+-- | It costs the last few tens of milliseconds of decay, and on the module
+-- | that provoked this the tail is within 3 dB of the noise floor by 2.8 s of
+-- | a 3.0 s cell — so the guard is taking silence.
+slots :: Number -> Number -> Array Number -> Array { start :: Number, end :: Number }
+slots lead guard marks
   | Array.length marks < 2 = []
   | otherwise =
       let
@@ -95,4 +110,6 @@ slots lead marks
                     Just e -> e + middle
                     Nothing -> middle)
       in
-        Array.zipWith (\s e -> { start: max 0.0 s, end: e }) edges ends
+        Array.zipWith
+          (\s e -> { start: max 0.0 s, end: max (s + 0.01) (e - guard) })
+          edges ends

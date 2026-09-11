@@ -146,6 +146,10 @@ type Plan =
   -- | Trigger to next trigger. Long enough for the sound to finish, plus enough
   -- | silence to see the join.
   , spacingMs :: Int
+  -- | **How long before the next trigger a region closes.** The counterpart to
+  -- | `leadMs`: that one opens a region before the sound it wants, this one
+  -- | closes it before the sound it does not. See `Quadrat.Schedule.slots`.
+  , guardMs :: Int
   -- | **How long after a trigger is issued before its sound is in the take**,
   -- | in milliseconds — the one number a schedule cannot know.
   -- |
@@ -170,6 +174,7 @@ emptyPlan =
   , port: ""
   , settleMs: 120
   , spacingMs: 2000
+  , guardMs: 120
   , leadMs: 30
   }
 
@@ -232,6 +237,7 @@ data Msg
   | SetTrigChannel String
   | SetVelocity String
   | SetHold String
+  | SetGuard String
   | SetSettle String
   | SetSpacing String
   | SetLead String
@@ -321,6 +327,7 @@ applyMsg = case _ of
   SetHold v -> onTrig \t -> t { ms = clamp 1 5000 (intOr t.ms v) }
   SetSettle v -> \p -> p { settleMs = clamp 0 5000 (intOr p.settleMs v) }
   SetSpacing v -> \p -> p { spacingMs = clamp 50 20000 (intOr p.spacingMs v) }
+  SetGuard v -> \p -> p { guardMs = clamp 0 2000 (intOr p.guardMs v) }
   -- Negative is legal and occasionally right: a module that answers a gate
   -- before the page hears about it is not a thing, but a trigger read late
   -- from a stale snapshot is, and the correction for it is a boundary moved
@@ -482,6 +489,7 @@ type Plain =
   , port :: String
   , settleMs :: Int
   , spacingMs :: Int
+  , guardMs :: Int
   , leadMs :: Int
   }
 
@@ -538,6 +546,7 @@ flatten p =
   , port: p.port
   , settleMs: p.settleMs
   , spacingMs: p.spacingMs
+  , guardMs: p.guardMs
   , leadMs: p.leadMs
   }
   where
@@ -592,6 +601,7 @@ unflatten p =
     , port: p.port
     , settleMs: clamp 0 5000 p.settleMs
     , spacingMs: clamp 50 20000 p.spacingMs
+    , guardMs: clamp 0 2000 p.guardMs
     , leadMs: clamp (-500) 2000 p.leadMs
     }
   where

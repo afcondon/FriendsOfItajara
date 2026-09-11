@@ -93,6 +93,10 @@ settings h =
              , field "spacing ms" (show p.spacingMs) SetSpacing 5
                  "trigger to trigger; long enough for the sound to finish AND for a \
                  \gap to be visible after it"
+             , field "guard ms" (show p.guardMs) SetGuard 4
+                 "how long BEFORE the next trigger a region closes — the counterpart \
+                 \to lead. Nothing was closing a region before the sound it does not \
+                 \want, so the boundary sat exactly where the next attack lands."
              ]
       )
 

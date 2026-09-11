@@ -1193,6 +1193,7 @@ analyse write = do
           -- number the schedule cannot supply itself.
           declared = Schedule.slots
                        (Int.toNumber st.sweep.leadMs / 1000.0)
+                       (Int.toNumber st.sweep.guardMs / 1000.0)
                        st.schedule
       r <- H.liftAff (attempt (toAffE (Http.divisions
             { take: takeName
