@@ -236,8 +236,32 @@ data Msg
   | SetSpacing String
   | SetLead String
 
+-- | **A pitch axis has a base and a count, not a range.**
+-- |
+-- | Its top used to be editable, which made the extent and the span two
+-- | numbers that could disagree — and every way they can disagree is a bug:
+-- | too few cells skip a degree, too many repeat one. Sampling an instrument
+-- | wants one note per sample, so the count already says how many notes there
+-- | are and the base says where they start. The top is arithmetic.
+-- |
+-- | Enforced after every message rather than at the two that can break it, so
+-- | a message added later cannot reintroduce the disagreement by omission.
+-- |
+-- | What this gives up: twelve samples spread thinly over five octaves, which
+-- | was reachable by setting a wide range and is now not. If that comes back
+-- | it should come back as a STEP, which says what it means.
+fixPitch :: Plan -> Plan
+fixPitch p =
+  let n = max 1 (Encoding.total p.extent)
+  in p { params = map
+           (\q -> q { pitch = map (\ps -> ps { noteHi = min 127 (ps.noteLo + n - 1) }) q.pitch })
+           p.params }
+
 update :: Msg -> Plan -> Plan
-update = case _ of
+update m = fixPitch <<< applyMsg m
+
+applyMsg :: Msg -> Plan -> Plan
+applyMsg = case _ of
   PickEncoding v -> \p ->
     case Array.find (\e -> Encoding.name e == v) Encoding.all of
       Nothing -> p

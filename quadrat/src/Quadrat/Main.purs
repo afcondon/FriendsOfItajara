@@ -401,8 +401,14 @@ handleAction = case _ of
                     -- clamps, and pointing at notes the sweep never measured is
                     -- the commonest mistake with a fresh calibration.
                     cells = max 1 (Encoding.total st0.sweep.extent)
-                    lo = tlo
-                    hi = min thi (tlo + cells - 1)
+                    -- **Start on a C.** Sampling an instrument wants an octave
+                    -- you can name, and a bank that begins on G#1 is one every
+                    -- later decision has to work around. The nearest C at or
+                    -- above the table's lowest measured note — above, because
+                    -- below it the realiser clamps and the bottom of the run
+                    -- would come out on one pitch.
+                    lo = tlo + mod (12 - mod tlo 12) 12
+                    hi = min thi (lo + cells - 1)
                 H.modify_ \st -> st
                   { sweep = st.sweep
                       { params = fromMaybe st.sweep.params
@@ -813,9 +819,12 @@ handleAction = case _ of
   SetHoverPlays b -> do
     unless b (liftEffect Audio.stop)
     H.modify_ _ { hoverPlays = b }
-  HoverPlay i -> do
-    st <- H.get
-    when st.hoverPlays (handleAction (Play i))
+  -- **Hover always plays.** It was behind a checkbox, and after the division
+  -- moved into a modal the checkbox went with it — so the page's most useful
+  -- gesture was off by default and switched on somewhere you had no reason to
+  -- look. There is no cost to it being on: the pointer is over a slice only
+  -- because you are asking about that slice.
+  HoverPlay i -> handleAction (Play i)
   -- | **The transect end to end**, which is the one listen the tiles cannot
   -- | give you: twelve samples heard in order, with the gaps, is how you hear
   -- | a sweep as a sweep rather than as twelve sounds.
@@ -1321,7 +1330,7 @@ render st =
         Bench ->
           HH.div_
             [ HH.section [ HP.class_ (HH.ClassName "q-hero") ]
-                [ HH.div [ HP.class_ (HH.ClassName "q-actbar") ] [ goRow, doors ]
+                [ HH.div [ HP.class_ (HH.ClassName "q-actbar") ] [ goRow, transport, doors ]
                 , if not (Array.null st.regions) || st.busy || hasTake
                     then caught
                     else case st.fill of
@@ -1381,6 +1390,32 @@ render st =
   -- the recording it is describing.
   elapsed = maybe "0" (\c -> fmt c.secs) cp
 
+  -- | **The transport, as a transport.**
+  -- |
+  -- | It was two labelled buttons under the waveform — "\x25b6 all of it" and
+  -- | "stop" — which read as a caption rather than as controls, and put the
+  -- | only two audio verbs on the page somewhere other than where the other
+  -- | verbs are. Record, play and stop are one family and belong in one row;
+  -- | the icons are the convention and need no words.
+  transport =
+    HH.div [ HP.class_ (HH.ClassName "q-transport") ]
+      [ HH.button
+          [ HP.class_ (HH.ClassName "q-tape")
+          , HP.disabled (not hasTake)
+          , HP.title "play the whole take, end to end, gaps and all"
+          , HE.onClick \_ -> PlayWhole
+          ]
+          [ HH.text "\x25b6" ]
+      , HH.button
+          [ HP.class_ (HH.ClassName "q-tape")
+          , HP.title "stop"
+          , HE.onClick \_ -> StopAudio
+          ]
+          [ HH.text "\x25a0" ]
+      , HH.span [ HP.class_ (HH.ClassName "q-taketime") ]
+          [ HH.text (maybe "" (\c -> fmt c.secs <> " s") (cap st)) ]
+      ]
+
   -- | **Peers of Record.** They are all things you do to this take, and a
   -- | separate row for four of them implied a separation that is not there.
   doors =
@@ -1437,17 +1472,19 @@ render st =
   -- | Dividing settings and card addresses are each a handful of controls that
   -- | matter intensely for about ten seconds and then never again. On the page
   -- | they competed for attention with the two things you look at constantly.
+  -- | **The scrim does not close on click.**
+  -- |
+  -- | It did, with a guard on the inner div that re-set the same modal to
+  -- | absorb the click — and the guard never worked. Halogen dispatches both
+  -- | handlers on a bubbling click, inner first, so the scrim's `Nothing`
+  -- | always landed last and the modal shut the instant you touched anything
+  -- | in it. Focusing a text field was enough. Closing is now the business of
+  -- | the one control that says so.
   modalBox title inner =
     HH.div
-      [ HP.class_ (HH.ClassName "q-scrim")
-      , HE.onClick \_ -> OpenModal Nothing
-      ]
+      [ HP.class_ (HH.ClassName "q-scrim") ]
       [ HH.div
-          [ HP.class_ (HH.ClassName "q-modal")
-          -- Clicks inside must not reach the scrim, or every control in the
-          -- modal would also close it.
-          , HE.onClick \_ -> OpenModal (st.modal)
-          ]
+          [ HP.class_ (HH.ClassName "q-modal") ]
           [ HH.div [ HP.class_ (HH.ClassName "q-modalhead") ]
               [ HH.h2_ [ HH.text title ]
               , HH.button
@@ -1592,28 +1629,8 @@ render st =
     Just i -> case Array.index st.sweep.params i >>= _.pitch of
       Nothing -> []
       Just ps ->
-        let
-          n = max 1 (Encoding.total st.sweep.extent)
-          span = ps.noteHi - ps.noteLo
-          step = Int.toNumber span / Int.toNumber (max 1 (n - 1))
-        in
           [ HH.text (" · " <> Pitch.noteName ps.noteLo <> "–"
-                       <> Pitch.noteName ps.noteHi <> " ") ]
-            <> if span == n - 1
-                 then [ HH.text "chromatic" ]
-                 else
-                   [ HH.span [ HP.class_ (HH.ClassName "q-sayodd") ]
-                       [ HH.text ("in steps of " <> fmt step <> " semitones") ]
-                   , HH.button
-                       [ HP.class_ (HH.ClassName "q-sayfix")
-                       , HP.title ("one semitone per sample — "
-                             <> Pitch.noteName ps.noteLo <> "–"
-                             <> Pitch.noteName (ps.noteLo + n - 1))
-                       , HE.onClick \_ ->
-                           SweepMsg (Sweep.SetPitchHi i (show (ps.noteLo + n - 1)))
-                       ]
-                       [ HH.text "make it chromatic" ]
-                   ]
+                       <> Pitch.noteName ps.noteHi <> " chromatic") ]
 
   -- | What is being moved, by name only. The shapes and the ranges are in the
   -- | panel; this says how many knobs are in play, which is the part you want
@@ -1715,12 +1732,15 @@ render st =
               -- | of red capitals said the same thing twice and was the
               -- | loudest thing on the page for a condition that is normal
               -- | between takes.
-              , HH.span [ HP.class_ (HH.ClassName "q-state") ]
-                  [ HH.text (case st.fill of
-                      Swept -> "the take closes itself when the last position has sounded"
-                      Played -> maybe "" (\c -> if c.holds
-                                                  then "captured " <> fmt c.secs <> " s"
-                                                  else Kind.prompt st.kind) cp) ]
+              , case st.fill of
+                  -- A transect closing itself is how a transect works, said
+                  -- once in the docs and never needed again beside the button.
+                  Swept -> HH.text ""
+                  Played ->
+                    HH.span [ HP.class_ (HH.ClassName "q-state") ]
+                      [ HH.text (maybe "" (\c -> if c.holds
+                                                   then "captured " <> fmt c.secs <> " s"
+                                                   else Kind.prompt st.kind) cp) ]
               ]
       )
 
@@ -2069,20 +2089,6 @@ render st =
               Just pk | Array.length pk.hi > 0 ->
                 HH.div [ HP.class_ (HH.ClassName "q-whole") ]
                   [ HH.div_ (map (strip pk) (rowsOf (Array.length st.regions)))
-                  , HH.div [ HP.class_ (HH.ClassName "q-wholebar") ]
-                      [ HH.button
-                          [ HP.class_ (HH.ClassName "q-plain")
-                          , HP.title "the whole take, end to end, gaps and all"
-                          , HE.onClick \_ -> PlayWhole
-                          ]
-                          [ HH.text "\x25b6 all of it" ]
-                      , HH.button
-                          [ HP.class_ (HH.ClassName "q-plain")
-                          , HE.onClick \_ -> StopAudio ]
-                          [ HH.text "stop" ]
-                      , HH.span [ HP.class_ (HH.ClassName "q-muted") ]
-                          [ HH.text (maybe "" (\c -> fmt c.secs <> " s") (cap st)) ]
-                      ]
                   ]
               _ -> HH.text ""
           , if Array.null st.regions && hasTake && not st.busy
@@ -2137,12 +2143,6 @@ render st =
                   , HH.span_ [ HH.text "fewer" ]
                   , HH.span [ HP.class_ (HH.ClassName "q-gapval") ]
                       [ HH.text (show (Int.round st.minGap) <> " ms") ]
-                  ]
-              , HH.label [ HP.class_ (HH.ClassName "q-hover") ]
-                  [ HH.input
-                      [ HP.type_ HP.InputCheckbox, HP.checked st.hoverPlays
-                      , HE.onChecked SetHoverPlays ]
-                  , HH.span_ [ HH.text "hover plays" ]
                   ]
               ]
       , dividerRow

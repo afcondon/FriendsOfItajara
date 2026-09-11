@@ -548,66 +548,18 @@ part h which =
               -- The FIELDS carry numbers and the hint carries the names. A
               -- field that displayed "C2" while expecting `36` typed back is a
               -- box you cannot retype its own contents into.
+              -- **A base and a count, not a range.** The top follows from how
+              -- many samples the run makes — see `Sweep.fixPitch` — so there
+              -- is one number to set and no way for two to disagree.
               [ tiny "from" 4 (show ps.noteLo) (SetPitchLo i)
-                  "lowest note as a MIDI number — 60 is C4, 12 to an octave"
-              , tiny "to" 4 (show ps.noteHi) (SetPitchHi i)
-                  "highest note as a MIDI number. Steps ROUND to whole semitones, so \
-                  \every position lands in tune — but a count that is not one per \
-                  \semitone SKIPS degrees or REPEATS them, which the line below says."
+                  "the lowest note, as a MIDI number — 60 is C4, 12 to an octave. \
+                  \The top follows from the number of samples."
               , HH.span [ cls "q-swhint" ]
-                  [ HH.text (Pitch.noteName ps.noteLo <> "–" <> Pitch.noteName ps.noteHi
-                              <> " · " <> reach ps) ]
-              , degreeGuard i q ps
+                  [ HH.text (Pitch.noteName ps.noteLo <> " – "
+                              <> Pitch.noteName ps.noteHi <> " chromatic · "
+                              <> reach ps) ]
               ]
       ]
-
-  -- | **Extent and span are two numbers, and for a pitch axis a mismatch is
-  -- | always a bug.**
-  -- |
-  -- | Every other parameter is continuous, so any number of cells over its
-  -- | range is a legitimate choice of resolution. A pitch axis is not: its
-  -- | span has a natural granularity, and a count that is not one cell per
-  -- | degree cannot be honoured. Rounding is monotonic, so the failure is
-  -- | exactly one of two, and it is silent in both directions.
-  -- |
-  -- | Measured on 2026-09-11, both on the same afternoon: 12 cells over
-  -- | C4–C5 dropped F#4 without a word, and 16 cells over C4–B4 played four
-  -- | notes twice. Neither run looked wrong on the page.
-  degreeGuard i q ps =
-    let
-      want = ps.noteHi - ps.noteLo + 1
-      have = fromMaybe 0 (Array.index h.plan.extent q.axis)
-    in
-      if want < 1 || have == want then HH.text ""
-      else
-        HH.span [ cls "q-swwarn" ]
-          [ HH.text
-              ( show have <> " cells over " <> show want <> " degrees — "
-                  <> if have < want
-                       then show (want - have) <> " skipped"
-                       else show (have - want) <> " repeat" )
-          -- **Two ways out, because either number may be the one you meant.**
-          --
-          -- A mismatch says only that they disagree. Widening the run to 56
-          -- cells and narrowing the range to 12 degrees are both repairs, and
-          -- which is right depends on what you are making — so offer both and
-          -- name what each does rather than guessing.
-          , HH.button
-              [ cls "q-swfix"
-              , HP.title ("record " <> show want <> " samples — one per degree \
-                          \of the range you asked for")
-              , HE.onClick \_ -> h.msg (SetExtent q.axis (show want))
-              ]
-              [ HH.text (show want <> " cells") ]
-          , HH.button
-              [ cls "q-swfix"
-              , HP.title ("keep " <> show have <> " samples and shorten the range \
-                          \to " <> Pitch.noteName ps.noteLo <> "–"
-                          <> Pitch.noteName (ps.noteLo + have - 1))
-              , HE.onClick \_ -> h.msg (SetPitchHi i (show (ps.noteLo + have - 1)))
-              ]
-              [ HH.text ("to " <> Pitch.noteName (ps.noteLo + have - 1)) ]
-          ]
 
   -- What a table can actually reach, because outside its span the realiser
   -- clamps and a transect comes out on one pitch.

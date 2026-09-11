@@ -124,7 +124,6 @@ body {
 .q-whole-svg { display: block; width: 100%; height: 128px; }
 .q-whole-svg polygon { fill: var(--ink); }
 
-.q-hover { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
 
 /* Auto-fill rather than a fixed count: ten hits and a hundred slices should
    both look deliberate, and the tile is the unit that stays constant. */
@@ -572,13 +571,6 @@ body {
 /* An interval that is not a semitone is legitimate and is almost never
    what you meant, so it is stated in the hot colour with the repair
    beside it — rather than prevented, which would remove a real use. */
-.q-sayodd { color: var(--hot); font-weight: 600; }
-.q-sayfix {
-  border: 1px solid var(--hot); background: #fff; color: var(--hot);
-  border-radius: 3px; cursor: pointer; font: inherit; font-size: 11px;
-  padding: 1px 7px; margin-left: 6px;
-}
-.q-sayfix:hover { background: var(--hot); color: #fff; }
 
 /* ── Specification, result, adjustments ──────────────────────────────────
    Down the page rather than across it. Side-by-side pages put the
@@ -662,3 +654,16 @@ body {
 /* The level sits inside the sentence, next to the input it measures —
    quiet enough to be part of a line of prose. */
 .q-sayline .q-spark { font-size: 13px; margin-left: 6px; vertical-align: baseline; }
+
+/* Record, play and stop are one family and belong in one row. The two
+   audio verbs were a labelled pair under the waveform that read as a
+   caption rather than as controls. */
+.q-transport { display: flex; align-items: center; gap: 6px; }
+.q-tape {
+  border: 1px solid var(--rule); background: #fff; border-radius: 3px;
+  cursor: pointer; font-size: 13px; line-height: 1;
+  width: 40px; height: 100%; min-height: 38px; color: var(--ink);
+}
+.q-tape:hover:enabled { border-color: var(--ink); }
+.q-tape:disabled { opacity: 0.35; cursor: not-allowed; }
+.q-taketime { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; margin-left: 4px; }
