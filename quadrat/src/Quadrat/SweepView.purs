@@ -297,9 +297,67 @@ body h =
   -- | `msm kit build` makes the same objections at write time, which is after
   -- | the hits exist. This is the only place saying it can save anything.
 
+  -- | **A pitch is not a curve over a voltage range, so it is not drawn like
+  -- | one.**
+  -- |
+  -- | Physically the two are the same wire; as questions they are unrelated. A
+  -- | modulation parameter asks for a fraction of the way between two voltages;
+  -- | a pitch asks for F#3, and the volts are whatever the measured table says
+  -- | that costs. Sharing a row made them look like variants of one control,
+  -- | and `cvLo`/`cvHi` sat there on a pitch row doing nothing at all —
+  -- | `levelOf` ignores them outright.
+  row i q = case q.pitch of
+    Just _ -> pitchRow i q
+    Nothing -> plainRow i q
+
+  -- | Instrument, range and where it goes — the whole of a pitch axis, inline.
+  -- | The per-cell values stay behind `open`, which is where a tuning that is
+  -- | not a run of semitones gets placed by hand.
+  pitchRow i q =
+    [ HH.div [ cls "q-curveparam is-pitch" ]
+        [ HH.div [ cls "q-swtop" ]
+            [ HH.input
+                [ cls "q-swname", HP.type_ HP.InputText, HP.value q.name
+                , HP.title "what this parameter is called on the instrument"
+                , HE.onValueInput (h.msg <<< SetName i) ]
+            , mini (if h.open == Just i then "close" else "open")
+                "place every note by hand"
+                (h.openParam (if h.open == Just i then Nothing else Just i))
+            , HH.button
+                [ cls "q-swmini is-drop", HP.title "remove this parameter"
+                , HE.onClick \_ -> h.msg (DropParam i) ]
+                [ HH.text "×" ]
+            ]
+        , if isJust q.pitch then HH.text "" else pitchPick i q
+        , HH.div [ cls "q-swsays" ]
+            [ HH.text (routing q)
+            , HH.span [ cls "q-swaxis" ]
+                [ HH.text (" · " <> maybe "" _.name (Array.index axs q.axis)) ]
+            ]
+        -- **Say when the notes are not evenly spaced.** The curve still shapes
+        -- a pitch run — `noteAt` reads its value — so a shape left over from
+        -- some other use would bend the scale silently now that the thumbnail
+        -- is gone.
+        , if isDrawn q.curve || Curve.label q.curve /= "Linear"
+            then
+              HH.div [ cls "q-swwarn" ]
+                [ HH.text ("shaped by " <> Curve.label q.curve
+                             <> " — the notes are not evenly spaced")
+                , HH.button
+                    [ cls "q-swfix"
+                    , HP.title "back to one degree per step"
+                    , HE.onClick \_ -> h.msg (NextShape i)
+                    ]
+                    [ HH.text "next shape" ]
+                ]
+            else HH.text ""
+        ]
+    ]
+      <> (if h.open == Just i then [ sliders i q ] else [])
+
   -- | A curve, and the parameter it moves. The sketch's left two columns, kept
   -- | on one row so the arrow between them needs no drawing.
-  row i q =
+  plainRow i q =
     [ HH.div [ cls "q-curvecard" ]
         [ HH.button
             [ cls "q-curveface"
@@ -496,7 +554,7 @@ body h =
               , HH.span [ cls "q-swhint" ]
                   [ HH.text (Pitch.noteName ps.noteLo <> "–" <> Pitch.noteName ps.noteHi
                               <> " · " <> reach ps) ]
-              , degreeGuard q ps
+              , degreeGuard i q ps
               ]
       ]
 
@@ -512,7 +570,7 @@ body h =
   -- | Measured on 2026-09-11, both on the same afternoon: 12 cells over
   -- | C4–C5 dropped F#4 without a word, and 16 cells over C4–B4 played four
   -- | notes twice. Neither run looked wrong on the page.
-  degreeGuard q ps =
+  degreeGuard i q ps =
     let
       want = ps.noteHi - ps.noteLo + 1
       have = fromMaybe 0 (Array.index h.plan.extent q.axis)
@@ -525,12 +583,27 @@ body h =
                   <> if have < want
                        then show (want - have) <> " skipped"
                        else show (have - want) <> " repeat" )
+          -- **Two ways out, because either number may be the one you meant.**
+          --
+          -- A mismatch says only that they disagree. Widening the run to 56
+          -- cells and narrowing the range to 12 degrees are both repairs, and
+          -- which is right depends on what you are making — so offer both and
+          -- name what each does rather than guessing.
           , HH.button
               [ cls "q-swfix"
-              , HP.title "set this axis to one cell per degree"
+              , HP.title ("record " <> show want <> " samples — one per degree \
+                          \of the range you asked for")
               , HE.onClick \_ -> h.msg (SetExtent q.axis (show want))
               ]
-              [ HH.text ("use " <> show want) ]
+              [ HH.text (show want <> " cells") ]
+          , HH.button
+              [ cls "q-swfix"
+              , HP.title ("keep " <> show have <> " samples and shorten the range \
+                          \to " <> Pitch.noteName ps.noteLo <> "–"
+                          <> Pitch.noteName (ps.noteLo + have - 1))
+              , HE.onClick \_ -> h.msg (SetPitchHi i (show (ps.noteLo + have - 1)))
+              ]
+              [ HH.text ("to " <> Pitch.noteName (ps.noteLo + have - 1)) ]
           ]
 
   -- What a table can actually reach, because outside its span the realiser

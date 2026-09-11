@@ -361,8 +361,27 @@ handleAction = case _ of
                 H.modify_ (note ("calibration " <> label <> " has no usable points"
                                   <> (if t.error == "" then "" else ": " <> t.error)))
             | otherwise -> do
-                let lo = Pitch.hzNote (fromMaybe 0.0 (map _.hz (Array.head t.points)))
-                    hi = Pitch.hzNote (fromMaybe 0.0 (map _.hz (Array.last t.points)))
+                st0 <- H.get
+                let tlo = Pitch.hzNote (fromMaybe 0.0 (map _.hz (Array.head t.points)))
+                    thi = Pitch.hzNote (fromMaybe 0.0 (map _.hz (Array.last t.points)))
+                    -- **One cell per semitone, anchored at the bottom of the
+                    -- table.**
+                    --
+                    -- The default used to be the table's whole span, which is
+                    -- the right bound and the wrong range: `bia-bass` measures
+                    -- G1–D6, 56 degrees, and twelve cells across 56 degrees is
+                    -- a step of five semitones — a rising stack of PERFECT
+                    -- FOURTHS, played on 2026-09-11 and sounding like a bug in
+                    -- the tuning when it was arithmetic doing as it was told.
+                    --
+                    -- A pitch axis has a natural granularity, so the only
+                    -- default that cannot surprise is one degree per cell. The
+                    -- span still bounds it: outside the table the realiser
+                    -- clamps, and pointing at notes the sweep never measured is
+                    -- the commonest mistake with a fresh calibration.
+                    cells = max 1 (Encoding.total st0.sweep.extent)
+                    lo = tlo
+                    hi = min thi (tlo + cells - 1)
                 H.modify_ \st -> st
                   { sweep = st.sweep
                       { params = fromMaybe st.sweep.params
@@ -378,7 +397,8 @@ handleAction = case _ of
                 -- newly-picked calibration is to be pointing at notes the sweep
                 -- never measured.
                 H.modify_ (note (label <> ": " <> Pitch.noteName lo <> "–" <> Pitch.noteName hi
-                                  <> ", " <> show (Array.length t.points) <> " points"))
+                                  <> " (measured " <> Pitch.noteName tlo <> "–" <> Pitch.noteName thi
+                                  <> ", " <> show (Array.length t.points) <> " points)"))
   Init -> do
     n <- liftEffect (slugFor Kind.DrumHits)
     -- The sweep plan as it was left. See `Quadrat.Sweep.restore` — a run,

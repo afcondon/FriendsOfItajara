@@ -12407,8 +12407,8 @@
   var el2 = function(nm) {
     return elementNS("http://www.w3.org/2000/svg")(nm);
   };
-  var cls = function($81) {
-    return class_(ClassName($81));
+  var cls = function($92) {
+    return class_(ClassName($92));
   };
   var settings = function(h) {
     var objections2 = (function() {
@@ -12426,8 +12426,8 @@
         return function(act) {
           return function(w) {
             return function(title4) {
-              return label4([cls("q-stack"), title2(title4)])([span_([text5(lbl)]), input2([type_19(InputText.value), value13(v), style3("width: " + (show12((w * 11 | 0) + 18 | 0) + "px")), onValueInput(function($82) {
-                return h.msg(act($82));
+              return label4([cls("q-stack"), title2(title4)])([span_([text5(lbl)]), input2([type_19(InputText.value), value13(v), style3("width: " + (show12((w * 11 | 0) + 18 | 0) + "px")), onValueInput(function($93) {
+                return h.msg(act($93));
               })])]);
             };
           };
@@ -12439,17 +12439,17 @@
         return label4([cls("q-stack"), title2(ax.name + (" \u2014 picked by " + ax.picked))])([span_([text5(ax.name + "s")]), (function() {
           if (ax.free) {
             return input2([type_19(InputNumber.value), value13(show12(fromMaybe(1)(index2(h.plan.extent)(i2)))), min5(toNumber(fromMaybe(1)(head(ax.sizes)))), max6(toNumber(fromMaybe(1)(last2(ax.sizes)))), onValueInput((function() {
-              var $83 = SetExtent.create(i2);
-              return function($84) {
-                return h.msg($83($84));
+              var $94 = SetExtent.create(i2);
+              return function($95) {
+                return h.msg($94($95));
               };
             })())]);
           }
           ;
           return select3([onValueChange((function() {
-            var $85 = SetExtent.create(i2);
-            return function($86) {
-              return h.msg($85($86));
+            var $96 = SetExtent.create(i2);
+            return function($97) {
+              return h.msg($96($97));
             };
           })())])(map29(function(n) {
             return option([value13(show12(n)), selected2(eq3(index2(h.plan.extent)(i2))(new Just(n)))])([text5(show12(n))]);
@@ -12458,8 +12458,8 @@
       };
     };
     var axs = axes(h.plan.encoding);
-    var encodingRow = div3([cls("q-swrow")])(append13([label4([cls("q-stack")])([span_([text5("encoding")]), select3([onValueChange(function($87) {
-      return h.msg(PickEncoding.create($87));
+    var encodingRow = div3([cls("q-swrow")])(append13([label4([cls("q-stack")])([span_([text5("encoding")]), select3([onValueChange(function($98) {
+      return h.msg(PickEncoding.create($98));
     })])(map29(function(e) {
       return option([value13(name17(e)), selected2(eq12(e)(h.plan.encoding))])([text5(label7(e))]);
     })(all5))])])(append13(mapWithIndex2(extentField)(axs))([field("settle ms")(show12(h.plan.settleMs))(SetSettle.create)(4)("after setting the parameters, before the trigger \u2014 too short and a cell is a blend of itself and its neighbour"), field("spacing ms")(show12(h.plan.spacingMs))(SetSpacing.create)(5)("trigger to trigger; long enough for the sound to finish AND for a gap to be visible after it")])));
@@ -12516,8 +12516,8 @@
         return function(v) {
           return function(act) {
             return function(title4) {
-              return label4([cls("q-stack is-tiny"), title2(title4)])([span_([text5(lbl)]), input2([type_19(InputText.value), value13(v), style3("width: " + (show12((w * 10 | 0) + 16 | 0) + "px")), onValueInput(function($88) {
-                return h.msg(act($88));
+              return label4([cls("q-stack is-tiny"), title2(title4)])([span_([text5(lbl)]), input2([type_19(InputText.value), value13(v), style3("width: " + (show12((w * 10 | 0) + 16 | 0) + "px")), onValueInput(function($99) {
+                return h.msg(act($99));
               })])]);
             };
           };
@@ -12539,7 +12539,7 @@
           return "  " + (num(q2.cvLo) + (" \u2192 " + num(q2.cvHi)));
         }
         ;
-        throw new Error("Failed pattern match at Quadrat.SweepView (line 393, column 15 - line 396, column 61): " + [q2.pitch.constructor.name]);
+        throw new Error("Failed pattern match at Quadrat.SweepView (line 451, column 15 - line 454, column 61): " + [q2.pitch.constructor.name]);
       })();
       var jackOf = function(b2) {
         if (b2 >= 8 && b2 <= 15) {
@@ -12550,7 +12550,7 @@
           return "";
         }
         ;
-        throw new Error("Failed pattern match at Quadrat.SweepView (line 405, column 7 - line 407, column 25): " + [b2.constructor.name]);
+        throw new Error("Failed pattern match at Quadrat.SweepView (line 463, column 7 - line 465, column 25): " + [b2.constructor.name]);
       };
       var parts = catMaybes2([map111(function(b2) {
         return "cv " + (show12(b2) + (jackOf(b2) + volts));
@@ -12559,8 +12559,8 @@
       })(q2.esx), map111(function(c) {
         return "cc " + (show12(c) + (" ch " + (show12(q2.channel) + ("  " + (show12(q2.ccLo) + (" \u2192 " + show12(q2.ccHi)))))));
       })(q2.cc)]);
-      var $54 = $$null2(parts);
-      if ($54) {
+      var $58 = $$null2(parts);
+      if ($58) {
         return "not routed \u2014 this parameter moves nothing";
       }
       ;
@@ -12579,8 +12579,8 @@
       return function(label9) {
         return function(why) {
           return label4([cls("q-swopt" + (function() {
-            var $59 = h.rigFires === want;
-            if ($59) {
+            var $63 = h.rigFires === want;
+            if ($63) {
               return " on";
             }
             ;
@@ -12606,13 +12606,13 @@
     var newPitch = div3([cls("q-swrow")])([label4([cls("q-stack")])([span_([text5("instrument")]), select3([cls("q-swsel"), title2("a calibration table from `deepstar tune` \u2014 it names a SIGNAL PATH, not a module, so it is only true for the jack it was swept from"), onValueChange(h.addPitch)])(cons2(option([value13(""), selected2(true)])([text5("\u2014 no pitch sweep \u2014")]))(map29(function(t) {
       return option([value13(t.label)])([text5(t.label + ("  " + hzSpan(t)))]);
     })(h.tables)))]), span3([cls("q-muted")])([text5((function() {
-      var $60 = h.tablesErr !== "";
-      if ($60) {
+      var $64 = h.tablesErr !== "";
+      if ($64) {
         return h.tablesErr;
       }
       ;
-      var $61 = $$null2(h.tables);
-      if ($61) {
+      var $65 = $$null2(h.tables);
+      if ($65) {
         return "No instrument has been measured yet. `deepstar tune` builds a table by sweeping a module and listening to it.";
       }
       ;
@@ -12623,19 +12623,19 @@
         return function(act) {
           return function(w) {
             return function(title4) {
-              return label4([cls("q-stack"), title2(title4)])([span_([text5(lbl)]), input2([type_19(InputText.value), value13(v), style3("width: " + (show12((w * 11 | 0) + 18 | 0) + "px")), onValueInput(function($89) {
-                return h.msg(act($89));
+              return label4([cls("q-stack"), title2(title4)])([span_([text5(lbl)]), input2([type_19(InputText.value), value13(v), style3("width: " + (show12((w * 11 | 0) + 18 | 0) + "px")), onValueInput(function($100) {
+                return h.msg(act($100));
               })])]);
             };
           };
         };
       };
     };
-    var trigger = div3([cls("q-swrow is-trig")])([field("gate bus")(maybe("")(show12)(h.plan.trigger.gate))(SetGate.create)(3)("an es9-daemon bus pulsed to fire the sound; 15 is ES-9 panel jack 8"), field("level")(num(h.plan.trigger.gateLevel))(SetGateLevel.create)(4)("how high that pulse goes, -1 to 1"), field("es5 gate")(maybe("")(show12)(h.plan.trigger.es5))(SetEs5.create)(3)("one of the ES-5's own eight gates, 0-7. No level \u2014 they have none. Fires alongside the bus gate if both are set"), field("note")(maybe("")(show12)(h.plan.trigger.note))(SetNote.create)(4)("a MIDI note to play instead of, or as well as, the gate"), field("ch")(show12(h.plan.trigger.channel))(SetTrigChannel.create)(3)("MIDI channel for the note"), field("vel")(show12(h.plan.trigger.velocity))(SetVelocity.create)(4)("how hard"), field("hold ms")(show12(h.plan.trigger.ms))(SetHold.create)(4)("how long it is held"), label4([cls("q-stack")])([span_([text5("midi out")]), select3([onValueChange(function($90) {
-      return h.msg(SetPort.create($90));
+    var trigger = div3([cls("q-swrow is-trig")])([field("gate bus")(maybe("")(show12)(h.plan.trigger.gate))(SetGate.create)(3)("an es9-daemon bus pulsed to fire the sound; 15 is ES-9 panel jack 8"), field("level")(num(h.plan.trigger.gateLevel))(SetGateLevel.create)(4)("how high that pulse goes, -1 to 1"), field("es5 gate")(maybe("")(show12)(h.plan.trigger.es5))(SetEs5.create)(3)("one of the ES-5's own eight gates, 0-7. No level \u2014 they have none. Fires alongside the bus gate if both are set"), field("note")(maybe("")(show12)(h.plan.trigger.note))(SetNote.create)(4)("a MIDI note to play instead of, or as well as, the gate"), field("ch")(show12(h.plan.trigger.channel))(SetTrigChannel.create)(3)("MIDI channel for the note"), field("vel")(show12(h.plan.trigger.velocity))(SetVelocity.create)(4)("how hard"), field("hold ms")(show12(h.plan.trigger.ms))(SetHold.create)(4)("how long it is held"), label4([cls("q-stack")])([span_([text5("midi out")]), select3([onValueChange(function($101) {
+      return h.msg(SetPort.create($101));
     })])(cons2(option([value13(""), selected2(h.plan.port === "")])([text5((function() {
-      var $62 = $$null2(h.ports);
-      if ($62) {
+      var $66 = $$null2(h.ports);
+      if ($66) {
         return "none yet";
       }
       ;
@@ -12650,25 +12650,29 @@
       ;
       return text5("");
     })()]);
-    var degreeGuard = function(q2) {
-      return function(ps) {
-        var want = (ps.noteHi - ps.noteLo | 0) + 1 | 0;
-        var have = fromMaybe(0)(index2(h.plan.extent)(q2.axis));
-        var $64 = want < 1 || have === want;
-        if ($64) {
-          return text5("");
-        }
-        ;
-        return span3([cls("q-swwarn")])([text5(show12(have) + (" cells over " + (show12(want) + (" degrees \u2014 " + (function() {
-          var $65 = have < want;
-          if ($65) {
-            return show12(want - have | 0) + " skipped";
+    var degreeGuard = function(i2) {
+      return function(q2) {
+        return function(ps) {
+          var want = (ps.noteHi - ps.noteLo | 0) + 1 | 0;
+          var have = fromMaybe(0)(index2(h.plan.extent)(q2.axis));
+          var $68 = want < 1 || have === want;
+          if ($68) {
+            return text5("");
           }
           ;
-          return show12(have - want | 0) + " repeat";
-        })())))), button([cls("q-swfix"), title2("set this axis to one cell per degree"), onClick(function(v) {
-          return h.msg(new SetExtent(q2.axis, show12(want)));
-        })])([text5("use " + show12(want))])]);
+          return span3([cls("q-swwarn")])([text5(show12(have) + (" cells over " + (show12(want) + (" degrees \u2014 " + (function() {
+            var $69 = have < want;
+            if ($69) {
+              return show12(want - have | 0) + " skipped";
+            }
+            ;
+            return show12(have - want | 0) + " repeat";
+          })())))), button([cls("q-swfix"), title2("record " + (show12(want) + " samples \u2014 one per degree of the range you asked for")), onClick(function(v) {
+            return h.msg(new SetExtent(q2.axis, show12(want)));
+          })])([text5(show12(want) + " cells")]), button([cls("q-swfix"), title2("keep " + (show12(have) + (" samples and shorten the range to " + (noteName(ps.noteLo) + ("\u2013" + noteName((ps.noteLo + have | 0) - 1 | 0)))))), onClick(function(v) {
+            return h.msg(new SetPitchHi(i2, show12((ps.noteLo + have | 0) - 1 | 0)));
+          })])([text5("to " + noteName((ps.noteLo + have | 0) - 1 | 0))])]);
+        };
       };
     };
     var pitchPick = function(i2) {
@@ -12680,13 +12684,13 @@
         })(h.tables)))]), (function() {
           if (q2.pitch instanceof Nothing) {
             return span3([cls("q-swhint")])([text5((function() {
-              var $67 = h.tablesErr !== "";
-              if ($67) {
+              var $71 = h.tablesErr !== "";
+              if ($71) {
                 return h.tablesErr;
               }
               ;
-              var $68 = $$null2(h.tables);
-              if ($68) {
+              var $72 = $$null2(h.tables);
+              if ($72) {
                 return "no calibration tables \u2014 run `deepstar tune`";
               }
               ;
@@ -12695,10 +12699,10 @@
           }
           ;
           if (q2.pitch instanceof Just) {
-            return span_([tiny("from")(4)(show12(q2.pitch.value0.noteLo))(SetPitchLo.create(i2))("lowest note as a MIDI number \u2014 60 is C4, 12 to an octave"), tiny("to")(4)(show12(q2.pitch.value0.noteHi))(SetPitchHi.create(i2))("highest note as a MIDI number. Steps ROUND to whole semitones, so every position lands in tune \u2014 but a count that is not one per semitone SKIPS degrees or REPEATS them, which the line below says."), span3([cls("q-swhint")])([text5(noteName(q2.pitch.value0.noteLo) + ("\u2013" + (noteName(q2.pitch.value0.noteHi) + (" \xB7 " + reach(q2.pitch.value0)))))]), degreeGuard(q2)(q2.pitch.value0)]);
+            return span_([tiny("from")(4)(show12(q2.pitch.value0.noteLo))(SetPitchLo.create(i2))("lowest note as a MIDI number \u2014 60 is C4, 12 to an octave"), tiny("to")(4)(show12(q2.pitch.value0.noteHi))(SetPitchHi.create(i2))("highest note as a MIDI number. Steps ROUND to whole semitones, so every position lands in tune \u2014 but a count that is not one per semitone SKIPS degrees or REPEATS them, which the line below says."), span3([cls("q-swhint")])([text5(noteName(q2.pitch.value0.noteLo) + ("\u2013" + (noteName(q2.pitch.value0.noteHi) + (" \xB7 " + reach(q2.pitch.value0)))))]), degreeGuard(i2)(q2)(q2.pitch.value0)]);
           }
           ;
-          throw new Error("Failed pattern match at Quadrat.SweepView (line 476, column 9 - line 500, column 16): " + [q2.pitch.constructor.name]);
+          throw new Error("Failed pattern match at Quadrat.SweepView (line 534, column 9 - line 558, column 16): " + [q2.pitch.constructor.name]);
         })()]);
       };
     };
@@ -12707,9 +12711,9 @@
         return function(v) {
           var pc = round2(v * 100);
           return div3([cls("q-swcell")])([input2([cls("q-swslider"), type_19(InputRange.value), min5(0), max6(100), step3(new Step(1)), value13(show12(pc)), title2(show12(j2 + 1 | 0) + (": " + (show12(pc) + "%"))), onValueInput((function() {
-            var $91 = SetValue.create(i2)(j2);
-            return function($92) {
-              return h.msg($91($92));
+            var $102 = SetValue.create(i2)(j2);
+            return function($103) {
+              return h.msg($102($103));
             };
           })())]), span3([cls("q-swval")])([text5(show12(pc))]), span3([cls("q-swidx")])([text5(show12(j2 + 1 | 0))])]);
         };
@@ -12732,7 +12736,7 @@
           })(axs))]);
         }
         ;
-        throw new Error("Failed pattern match at Quadrat.SweepView (line 358, column 3 - line 369, column 12): " + [i2.constructor.name, q2.constructor.name]);
+        throw new Error("Failed pattern match at Quadrat.SweepView (line 416, column 3 - line 427, column 12): " + [i2.constructor.name, q2.constructor.name]);
       };
     };
     var where_ = function(i2) {
@@ -12748,50 +12752,50 @@
         })(index2(axs)(q2.axis))))))]), where_(i2)(q2), div3([cls("q-deskgrid")])(mapWithIndex2(cell(i2))(vs))]);
       };
     };
-    var row = function(i2) {
+    var pitchRow = function(i2) {
       return function(q2) {
-        return append13([div3([cls("q-curvecard")])([button([cls("q-curveface"), title2((function() {
-          var $72 = isDrawn(q2.curve);
-          if ($72) {
-            return "drawn by hand \u2014 open it to change the values";
-          }
-          ;
-          return "click for the next shape";
-        })()), onClick(function(v) {
-          return h.msg(new NextShape(i2));
-        })])([thumb(valuesFor(h.plan)(q2))(isDrawn(q2.curve))]), div3([cls("q-curvefoot")])([span3([cls("q-curvelabel")])([text5(label8(q2.curve))]), mini("\u2194")("reverse it \u2014 the falling half of a pair")(h.msg(new FlipCurve(i2))), mini((function() {
-          var $73 = eq3(h.open)(new Just(i2));
-          if ($73) {
+        return append13([div3([cls("q-curveparam is-pitch")])([div3([cls("q-swtop")])([input2([cls("q-swname"), type_19(InputText.value), value13(q2.name), title2("what this parameter is called on the instrument"), onValueInput((function() {
+          var $104 = SetName.create(i2);
+          return function($105) {
+            return h.msg($104($105));
+          };
+        })())]), mini((function() {
+          var $76 = eq3(h.open)(new Just(i2));
+          if ($76) {
             return "close";
           }
           ;
           return "open";
-        })())("place every value by hand")(h.openParam((function() {
-          var $74 = eq3(h.open)(new Just(i2));
-          if ($74) {
+        })())("place every note by hand")(h.openParam((function() {
+          var $77 = eq3(h.open)(new Just(i2));
+          if ($77) {
             return Nothing.value;
           }
           ;
           return new Just(i2);
-        })())), (function() {
-          var $75 = isDrawn(q2.curve);
-          if ($75) {
-            return mini("curve")("back to a named shape \u2014 this discards the values")(h.msg(new ToCurve(i2)));
+        })())), button([cls("q-swmini is-drop"), title2("remove this parameter"), onClick(function(v) {
+          return h.msg(new DropParam(i2));
+        })])([text5("\xD7")])]), (function() {
+          var $78 = isJust(q2.pitch);
+          if ($78) {
+            return text5("");
+          }
+          ;
+          return pitchPick(i2)(q2);
+        })(), div3([cls("q-swsays")])([text5(routing(q2)), span3([cls("q-swaxis")])([text5(" \xB7 " + maybe("")(function(v) {
+          return v.name;
+        })(index2(axs)(q2.axis)))])]), (function() {
+          var $79 = isDrawn(q2.curve) || label8(q2.curve) !== "Linear";
+          if ($79) {
+            return div3([cls("q-swwarn")])([text5("shaped by " + (label8(q2.curve) + " \u2014 the notes are not evenly spaced")), button([cls("q-swfix"), title2("back to one degree per step"), onClick(function(v) {
+              return h.msg(new NextShape(i2));
+            })])([text5("next shape")])]);
           }
           ;
           return text5("");
-        })()])]), div3([cls("q-curveparam")])([div3([cls("q-swtop")])([input2([cls("q-swname"), type_19(InputText.value), value13(q2.name), title2("what this parameter is called on the instrument"), onValueInput((function() {
-          var $93 = SetName.create(i2);
-          return function($94) {
-            return h.msg($93($94));
-          };
-        })())]), button([cls("q-swmini is-drop"), title2("remove this parameter"), onClick(function(v) {
-          return h.msg(new DropParam(i2));
-        })])([text5("\xD7")])]), div3([cls("q-swsays")])([text5(routing(q2)), span3([cls("q-swaxis")])([text5(" \xB7 " + maybe("")(function(v) {
-          return v.name;
-        })(index2(axs)(q2.axis)))])])])])((function() {
-          var $76 = eq3(h.open)(new Just(i2));
-          if ($76) {
+        })()])])((function() {
+          var $80 = eq3(h.open)(new Just(i2));
+          if ($80) {
             return [sliders(i2)(q2)];
           }
           ;
@@ -12799,11 +12803,75 @@
         })());
       };
     };
+    var plainRow = function(i2) {
+      return function(q2) {
+        return append13([div3([cls("q-curvecard")])([button([cls("q-curveface"), title2((function() {
+          var $81 = isDrawn(q2.curve);
+          if ($81) {
+            return "drawn by hand \u2014 open it to change the values";
+          }
+          ;
+          return "click for the next shape";
+        })()), onClick(function(v) {
+          return h.msg(new NextShape(i2));
+        })])([thumb(valuesFor(h.plan)(q2))(isDrawn(q2.curve))]), div3([cls("q-curvefoot")])([span3([cls("q-curvelabel")])([text5(label8(q2.curve))]), mini("\u2194")("reverse it \u2014 the falling half of a pair")(h.msg(new FlipCurve(i2))), mini((function() {
+          var $82 = eq3(h.open)(new Just(i2));
+          if ($82) {
+            return "close";
+          }
+          ;
+          return "open";
+        })())("place every value by hand")(h.openParam((function() {
+          var $83 = eq3(h.open)(new Just(i2));
+          if ($83) {
+            return Nothing.value;
+          }
+          ;
+          return new Just(i2);
+        })())), (function() {
+          var $84 = isDrawn(q2.curve);
+          if ($84) {
+            return mini("curve")("back to a named shape \u2014 this discards the values")(h.msg(new ToCurve(i2)));
+          }
+          ;
+          return text5("");
+        })()])]), div3([cls("q-curveparam")])([div3([cls("q-swtop")])([input2([cls("q-swname"), type_19(InputText.value), value13(q2.name), title2("what this parameter is called on the instrument"), onValueInput((function() {
+          var $106 = SetName.create(i2);
+          return function($107) {
+            return h.msg($106($107));
+          };
+        })())]), button([cls("q-swmini is-drop"), title2("remove this parameter"), onClick(function(v) {
+          return h.msg(new DropParam(i2));
+        })])([text5("\xD7")])]), div3([cls("q-swsays")])([text5(routing(q2)), span3([cls("q-swaxis")])([text5(" \xB7 " + maybe("")(function(v) {
+          return v.name;
+        })(index2(axs)(q2.axis)))])])])])((function() {
+          var $85 = eq3(h.open)(new Just(i2));
+          if ($85) {
+            return [sliders(i2)(q2)];
+          }
+          ;
+          return [];
+        })());
+      };
+    };
+    var row = function(i2) {
+      return function(q2) {
+        if (q2.pitch instanceof Just) {
+          return pitchRow(i2)(q2);
+        }
+        ;
+        if (q2.pitch instanceof Nothing) {
+          return plainRow(i2)(q2);
+        }
+        ;
+        throw new Error("Failed pattern match at Quadrat.SweepView (line 309, column 13 - line 311, column 28): " + [q2.pitch.constructor.name]);
+      };
+    };
     var rowsWhere = function(wantPitch) {
       return concat(mapWithIndex2(function(i2) {
         return function(q2) {
-          var $77 = isJust(q2.pitch) === wantPitch;
-          if ($77) {
+          var $88 = isJust(q2.pitch) === wantPitch;
+          if ($88) {
             return row(i2)(q2);
           }
           ;
@@ -12827,10 +12895,10 @@
       ;
       return "is-moot";
     })())])([sectionHead("Pitch sweep")("optional \u2014 a measured table turns notes into the volts this instrument needs for them"), (function() {
-      var $80 = any2(function(q2) {
+      var $91 = any2(function(q2) {
         return isJust(q2.pitch);
       })(h.plan.params);
-      if ($80) {
+      if ($91) {
         return div3([cls("q-curves")])(rowsWhere(true));
       }
       ;
@@ -13929,7 +13997,7 @@
         })(st.cardView.value0.rows);
       }
       ;
-      throw new Error("Failed pattern match at Quadrat.Main (line 1119, column 17 - line 1124, column 18): " + [st.cardView.constructor.name]);
+      throw new Error("Failed pattern match at Quadrat.Main (line 1139, column 17 - line 1144, column 18): " + [st.cardView.constructor.name]);
     };
     var fits = function(v) {
       return !taken(v) && (!wide || !taken(v + 1 | 0));
@@ -13957,7 +14025,7 @@
       return v.value0.kind === name15(st.kind) && (v.value0.stereo === notEq1(foldsTo(st.kind))(ToMono.value) && (v.value0.slicer > 0 === (joins(st.kind) || isEqual(st.divider)) && length3(v.value0.sets) < 12));
     }
     ;
-    throw new Error("Failed pattern match at Quadrat.Main (line 1092, column 17 - line 1098, column 34): " + [v.constructor.name]);
+    throw new Error("Failed pattern match at Quadrat.Main (line 1112, column 17 - line 1118, column 34): " + [v.constructor.name]);
   };
   var closeAfter = function(st) {
     var v = closes(st.kind);
@@ -13971,7 +14039,7 @@
       })(st.looper) | 0;
     }
     ;
-    throw new Error("Failed pattern match at Quadrat.Main (line 913, column 17 - line 915, column 49): " + [v.constructor.name]);
+    throw new Error("Failed pattern match at Quadrat.Main (line 933, column 17 - line 935, column 49): " + [v.constructor.name]);
   };
   var clampN = function(lo) {
     return function(hi) {
@@ -14146,7 +14214,7 @@
         return "what has been kept, and where it can go";
       }
       ;
-      throw new Error("Failed pattern match at Quadrat.Main (line 1255, column 13 - line 1257, column 57): " + [st.page.constructor.name]);
+      throw new Error("Failed pattern match at Quadrat.Main (line 1275, column 13 - line 1277, column 57): " + [st.page.constructor.name]);
     })();
     var style4 = attr2("style");
     var srcNow = (function() {
@@ -14298,7 +14366,7 @@
         })])([text5("replace")])]);
       }
       ;
-      throw new Error("Failed pattern match at Quadrat.Main (line 2130, column 9 - line 2153, column 16): " + [occupant.constructor.name]);
+      throw new Error("Failed pattern match at Quadrat.Main (line 2150, column 9 - line 2173, column 16): " + [occupant.constructor.name]);
     })(), (function() {
       if (occupant instanceof Just && length3(occupant.value0.sets) >= 1) {
         return label4([class_("q-field is-tight")])([span_([text5("picked by")]), select3([onValueChange(SetLayerMode.create)])(map30(function(m) {
@@ -14330,7 +14398,7 @@
         })() + " \u2014 add stands beside them, replace puts this in their place")))))]);
       }
       ;
-      throw new Error("Failed pattern match at Quadrat.Main (line 2177, column 9 - line 2184, column 86): " + [occupant.constructor.name]);
+      throw new Error("Failed pattern match at Quadrat.Main (line 2197, column 9 - line 2204, column 86): " + [occupant.constructor.name]);
     })()]);
     var noPlace = div3([class_("q-place is-moot")])([span3([class_("q-acthead")])([text5("Place")]), span3([class_("q-scratch")])([text5("SuperDirt \u2014 the set as stored is already the bank, so there is nothing to place it in")])]);
     var meterPc = clampN(0)(1)((srcDb + 60) / 60);
@@ -14380,7 +14448,7 @@
         })())]);
       }
       ;
-      throw new Error("Failed pattern match at Quadrat.Main (line 2225, column 3 - line 2260, column 77): ");
+      throw new Error("Failed pattern match at Quadrat.Main (line 2245, column 3 - line 2280, column 77): ");
     })();
     var labelOf = function(steps2) {
       return function(i2) {
@@ -14397,7 +14465,7 @@
           return show13(i2 + 1 | 0);
         }
         ;
-        throw new Error("Failed pattern match at Quadrat.Main (line 1916, column 5 - line 1918, column 30): " + [v.constructor.name]);
+        throw new Error("Failed pattern match at Quadrat.Main (line 1936, column 5 - line 1938, column 30): " + [v.constructor.name]);
       };
     };
     var plannedRow = function(rng) {
@@ -14488,7 +14556,7 @@
         })()]);
       }
       ;
-      throw new Error("Failed pattern match at Quadrat.Main (line 2042, column 3 - line 2048, column 12): ");
+      throw new Error("Failed pattern match at Quadrat.Main (line 2062, column 3 - line 2068, column 12): ");
     })();
     var keepBar = function(i2) {
       return function(r) {
@@ -14542,7 +14610,7 @@
         })(range2(0)(div1(n - 1 | 0)(innerN)));
       }
       ;
-      throw new Error("Failed pattern match at Quadrat.Main (line 1812, column 3 - line 1817, column 47): " + [n.constructor.name]);
+      throw new Error("Failed pattern match at Quadrat.Main (line 1832, column 3 - line 1837, column 47): " + [n.constructor.name]);
     };
     var expected = (function() {
       var cells3 = cells2(st.sweep.encoding)(st.sweep.extent);
@@ -14593,7 +14661,7 @@
         return 's "' + (r.name + ('" # n "0..' + (show13(r.count - 1 | 0) + '"')));
       }
       ;
-      throw new Error("Failed pattern match at Quadrat.Main (line 1569, column 3 - line 1575, column 78): " + [r.constructor.name]);
+      throw new Error("Failed pattern match at Quadrat.Main (line 1589, column 3 - line 1595, column 78): " + [r.constructor.name]);
     };
     var setRow = function(r) {
       return article([class_("q-set")])([div3([class_("q-set-id")])([div3([class_("q-set-name")])([text5(r.name)]), div3([class_("q-set-when")])([text5(take3(10)(r.made) + (function() {
@@ -14659,7 +14727,7 @@
         })(st.sets))) + " re-runnable")))])])])(map30(setRow)(st.sets)));
       }
       ;
-      throw new Error("Failed pattern match at Quadrat.Main (line 1544, column 3 - line 1565, column 12): ");
+      throw new Error("Failed pattern match at Quadrat.Main (line 1564, column 3 - line 1585, column 12): ");
     })();
     var declaredVsFound = (function() {
       if (!st.swept) {
@@ -14687,7 +14755,7 @@
         return span3([class_("q-warn")])([text5("you swept " + (show13(total(st.sweep.extent)) + (" samples and this divided into " + (show13(length3(st.regions)) + " \u2014 try another divider, or a wider gap, before sending it"))))]);
       }
       ;
-      throw new Error("Failed pattern match at Quadrat.Main (line 2265, column 3 - line 2282, column 80): ");
+      throw new Error("Failed pattern match at Quadrat.Main (line 2285, column 3 - line 2302, column 80): ");
     })();
     var cp = cap(st);
     var elapsed = maybe("0")(function(c) {
@@ -14716,7 +14784,7 @@
         })(), span3([class_("q-muted")])([text5(blurb2(st.divider))])]);
       }
       ;
-      throw new Error("Failed pattern match at Quadrat.Main (line 1972, column 3 - line 1992, column 12): ");
+      throw new Error("Failed pattern match at Quadrat.Main (line 1992, column 3 - line 2012, column 12): ");
     })();
     var writing = maybe(false)(function(v) {
       return v.on;
@@ -14777,7 +14845,7 @@
             })(cp);
           }
           ;
-          throw new Error("Failed pattern match at Quadrat.Main (line 1331, column 32 - line 1335, column 81): " + [st.fill.constructor.name]);
+          throw new Error("Failed pattern match at Quadrat.Main (line 1351, column 32 - line 1355, column 81): " + [st.fill.constructor.name]);
         })())]);
       })()];
     })());
@@ -14812,7 +14880,7 @@
         })())])([text5(fmt(srcDb) + " dB")])]);
       }
       ;
-      throw new Error("Failed pattern match at Quadrat.Main (line 1437, column 14 - line 1462, column 10): " + [st.looper.constructor.name]);
+      throw new Error("Failed pattern match at Quadrat.Main (line 1457, column 14 - line 1482, column 10): " + [st.looper.constructor.name]);
     })();
     var kindBtn = function(k) {
       return button([class_("q-kind" + (function() {
@@ -14863,7 +14931,7 @@
         return span3([class_("q-ok")])([text5("daemon")]);
       }
       ;
-      throw new Error("Failed pattern match at Quadrat.Main (line 1483, column 16 - line 1485, column 79): " + [st.looper.constructor.name]);
+      throw new Error("Failed pattern match at Quadrat.Main (line 1503, column 16 - line 1505, column 79): " + [st.looper.constructor.name]);
     })();
     var clamp01 = function(v) {
       return max13(0)(min7(1)(v));
@@ -14895,7 +14963,7 @@
         };
       }
       ;
-      throw new Error("Failed pattern match at Quadrat.Main (line 1949, column 7 - line 1957, column 12): " + [noted.constructor.name]);
+      throw new Error("Failed pattern match at Quadrat.Main (line 1969, column 7 - line 1977, column 12): " + [noted.constructor.name]);
     };
     var segment = function(i2) {
       return function(r) {
@@ -15076,7 +15144,7 @@
         })(), label4([class_("q-hover")])([input2([type_20(InputCheckbox.value), checked2(st.hoverPlays), onChecked(SetHoverPlays.create)]), span_([text5("hover plays")])])]), dividerRow, sendRow]);
       }
       ;
-      throw new Error("Failed pattern match at Quadrat.Main (line 1733, column 3 - line 1799, column 12): ");
+      throw new Error("Failed pattern match at Quadrat.Main (line 1753, column 3 - line 1819, column 12): ");
     })();
     var cardView = section([class_("q-card")])([h2_([text5("The card, so far")]), (function() {
       if (st.cardView instanceof Nothing) {
@@ -15109,7 +15177,7 @@
         ;
       }
       ;
-      throw new Error("Failed pattern match at Quadrat.Main (line 2297, column 9 - line 2316, column 20): " + [st.cardView.constructor.name]);
+      throw new Error("Failed pattern match at Quadrat.Main (line 2317, column 9 - line 2336, column 20): " + [st.cardView.constructor.name]);
     })()]);
     return div3([class_("q")])([header([class_("q-head")])([h1_([text5("Quadrat")]), nav([class_("q-nav")])([pageTab(Bench.value)("Bench")("cut a transect and look at what came back"), pageTab(Library.value)("Library")("every set kept, re-runnable, and where it can go")]), span3([class_("q-sub")])([text5(tagline)]), connection]), (function() {
       if (st.page instanceof Bench) {
@@ -15127,7 +15195,7 @@
             return waiting;
           }
           ;
-          throw new Error("Failed pattern match at Quadrat.Main (line 1211, column 26 - line 1213, column 40): " + [st.fill.constructor.name]);
+          throw new Error("Failed pattern match at Quadrat.Main (line 1231, column 26 - line 1233, column 40): " + [st.fill.constructor.name]);
         })()]), section([class_("q-verso")])([h2_([text5("The take")]), nameField, (function() {
           if (st.fill instanceof Swept) {
             return settings({
@@ -15157,7 +15225,7 @@
             return handPanel;
           }
           ;
-          throw new Error("Failed pattern match at Quadrat.Main (line 1218, column 19 - line 1225, column 40): " + [st.fill.constructor.name]);
+          throw new Error("Failed pattern match at Quadrat.Main (line 1238, column 19 - line 1245, column 40): " + [st.fill.constructor.name]);
         })(), (function() {
           if (st.pivot instanceof Just && eq8(st.fill)(Swept.value)) {
             return pivotPanel(st.pivot.value0);
@@ -15171,7 +15239,7 @@
         return div_([setsView, cardView]);
       }
       ;
-      throw new Error("Failed pattern match at Quadrat.Main (line 1175, column 7 - line 1233, column 41): " + [st.page.constructor.name]);
+      throw new Error("Failed pattern match at Quadrat.Main (line 1195, column 7 - line 1253, column 41): " + [st.page.constructor.name]);
     })(), section([class_("q-log")])(map30(function(l) {
       return div_([text5(l)]);
     })(st.log))]);
@@ -15446,7 +15514,7 @@
                         };
                       }
                       ;
-                      throw new Error("Failed pattern match at Quadrat.Main (line 1073, column 22 - line 1077, column 61): " + [v.constructor.name]);
+                      throw new Error("Failed pattern match at Quadrat.Main (line 1093, column 22 - line 1097, column 61): " + [v.constructor.name]);
                     }))(function() {
                       return modify_3(note(show13(n) + ((function() {
                         var $864 = n === 1;
@@ -15468,7 +15536,7 @@
                 ;
               }
               ;
-              throw new Error("Failed pattern match at Quadrat.Main (line 1044, column 7 - line 1081, column 80): " + [r.constructor.name]);
+              throw new Error("Failed pattern match at Quadrat.Main (line 1064, column 7 - line 1101, column 80): " + [r.constructor.name]);
             });
           });
         });
@@ -15665,58 +15733,62 @@
               }
               ;
               if (otherwise) {
-                var lo = hzNote(fromMaybe(0)(map112(function(v1) {
-                  return v1.hz;
-                })(head(r.value0.points))));
-                var hi = hzNote(fromMaybe(0)(map112(function(v1) {
-                  return v1.hz;
-                })(last2(r.value0.points))));
-                return discard12(modify_3(function(st) {
-                  var $885 = {};
-                  for (var $886 in st) {
-                    if ({}.hasOwnProperty.call(st, $886)) {
-                      $885[$886] = st[$886];
-                    }
-                    ;
-                  }
-                  ;
-                  $885.sweep = (function() {
-                    var $882 = {};
-                    for (var $883 in st.sweep) {
-                      if ({}.hasOwnProperty.call(st.sweep, $883)) {
-                        $882[$883] = st["sweep"][$883];
+                return bind7(get2)(function(st0) {
+                  var tlo = hzNote(fromMaybe(0)(map112(function(v1) {
+                    return v1.hz;
+                  })(head(r.value0.points))));
+                  var thi = hzNote(fromMaybe(0)(map112(function(v1) {
+                    return v1.hz;
+                  })(last2(r.value0.points))));
+                  var cells3 = max14(1)(total(st0.sweep.extent));
+                  var hi = min1(thi)((tlo + cells3 | 0) - 1 | 0);
+                  return discard12(modify_3(function(st) {
+                    var $885 = {};
+                    for (var $886 in st) {
+                      if ({}.hasOwnProperty.call(st, $886)) {
+                        $885[$886] = st[$886];
                       }
                       ;
                     }
                     ;
-                    $882.params = fromMaybe(st.sweep.params)(modifyAt2(v.value0)(function(v3) {
-                      var $879 = {};
-                      for (var $880 in v3) {
-                        if ({}.hasOwnProperty.call(v3, $880)) {
-                          $879[$880] = v3[$880];
+                    $885.sweep = (function() {
+                      var $882 = {};
+                      for (var $883 in st.sweep) {
+                        if ({}.hasOwnProperty.call(st.sweep, $883)) {
+                          $882[$883] = st["sweep"][$883];
                         }
                         ;
                       }
                       ;
-                      $879.pitch = new Just({
-                        label: r.value0.label,
-                        noteLo: lo,
-                        noteHi: hi,
-                        table: r.value0.points
-                      });
-                      return $879;
-                    })(st.sweep.params));
-                    return $882;
-                  })();
-                  return $885;
-                }))(function() {
-                  return modify_3(note(v.value1 + (": " + (noteName(lo) + ("\u2013" + (noteName(hi) + (", " + (show13(length3(r.value0.points)) + " points"))))))));
+                      $882.params = fromMaybe(st.sweep.params)(modifyAt2(v.value0)(function(v3) {
+                        var $879 = {};
+                        for (var $880 in v3) {
+                          if ({}.hasOwnProperty.call(v3, $880)) {
+                            $879[$880] = v3[$880];
+                          }
+                          ;
+                        }
+                        ;
+                        $879.pitch = new Just({
+                          label: r.value0.label,
+                          noteLo: tlo,
+                          noteHi: hi,
+                          table: r.value0.points
+                        });
+                        return $879;
+                      })(st.sweep.params));
+                      return $882;
+                    })();
+                    return $885;
+                  }))(function() {
+                    return modify_3(note(v.value1 + (": " + (noteName(tlo) + ("\u2013" + (noteName(hi) + (" (measured " + (noteName(tlo) + ("\u2013" + (noteName(thi) + (", " + (show13(length3(r.value0.points)) + " points)"))))))))))));
+                  });
                 });
               }
               ;
             }
             ;
-            throw new Error("Failed pattern match at Quadrat.Main (line 354, column 9 - line 381, column 89): " + [r.constructor.name]);
+            throw new Error("Failed pattern match at Quadrat.Main (line 354, column 9 - line 401, column 90): " + [r.constructor.name]);
           });
         }
         ;
@@ -15794,7 +15866,7 @@
                       ;
                     }
                     ;
-                    throw new Error("Failed pattern match at Quadrat.Main (line 411, column 15 - line 415, column 116): " + [cal.constructor.name]);
+                    throw new Error("Failed pattern match at Quadrat.Main (line 431, column 15 - line 435, column 116): " + [cal.constructor.name]);
                   })()))(function() {
                     return discard12(handleAction(dictMonadAff)(RefreshCard.value))(function() {
                       return discard12(liftEffect12(connect2(defaultUrl)))(function() {
@@ -16094,7 +16166,7 @@
               });
             }
             ;
-            throw new Error("Failed pattern match at Quadrat.Main (line 494, column 5 - line 496, column 51): " + [r.constructor.name]);
+            throw new Error("Failed pattern match at Quadrat.Main (line 514, column 5 - line 516, column 51): " + [r.constructor.name]);
           })())(function() {
             return handleAction(dictMonadAff)(RefreshSets.value);
           });
@@ -16122,7 +16194,7 @@
             });
           }
           ;
-          throw new Error("Failed pattern match at Quadrat.Main (line 500, column 5 - line 502, column 47): " + [r.constructor.name]);
+          throw new Error("Failed pattern match at Quadrat.Main (line 520, column 5 - line 522, column 47): " + [r.constructor.name]);
         });
       }
       ;
@@ -16259,7 +16331,7 @@
                   })());
                 }
                 ;
-                throw new Error("Failed pattern match at Quadrat.Main (line 520, column 5 - line 522, column 81): " + [r.constructor.name]);
+                throw new Error("Failed pattern match at Quadrat.Main (line 540, column 5 - line 542, column 81): " + [r.constructor.name]);
               })())(function() {
                 return handleAction(dictMonadAff)(RefreshCard.value);
               });
@@ -16304,7 +16376,7 @@
             ;
           }
           ;
-          throw new Error("Failed pattern match at Quadrat.Main (line 533, column 5 - line 543, column 42): " + [r.constructor.name]);
+          throw new Error("Failed pattern match at Quadrat.Main (line 553, column 5 - line 563, column 42): " + [r.constructor.name]);
         });
       }
       ;
@@ -16479,7 +16551,7 @@
                 })());
               }
               ;
-              throw new Error("Failed pattern match at Quadrat.Main (line 550, column 5 - line 552, column 81): " + [r.constructor.name]);
+              throw new Error("Failed pattern match at Quadrat.Main (line 570, column 5 - line 572, column 81): " + [r.constructor.name]);
             })())(function() {
               return handleAction(dictMonadAff)(RefreshCard.value);
             });
@@ -16715,7 +16787,7 @@
                   });
                 }
                 ;
-                throw new Error("Failed pattern match at Quadrat.Main (line 628, column 9 - line 646, column 16): " + [r.constructor.name]);
+                throw new Error("Failed pattern match at Quadrat.Main (line 648, column 9 - line 666, column 16): " + [r.constructor.name]);
               })())(function() {
                 return discard12(handleAction(dictMonadAff)(RefreshCard.value))(function() {
                   return handleAction(dictMonadAff)(RefreshSets.value);
@@ -16753,7 +16825,7 @@
               });
             }
             ;
-            throw new Error("Failed pattern match at Quadrat.Main (line 660, column 9 - line 675, column 45): " + [v1.constructor.name]);
+            throw new Error("Failed pattern match at Quadrat.Main (line 680, column 9 - line 695, column 45): " + [v1.constructor.name]);
           });
         }
         ;
@@ -17166,7 +17238,7 @@
               });
             }
             ;
-            throw new Error("Failed pattern match at Quadrat.Main (line 786, column 7 - line 794, column 85): " + [r.constructor.name]);
+            throw new Error("Failed pattern match at Quadrat.Main (line 806, column 7 - line 814, column 85): " + [r.constructor.name]);
           }));
         });
       }
@@ -17245,7 +17317,7 @@
             });
           }
           ;
-          throw new Error("Failed pattern match at Quadrat.Main (line 806, column 5 - line 814, column 45): " + [st.sweepFork.constructor.name]);
+          throw new Error("Failed pattern match at Quadrat.Main (line 826, column 5 - line 834, column 45): " + [st.sweepFork.constructor.name]);
         });
       }
       ;
@@ -17340,7 +17412,7 @@
         });
       }
       ;
-      throw new Error("Failed pattern match at Quadrat.Main (line 345, column 16 - line 833, column 56): " + [v.constructor.name]);
+      throw new Error("Failed pattern match at Quadrat.Main (line 345, column 16 - line 853, column 56): " + [v.constructor.name]);
     };
   };
   var component = function(dictMonadAff) {

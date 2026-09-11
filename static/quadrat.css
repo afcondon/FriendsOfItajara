@@ -543,3 +543,10 @@ body {
 }
 .q-keepbar.on { background: var(--live); }
 .q-keepbar:hover { outline: 1px solid var(--ink); outline-offset: -1px; }
+
+/* A pitch row is not a curve row. No thumbnail, because the shape of a
+   scale is its notes rather than its envelope; no voltage range, because
+   `levelOf` ignores cvLo/cvHi outright on a pitch and a control that does
+   nothing is worse than an absent one. */
+.q-curveparam.is-pitch { grid-column: 1 / -1; border-left: 2px solid var(--hot); padding-left: 12px; }
+.q-curveparam.is-pitch .q-swsays { margin-top: 4px; }
