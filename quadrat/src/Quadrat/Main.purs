@@ -237,6 +237,13 @@ type State =
   -- | finished was one more button away from existing, and the difference was
   -- | invisible. False from the moment a run starts; true only after a set is
   -- | actually written.
+  -- | **Is the tile grid open?**
+  -- |
+  -- | It was the primary surface and spent the page on sixteen near-identical
+  -- | rectangles. The division now lives on the take's own waveform, where it
+  -- | can be seen against the sound that produced it; the grid survives as the
+  -- | detail view, for when one sample is the subject.
+  , tiles :: Boolean
   , kept :: Boolean
   -- | **The overwrite question, held open.** A set whose name is already taken
   -- | is replaced wholesale (`msm cut --overwrite` deletes the directory
@@ -273,6 +280,7 @@ data Action
   -- | confirmation and waits.
   | AskKeep
   | CancelKeep
+  | ShowTiles Boolean
   | SetLayerMode String
   | WriteCard String
   | Play Int
@@ -310,7 +318,7 @@ component = H.mkComponent
       , sweepFork: Nothing, midiPorts: [], swept: false, sweepEdit: Nothing
       , schedule: [], sets: [], tables: [], tablesErr: "", overran: false
       , page: Bench, fill: Swept, source: 0, pivot: Nothing
-      , kept: false, confirmKeep: false }
+      , tiles: false, kept: false, confirmKeep: false }
   , render
   , eval: H.mkEval H.defaultEval { handleAction = handleAction, initialize = Just Init }
   }
@@ -639,6 +647,12 @@ handleAction = case _ of
       else handleAction (SendToCard { place: false, append: false })
 
   CancelKeep -> H.modify_ _ { confirmKeep = false }
+
+  -- Hover-play comes on with the grid: the reason to open it is that one
+  -- sample has become the subject, and a detail view you have to arm is a
+  -- detail view you look at without hearing.
+  ShowTiles v -> H.modify_ \s0 ->
+    s0 { tiles = v, hoverPlays = if v then true else s0.hoverPlays }
 
   Analyse -> analyse true
   Divide -> analyse false
@@ -1722,7 +1736,11 @@ render st =
           [ case st.peaks of
               Just pk | Array.length pk.hi > 0 ->
                 HH.div [ HP.class_ (HH.ClassName "q-whole") ]
-                  [ Wave.svg pk.lo pk.hi [ Wave.klass "q-whole-svg" ]
+                  [ HH.div [ HP.class_ (HH.ClassName "q-strip") ]
+                      [ Wave.svg pk.lo pk.hi [ Wave.klass "q-whole-svg" ]
+                      , HH.div [ HP.class_ (HH.ClassName "q-segs") ]
+                          (Array.mapWithIndex segment st.regions)
+                      ]
                   , HH.div [ HP.class_ (HH.ClassName "q-wholebar") ]
                       [ HH.button
                           [ HP.class_ (HH.ClassName "q-plain")
@@ -1779,12 +1797,87 @@ render st =
                       , HE.onChecked SetHoverPlays ]
                   , HH.span_ [ HH.text "hover plays" ]
                   ]
+              -- **The grid, on demand.** Hover-play comes on with it, because
+              -- the reason to open it is that one sample is now the subject.
+              , HH.button
+                  [ HP.class_ (HH.ClassName ("q-plain" <> if st.tiles then " is-go" else ""))
+                  , HP.title "a waveform and its measurements per piece — the detail \
+                             \view, for when one sample is the subject"
+                  , HE.onClick \_ -> ShowTiles (not st.tiles)
+                  ]
+                  [ HH.text (if st.tiles then "hide tiles" else "tiles") ]
               ]
           , dividerRow
-          , HH.div shaped
-              (Array.mapWithIndex tile st.regions)
+          , if st.tiles
+              then HH.div shaped (Array.mapWithIndex tile st.regions)
+              else HH.text ""
           , sendRow
           ]
+
+  -- | **One piece of the take, drawn where it happened.**
+  -- |
+  -- | A band over the envelope rather than a tile beside it. The division and
+  -- | the sound that produced it are then the same picture, so a piece that
+  -- | starts late, runs into its neighbour, or caught nothing at all is
+  -- | visible without auditioning anything — and the gaps between bands are
+  -- | the silence, drawn by not being covered.
+  -- |
+  -- | Hover plays it, click keeps or drops it.
+  segment i r =
+    let
+      total = max 0.001 (maybe 1.0 _.secs (cap st))
+      pct v = show (100.0 * v / total) <> "%"
+      kept = Set.member i st.keep
+      w = witness i
+    in
+      HH.div
+        [ HP.class_ (HH.ClassName ("q-seg"
+            <> (if kept then "" else " is-dropped")
+            <> (if st.playing == Just i then " is-playing" else "")))
+        , style ("left:" <> pct r.start
+                   <> ";width:" <> pct (max 0.0 (r.end - r.start))
+                   <> (if kept then ";background:" <> w.tint else ""))
+        , HP.title (w.label <> " — " <> fmt (r.end - r.start) <> " s at "
+                      <> fmt r.start <> " s. Click to "
+                      <> (if kept then "drop" else "keep") <> " it.")
+        , HE.onMouseEnter \_ -> HoverPlay i
+        , HE.onClick \_ -> ToggleKeep i
+        ]
+        [ HH.span [ HP.class_ (HH.ClassName "q-seg-n") ] [ HH.text w.label ] ]
+
+  -- | Steps of the run that made this take, for the meanings. Empty for a take
+  -- | played by hand, which has no schedule and so no declared meaning.
+  runStepsC = if Array.null st.schedule then [] else Sweep.steps st.sweep
+
+  -- | **A parameter declares its witness** (spec §5): a pitch axis is
+  -- | witnessed by the note it asked for, anything else by how much came out.
+  -- | `note` is -1 on a parameter that is not a pitch, so finding one is the
+  -- | whole test — no second flag to fall out of step.
+  witness i =
+    let
+      noted = do
+        step <- Array.index runStepsC i
+        m <- Array.find (\x -> x.note >= 0) step.means
+        pure m.note
+      lo = 36
+      hi = 96
+    in
+      case noted of
+        Just n ->
+          { label: Pitch.noteName n
+          , tint: hsl (Int.toNumber (n - lo) / Int.toNumber (hi - lo))
+          }
+        Nothing ->
+          { label: show (i + 1)
+          , tint: hsl (maybe 0.0 (\r -> min 1.0 r.rms * 2.0) (Array.index st.regions i))
+          }
+
+  -- | A cool-to-warm band, at an alpha low enough that the waveform still
+  -- | reads through it. The colour is the measurement, not decoration.
+  hsl t =
+    "hsla(" <> show (Int.round (210.0 - 190.0 * clamp01 t)) <> ",70%,48%,0.22)"
+
+  clamp01 v = max 0.0 (min 1.0 v)
 
   -- | **The algorithms, by name.**
   -- |
@@ -2018,6 +2111,9 @@ render st =
         (\r -> r.bank == st.bank && r.kit == kitName
                  && r.voice == st.voice && r.set /= setName)
         v.rows
+
+  style :: forall r. String -> HH.IProp r Action
+  style = HP.attr (HH.AttrName "style")
 
   small lbl v act =
     HH.label [ HP.class_ (HH.ClassName "q-field is-tight") ]

@@ -119,7 +119,7 @@ body {
    which of these forty is the one I meant, and are they the same sound? A list
    of numbers cannot be read that way; a grid of shapes can. */
 .q-whole { border: 1px solid var(--rule); border-radius: 3px; background: #fff; padding: 6px; margin-bottom: 14px; }
-.q-whole-svg { display: block; width: 100%; height: 72px; }
+.q-whole-svg { display: block; width: 100%; height: 128px; }
 .q-whole-svg polygon { fill: var(--ink); }
 
 .q-gridhead { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; font-size: 13px; color: var(--muted); }
@@ -529,3 +529,36 @@ body {
 /* Greyed, not hidden: the fields are still the rig's instructions and still
    say what would be sent — they are simply not being used. */
 .is-moot { opacity: 0.38; pointer-events: none; }
+
+/* ── The division, drawn on the take that produced it ────────────────────
+   The tile grid was the primary surface: sixteen near-identical rectangles
+   spending the whole page to say what one annotated waveform says better.
+   A band per piece, laid over the envelope at the seconds it occupies, so
+   the division and the sound are one picture — and a piece that starts
+   late, runs into its neighbour or caught nothing is visible without
+   auditioning anything.
+
+   The GAPS are drawn by not being covered. That is the point: silence
+   between hits is the thing a spacing setting is trying to buy, and here
+   you can see whether you bought it. */
+.q-strip { position: relative; }
+.q-segs { position: absolute; inset: 0; }
+.q-seg {
+  position: absolute; top: 0; bottom: 0;
+  border-left: 1px solid var(--rule);
+  cursor: pointer;
+  display: flex; align-items: flex-end; justify-content: center;
+  overflow: hidden;
+}
+.q-seg:last-child { border-right: 1px solid var(--rule); }
+.q-seg:hover { border-left-color: var(--ink); background-color: rgba(22,22,26,0.06) !important; }
+.q-seg-n {
+  font-size: 9px; letter-spacing: 0.04em; color: var(--muted);
+  padding-bottom: 2px; white-space: nowrap; pointer-events: none;
+}
+.q-seg:hover .q-seg-n { color: var(--ink); font-weight: 600; }
+/* Dropped keeps its band — you have to be able to find it again to put it
+   back — but loses its tint and its confidence. */
+.q-seg.is-dropped { background: repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(122,122,133,0.16) 4px, rgba(122,122,133,0.16) 8px); }
+.q-seg.is-dropped .q-seg-n { text-decoration: line-through; opacity: 0.6; }
+.q-seg.is-playing { outline: 2px solid var(--hot); outline-offset: -2px; }
