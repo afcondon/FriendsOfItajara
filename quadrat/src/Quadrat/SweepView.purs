@@ -62,7 +62,6 @@ type Handlers act =
   -- | ignored in the second case. Two controls for one fact is two chances to
   -- | disagree, and the page had no way to say which had won.
   , rigFires :: Boolean
-  , setRigFires :: Boolean -> act
   }
 
 -- | **What the take is** — the destination, the shape of the set, and the two
@@ -79,19 +78,13 @@ settings h =
   p = h.plan
   axs = Encoding.axes p.encoding
 
+  -- | **The encoding and a single extent are said in the statement**, which
+  -- | is the one place the whole specification is legible at once. What stays
+  -- | here is what the statement cannot say without becoming a paragraph: the
+  -- | shape of a MULTI-axis run, and the two intervals.
   encodingRow =
     HH.div [ cls "q-swrow" ]
-      ( [ HH.label [ cls "q-stack" ]
-            [ HH.span_ [ HH.text "encoding" ]
-            , HH.select [ HE.onValueChange (h.msg <<< PickEncoding) ]
-                (map
-                  (\e -> HH.option
-                    [ HP.value (Encoding.name e), HP.selected (e == p.encoding) ]
-                    [ HH.text (Encoding.label e) ])
-                  Encoding.all)
-            ]
-        ]
-          <> Array.mapWithIndex extentField axs
+      ( (if Array.length axs > 1 then Array.mapWithIndex extentField axs else [])
           <> [ field "settle ms" (show p.settleMs) SetSettle 4
                  "after setting the parameters, before the trigger — too short and a \
                  \cell is a blend of itself and its neighbour"
@@ -189,31 +182,16 @@ body h =
       [ sectionHead "Trigger"
           "who strikes the instrument — and so whether the take divides by its \
           \own schedule or by finding the sounds afterwards"
-      , HH.div [ cls "q-swradio" ]
-          [ pick true "The rig fires it"
-              "a schedule of positions, played and recorded as one take, and \
-              \divided by the schedule that made it"
-          , pick false "I play it"
-              "you play it; the onsets are found afterwards. Nothing below is sent"
-          ]
       -- **Absent, not greyed.** These are the rig's instructions for striking
       -- the instrument; when you are the one striking it there are no
       -- instructions, and a greyed row of eight fields is eight things to read
-      -- before discovering they do not apply.
-      , if h.rigFires then trigger else HH.text ""
-      ]
-
-  pick want label why =
-    HH.label
-      [ cls ("q-swopt" <> if h.rigFires == want then " on" else "")
-      , HP.title why
-      ]
-      [ HH.input
-          [ HP.type_ HP.InputRadio
-          , HP.checked (h.rigFires == want)
-          , HE.onClick \_ -> h.setRigFires want
-          ]
-      , HH.span_ [ HH.text label ]
+      -- before discovering they do not apply. WHO strikes it is said in the
+      -- statement, which is the only place it is asked.
+      , if h.rigFires then trigger
+        else
+          HH.span [ cls "q-muted" ]
+            [ HH.text "You are striking it, so the rig sends nothing. The \
+                      \onsets are found in the take afterwards." ]
       ]
 
   pitchSection =

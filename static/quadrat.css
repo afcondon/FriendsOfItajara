@@ -550,3 +550,40 @@ body {
    nothing is worse than an absent one. */
 .q-curveparam.is-pitch { grid-column: 1 / -1; border-left: 2px solid var(--hot); padding-left: 12px; }
 .q-curveparam.is-pitch .q-swsays { margin-top: 4px; }
+
+/* ── The statement ───────────────────────────────────────────────────────
+   The whole specification as one sentence, because the salient choices
+   were spread over two pages, four panels and a masthead — every one of
+   them legible, none of them legible TOGETHER, so what the next Run would
+   actually do could only be assembled by reading the entire page.
+
+   The slots must read as WORDS, not as controls. A row of bordered boxes
+   in a line of prose is a form with prose between it, which is the thing
+   this replaces. So: no borders, inherited type, and a dotted underline
+   that says "this is settable" without saying "this is a widget". */
+.q-say { padding: 20px 0 18px; border-bottom: 1px solid var(--rule); margin-bottom: 20px; }
+.q-sayline {
+  margin: 0; font-size: 23px; line-height: 1.55; font-weight: 300;
+  letter-spacing: -0.01em; max-width: 68ch;
+}
+.q-sayfine { margin: 10px 0 0; font-size: 12px; color: var(--muted); }
+
+.q-slot {
+  font: inherit; color: var(--ink); font-weight: 500;
+  background: none; border: 0; border-bottom: 1px dotted var(--muted);
+  border-radius: 0; padding: 0 2px; cursor: pointer;
+  -webkit-appearance: none; appearance: none;
+}
+.q-slot:hover { border-bottom-color: var(--ink); background: rgba(22,22,26,0.04); }
+.q-slot:focus { outline: 0; border-bottom: 1px solid var(--hot); }
+.q-slot.is-num { width: 2.6em; text-align: right; -moz-appearance: textfield; }
+.q-slot.is-num::-webkit-outer-spin-button,
+.q-slot.is-num::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.q-slot.is-name { min-width: 12em; cursor: text; }
+.q-slot.is-fixed { border-bottom: 1px dotted var(--rule); cursor: default; }
+.q-slot.is-fine { font-size: 12px; font-weight: 600; color: var(--muted); }
+.q-slot.is-fine:hover { color: var(--ink); }
+
+/* The input is chosen in the sentence; only the measurement stays by the
+   Run button, because a meter moves and a name does not. */
+.q-srcname { font-weight: 500; }

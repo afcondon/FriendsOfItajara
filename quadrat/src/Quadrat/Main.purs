@@ -275,6 +275,11 @@ data Action
   -- | routed, then hands over to `PickPitch` — so the Pitch section can be
   -- | entered from the Pitch section.
   | AddPitch String
+  -- | **The two slots in the statement that are not already one action.**
+  -- | `SetPitched` turns the pitch axis on or off; `SetTriggerBy` says which
+  -- | interface strikes the instrument, or that you do.
+  | SetPitched String
+  | SetTriggerBy String
   | AskKeep
   | CancelKeep
   | SetLayerMode String
@@ -673,8 +678,15 @@ handleAction = case _ of
   -- | so keeping under a name that is taken is not a merge. The question is
   -- | asked from `sets`, which is already fetched — no round trip, and no
   -- | dialog: the button becomes the question and cancel is beside it.
+  -- Empty means "not a pitch run", so it clears rather than doing nothing:
+  -- the statement's calibration slot uses the same action for both, and a
+  -- dropdown you cannot get back out of is a trap.
   AddPitch label
-    | label == "" -> pure unit
+    | label == "" -> do
+        st <- H.get
+        case Array.findIndex (\q -> Maybe.isJust q.pitch) st.sweep.params of
+          Just i -> handleAction (SweepMsg (Sweep.ClearPitch i))
+          Nothing -> pure unit
     | otherwise -> do
         st <- H.get
         case Array.findIndex (\q -> Maybe.isJust q.pitch) st.sweep.params of
@@ -693,6 +705,50 @@ handleAction = case _ of
             -- until the take comes back silent.
             handleAction (SweepMsg (Sweep.SetCv i "8"))
             handleAction (PickPitch i label)
+
+  SetPitched v -> do
+    st <- H.get
+    case v, Array.findIndex (\q -> Maybe.isJust q.pitch) st.sweep.params of
+      "unpitched", Just i -> handleAction (SweepMsg (Sweep.ClearPitch i))
+      "pitched", Nothing ->
+        case Array.head st.tables of
+          Just t -> handleAction (AddPitch t.label)
+          Nothing -> H.modify_ (note "no calibration tables — run `deepstar tune` first")
+      _, _ -> pure unit
+
+  -- | **Which interface strikes the instrument.**
+  -- |
+  -- | Three real paths exist — an es9-daemon bus, one of the ES-5's own gates,
+  -- | and a MIDI note. The FH-2 is not a fourth: it is a MIDI module, reached
+  -- | on its own port, so it is offered as a named preset of the MIDI path
+  -- | rather than as a device the rig does not separately have.
+  SetTriggerBy v -> case v of
+    "hand" -> handleAction (FillBy Played)
+    "es9" -> do
+      handleAction (FillBy Swept)
+      st <- H.get
+      when (Maybe.isNothing st.sweep.trigger.gate)
+        (handleAction (SweepMsg (Sweep.SetGate "15")))
+      handleAction (SweepMsg (Sweep.SetEs5 ""))
+      handleAction (SweepMsg (Sweep.SetNote ""))
+    "es5" -> do
+      handleAction (FillBy Swept)
+      st <- H.get
+      when (Maybe.isNothing st.sweep.trigger.es5)
+        (handleAction (SweepMsg (Sweep.SetEs5 "0")))
+      handleAction (SweepMsg (Sweep.SetGate ""))
+      handleAction (SweepMsg (Sweep.SetNote ""))
+    _ -> do
+      handleAction (FillBy Swept)
+      st <- H.get
+      when (Maybe.isNothing st.sweep.trigger.note)
+        (handleAction (SweepMsg (Sweep.SetNote "60")))
+      handleAction (SweepMsg (Sweep.SetGate ""))
+      handleAction (SweepMsg (Sweep.SetEs5 ""))
+      when (v == "fh2") $
+        case Array.find (String.contains (String.Pattern "FH-2")) st.midiPorts of
+          Just o -> handleAction (SweepMsg (Sweep.SetPort o))
+          Nothing -> H.modify_ (note "no MIDI port named FH-2 — is the module on?")
 
   AskKeep -> do
     st <- H.get
@@ -1192,6 +1248,7 @@ render st =
         , HH.span [ HP.class_ (HH.ClassName "q-sub") ] [ HH.text tagline ]
         , connection
         ]
+    , if st.page == Bench then statement else HH.text ""
     , case st.page of
         -- | **A notebook spread: the method on the left, the results on the
         -- | right.**
@@ -1234,14 +1291,12 @@ render st =
                 ]
             , HH.section [ HP.class_ (HH.ClassName "q-verso") ]
                 [ HH.h2_ [ HH.text "The take" ]
-                , nameField
                 , case st.fill of
                     Swept -> SweepView.settings
                       { ports: st.midiPorts, open: st.sweepEdit, plan: st.sweep
                       , msg: SweepMsg, openParam: OpenParam
                       , tables: st.tables, tablesErr: st.tablesErr, pickPitch: PickPitch
-                      , rigFires: st.fill == Swept, addPitch: AddPitch
-                      , setRigFires: \b -> FillBy (if b then Swept else Played) }
+                      , rigFires: st.fill == Swept, addPitch: AddPitch }
                     Played -> handPanel
                 , case st.pivot of
                     Just j | st.fill == Swept -> pivotPanel j
@@ -1270,6 +1325,118 @@ render st =
   -- the recording it is describing.
   elapsed = maybe "0" (\c -> fmt c.secs) cp
 
+  -- | **The whole specification, as one sentence.**
+  -- |
+  -- | Andrew, 2026-09-11: *"it's very easy to get used to a bad interface and
+  -- | then just not see it for what it is"*. The salient choices were spread
+  -- | over two pages, four panels and a masthead — every one of them legible,
+  -- | none of them legible TOGETHER, so what the next Run would actually do
+  -- | could only be assembled by reading the whole page.
+  -- |
+  -- | Written as a sentence, it also stops being possible to leave a slot
+  -- | meaningless: "samples from hits" is not English, which is the same fault
+  -- | the spec records about the daemon's source names, arriving here as a
+  -- | thing you cannot help reading.
+  -- |
+  -- | Each slot is the ONLY control for what it says. Where a panel below used
+  -- | to ask the same question it no longer does.
+  statement =
+    HH.section [ HP.class_ (HH.ClassName "q-say") ]
+      [ HH.p [ HP.class_ (HH.ClassName "q-sayline") ]
+          [ HH.text "Making ", slotExtent
+          , HH.text " ", slotPitched
+          , HH.text " samples from ", slotSource
+          , HH.text ", triggered by ", slotTrigger
+          , HH.text ", kept as ", slotName
+          , HH.text " for ", slotEncoding
+          , HH.text "."
+          ]
+      , HH.p [ HP.class_ (HH.ClassName "q-sayfine") ]
+          ( [ HH.text "Calibration scheme: ", slotCalib ]
+              <> sweptSays
+              <> [ HH.text " · about ", HH.text runSecs, HH.text " to record" ] )
+      ]
+
+  -- | One axis is a number you can say; two are a shape, and the shape belongs
+  -- | with the axes that make it rather than in the middle of a sentence.
+  slotExtent = case st.sweep.extent of
+    [ n ] ->
+      HH.input
+        [ HP.class_ (HH.ClassName "q-slot is-num"), HP.type_ HP.InputNumber
+        , HP.value (show n), HP.min 1.0, HP.max 512.0
+        , HP.title "how many samples this run makes"
+        , HE.onValueInput \v -> SweepMsg (Sweep.SetExtent 0 v)
+        ]
+    ns -> HH.span [ HP.class_ (HH.ClassName "q-slot is-fixed") ]
+            [ HH.text (joinWith " × " (map show ns)) ]
+
+  slotPitched =
+    sel "q-slot" (if pitchOn then "pitched" else "unpitched") SetPitched
+      [ { v: "unpitched", t: "unpitched" }, { v: "pitched", t: "pitched" } ]
+
+  pitchOn = Array.any (\q -> Maybe.isJust q.pitch) st.sweep.params
+
+  slotSource = case st.looper of
+    Nothing -> HH.span [ HP.class_ (HH.ClassName "q-slot is-fixed") ] [ HH.text "…" ]
+    Just top ->
+      sel "q-slot" (show srcNow) PickSource
+        (Array.mapWithIndex
+          (\i src -> { v: show (i + 1)
+                     , t: src.name <> (if src.available then "" else " — off") })
+          top.sources)
+
+  slotTrigger =
+    sel "q-slot" triggerBy SetTriggerBy
+      [ { v: "es9", t: "the ES-9" }, { v: "es5", t: "the ES-5" }
+      , { v: "fh2", t: "the FH-2" }, { v: "midi", t: "MIDI" }
+      , { v: "hand", t: "my own hands" } ]
+
+  triggerBy
+    | st.fill == Played = "hand"
+    | Maybe.isJust st.sweep.trigger.note =
+        if String.contains (String.Pattern "FH-2") st.sweep.port then "fh2" else "midi"
+    | Maybe.isJust st.sweep.trigger.es5 = "es5"
+    | otherwise = "es9"
+
+  slotName =
+    HH.input
+      [ HP.class_ (HH.ClassName "q-slot is-name"), HP.type_ HP.InputText
+      , HP.value st.name, HP.disabled (st.armed || writing)
+      , HP.title "names the take, the set, and the kit it proposes"
+      , HE.onValueInput SetName
+      ]
+
+  slotEncoding =
+    sel "q-slot" (Encoding.name st.sweep.encoding) (SweepMsg <<< Sweep.PickEncoding)
+      (map (\e -> { v: Encoding.name e, t: Encoding.label e }) Encoding.all)
+
+  -- | The measured table, in small letters: which scheme turns notes into
+  -- | volts. `— none —` is not a gap, it is the unpitched case said plainly.
+  slotCalib =
+    sel "q-slot is-fine" (fromMaybe "" pitchLabel) AddPitch
+      ( Array.cons { v: "", t: "— none, unpitched —" }
+          (map (\t -> { v: t.label, t: t.label <> " · " <> t.module }) st.tables) )
+
+  pitchLabel = map _.label (Array.findMap _.pitch st.sweep.params)
+
+  -- | What is being moved, by name only. The shapes and the ranges are in the
+  -- | panel; this says how many knobs are in play, which is the part you want
+  -- | at a glance and the part a list of curves does not tell you.
+  sweptSays =
+    let ns = map _.name (Array.filter (\q -> Maybe.isNothing q.pitch) st.sweep.params)
+    in if Array.null ns then []
+       else [ HH.text (" · sweeping " <> joinWith ", " ns) ]
+
+  runSecs =
+    let n = Encoding.total st.sweep.extent
+    in fmt (Int.toNumber (n * st.sweep.spacingMs) / 1000.0) <> " s"
+
+  -- | A dropdown that reads as a word in a sentence rather than as a control.
+  sel k cur act opts =
+    HH.select
+      [ HP.class_ (HH.ClassName k), HE.onValueChange act ]
+      (map (\o -> HH.option [ HP.value o.v, HP.selected (o.v == cur) ] [ HH.text o.t ]) opts)
+
   -- | **The page's own line**, which changes with the page because the two
   -- | halves are not doing the same thing and should not claim to be.
   tagline = case st.page of
@@ -1283,17 +1450,6 @@ render st =
       , HE.onClick \_ -> GoTo pg
       ]
       [ HH.text label ]
-
-  -- | The take's name, shared by both ways of filling it: what is recorded is
-  -- | a take either way, and it is written under this name either way.
-  nameField =
-    HH.label [ HP.class_ (HH.ClassName "q-field") ]
-      [ HH.span_ [ HH.text "Call it" ]
-      , HH.input
-          [ HP.type_ HP.InputText, HP.value st.name
-          , HP.disabled (st.armed || writing)
-          , HE.onValueInput SetName ]
-      ]
 
   -- | **The one button, whatever is about to fill the take.**
   -- |
@@ -1458,16 +1614,19 @@ render st =
     Nothing -> HH.text ""
     Just top ->
       HH.div [ HP.class_ (HH.ClassName "q-listen") ]
+        -- **The choice is in the statement; the MEASUREMENT stays here.**
+        --
+        -- A number is not enough on its own and never was: a meter MOVES, so
+        -- playing a note answers "is this the right input" in the only way
+        -- that cannot be misread. Which input it is belongs in the sentence
+        -- with the rest of the specification; whether anything is coming in
+        -- belongs directly above the button that spends it.
         [ HH.label [ HP.class_ (HH.ClassName "q-stack") ]
             [ HH.span_ [ HH.text "listening to" ]
-            , HH.select
-                [ HP.disabled (st.armed || writing), HE.onValueChange PickSource ]
-                (Array.mapWithIndex
-                  (\i src -> HH.option
-                    [ HP.value (show (i + 1)), HP.selected (i + 1 == srcNow)
-                    , HP.disabled (not src.available) ]
-                    [ HH.text (src.name <> (if src.available then "" else " — off")) ])
-                  top.sources)
+            , HH.span [ HP.class_ (HH.ClassName "q-srcname") ]
+                [ HH.text (srcName <> (if maybe true _.available
+                                            (top.sources # \ss -> Array.index ss (srcNow - 1))
+                                         then "" else " — off")) ]
             ]
         , HH.div [ HP.class_ (HH.ClassName "q-meter") ]
             [ HH.div
@@ -1546,7 +1705,6 @@ render st =
       -- this is the same `Fill` it used to set.
       , rigFires: st.fill == Swept
       , addPitch: AddPitch
-      , setRigFires: \b -> FillBy (if b then Swept else Played)
       }
 
 
