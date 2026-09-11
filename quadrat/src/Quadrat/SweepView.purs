@@ -48,6 +48,12 @@ type Handlers act =
   , tablesErr :: String
   -- | Choosing one has to FETCH it, so it is an action rather than a `Msg`.
   , pickPitch :: Int -> String -> act
+  -- | **Make a pitch sweep out of nothing.** Choosing an instrument in an
+  -- | empty Pitch section has to CREATE the parameter, because otherwise the
+  -- | only way in is to add a curve in the section below, turn it into a
+  -- | pitch, and then choose an instrument — three steps in two sections to
+  -- | reach the thing the first section is named after.
+  , addPitch :: String -> act
   -- | **Who fires the sound** — `true` when the rig does, which is what makes
   -- | a take a transect, and `false` when you play it.
   -- |
@@ -190,7 +196,11 @@ body h =
           , pick false "I play it"
               "you play it; the onsets are found afterwards. Nothing below is sent"
           ]
-      , trigger
+      -- **Absent, not greyed.** These are the rig's instructions for striking
+      -- the instrument; when you are the one striking it there are no
+      -- instructions, and a greyed row of eight fields is eight things to read
+      -- before discovering they do not apply.
+      , if h.rigFires then trigger else HH.text ""
       ]
 
   pick want label why =
@@ -211,12 +221,46 @@ body h =
       [ sectionHead "Pitch sweep"
           "optional — a measured table turns notes into the volts this \
           \instrument needs for them"
-      , HH.div [ cls "q-curves" ] (rowsWhere true)
-      , if Array.any (\q -> isJust q.pitch) p.params then HH.text ""
-        else
-          HH.span [ cls "q-muted" ]
-            [ HH.text "No parameter is a pitch. Add a curve below and choose a \
-                      \calibration table on it." ]
+      , if Array.any (\q -> isJust q.pitch) p.params
+          then HH.div [ cls "q-curves" ] (rowsWhere true)
+          else newPitch
+      ]
+
+  -- | **The way in, in the section it belongs to.**
+  -- |
+  -- | One control: name the instrument, and the parameter that plays it comes
+  -- | into being routed and ready. Everything else about a pitch axis has a
+  -- | sensible answer already — the note range is the table's own span, the
+  -- | curve is a line, and a jack can be changed once it exists.
+  newPitch =
+    HH.div [ cls "q-swrow" ]
+      [ HH.label [ cls "q-stack" ]
+          [ HH.span_ [ HH.text "instrument" ]
+          , HH.select
+              [ cls "q-swsel"
+              , HP.title "a calibration table from `deepstar tune` — it names a \
+                         \SIGNAL PATH, not a module, so it is only true for the \
+                         \jack it was swept from"
+              , HE.onValueChange h.addPitch
+              ]
+              ( Array.cons
+                  (HH.option [ HP.value "", HP.selected true ]
+                    [ HH.text "— no pitch sweep —" ])
+                  (map
+                    (\t -> HH.option [ HP.value t.label ]
+                      [ HH.text (t.label <> "  " <> hzSpan t) ])
+                    h.tables)
+              )
+          ]
+      , HH.span [ cls "q-muted" ]
+          [ HH.text
+              (if h.tablesErr /= "" then h.tablesErr
+               else if Array.null h.tables
+                 then "No instrument has been measured yet. `deepstar tune` \
+                      \builds a table by sweeping a module and listening to it."
+               else "Choosing one adds the parameter that plays it, on ES-9 \
+                    \jack 1, across the table's own range. Change any of that \
+                    \once it is there.") ]
       ]
 
   paramsSection =
@@ -516,9 +560,8 @@ body h =
         ]
 
   trigger =
-    HH.div [ cls ("q-swrow is-trig" <> if h.rigFires then "" else " is-moot") ]
-      [ HH.span [ cls "q-arm-label" ] [ HH.text "Trigger" ]
-      , field "gate bus" (maybe "" show p.trigger.gate) SetGate 3
+    HH.div [ cls "q-swrow is-trig" ]
+      [ field "gate bus" (maybe "" show p.trigger.gate) SetGate 3
           "an es9-daemon bus pulsed to fire the sound; 15 is ES-9 panel jack 8"
       , field "level" (num p.trigger.gateLevel) SetGateLevel 4 "how high that pulse goes, -1 to 1"
       , field "es5 gate" (maybe "" show p.trigger.es5) SetEs5 3

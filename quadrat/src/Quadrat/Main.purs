@@ -271,6 +271,10 @@ data Action
   -- | **Keep, with the overwrite question asked first.** Falls straight
   -- | through to `SendToCard` when the name is free; otherwise arms the
   -- | confirmation and waits.
+  -- | **Choosing an instrument with no pitch parameter yet.** Creates one,
+  -- | routed, then hands over to `PickPitch` — so the Pitch section can be
+  -- | entered from the Pitch section.
+  | AddPitch String
   | AskKeep
   | CancelKeep
   | SetLayerMode String
@@ -649,6 +653,27 @@ handleAction = case _ of
   -- | so keeping under a name that is taken is not a merge. The question is
   -- | asked from `sets`, which is already fetched — no round trip, and no
   -- | dialog: the button becomes the question and cancel is beside it.
+  AddPitch label
+    | label == "" -> pure unit
+    | otherwise -> do
+        st <- H.get
+        case Array.findIndex (\q -> Maybe.isJust q.pitch) st.sweep.params of
+          -- Retarget the pitch there already is, rather than growing a second
+          -- one: two pitch axes on one transect is a thing to mean deliberately
+          -- and never a thing to arrive at by using a dropdown.
+          Just i -> handleAction (PickPitch i label)
+          Nothing -> do
+            handleAction (SweepMsg Sweep.AddParam)
+            st2 <- H.get
+            let i = Array.length st2.sweep.params - 1
+            handleAction (SweepMsg (Sweep.SetName i "pitch"))
+            -- **Routed on arrival.** Bus 8 is ES-9 panel jack 1. A parameter
+            -- that moves nothing is the failure this section exists to avoid,
+            -- and an unrouted pitch axis looks identical to a working one
+            -- until the take comes back silent.
+            handleAction (SweepMsg (Sweep.SetCv i "8"))
+            handleAction (PickPitch i label)
+
   AskKeep -> do
     st <- H.get
     let setName = if st.name == "" then "set" else st.name
@@ -1195,7 +1220,7 @@ render st =
                       { ports: st.midiPorts, open: st.sweepEdit, plan: st.sweep
                       , msg: SweepMsg, openParam: OpenParam
                       , tables: st.tables, tablesErr: st.tablesErr, pickPitch: PickPitch
-                      , rigFires: st.fill == Swept
+                      , rigFires: st.fill == Swept, addPitch: AddPitch
                       , setRigFires: \b -> FillBy (if b then Swept else Played) }
                     Played -> handPanel
                 , case st.pivot of
@@ -1500,6 +1525,7 @@ render st =
       -- spec were asking the same question in two places; the tab is gone and
       -- this is the same `Fill` it used to set.
       , rigFires: st.fill == Swept
+      , addPitch: AddPitch
       , setRigFires: \b -> FillBy (if b then Swept else Played)
       }
 
