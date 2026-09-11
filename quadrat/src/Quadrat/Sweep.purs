@@ -38,6 +38,8 @@ module Quadrat.Sweep
   , flatten
   , unflatten
   , adopt
+  , saveRun
+  , loadRun
   ) where
 
 import Prelude
@@ -474,6 +476,18 @@ foreign import loadPlain :: Plain -> Effect Plain
 -- | This is the whole of "re-runnable": what comes back is a plan like any
 -- | other, so changing the extent and pressing Run records the same transect
 -- | at a resolution nobody chose at the time.
+-- | **The schedule, kept beside the plan.**
+-- |
+-- | A run's schedule is measured, not derived — the trigger times as they
+-- | actually landed — so a reload that loses it cannot reconstruct it, and the
+-- | page silently falls back to dividing the take into equal pieces. Which is
+-- | only correct if the recording stops at the last hit, and it never does.
+-- |
+-- | Keyed by take name: a schedule belonging to a different take is worse than
+-- | no schedule at all, because it looks like an answer.
+foreign import saveRun :: { take :: String, schedule :: Array Number } -> Effect Unit
+foreign import loadRun :: Effect { take :: String, schedule :: Array Number }
+
 foreign import adoptPlain :: Plain -> Plain -> Plain
 
 adopt :: Plan -> Plain -> Plan

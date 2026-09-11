@@ -53,3 +53,36 @@ export const adoptPlain = (dflt) => (stored) => {
     : dflt.params;
   return { ...dflt, ...stored, params };
 };
+
+// **The schedule, across a reload — keyed by the take it belongs to.**
+//
+// The plan survives a reload and the schedule did not, which quietly downgraded
+// a transect to a guess: with no schedule the page falls back to the detector,
+// and dividing a take into N EQUAL pieces is only right when the recording ends
+// exactly at the last hit. It never does — there is always a tail. Measured on
+// 2026-09-11: a 12-cell run at 3000 ms filled 38.28 s, so equal division gave
+// 3.190 s bands against a 3.000 s schedule, every band 190 ms too long and the
+// twelfth 2.09 s adrift.
+//
+// A schedule is MEASURED — the trigger times as they actually happened — so it
+// cannot be recomputed from the plan, only kept. Keyed by take name because
+// that is what it describes: a schedule belonging to some other take is worse
+// than none.
+const RUN_KEY = "quadrat.run.v1";
+
+export const saveRun = (r) => () => {
+  try {
+    localStorage.setItem(RUN_KEY, JSON.stringify(r));
+  } catch (_) {}
+};
+
+export const loadRun = () => {
+  try {
+    const s = localStorage.getItem(RUN_KEY);
+    const r = s ? JSON.parse(s) : null;
+    if (r && typeof r.take === "string" && Array.isArray(r.schedule)) {
+      return { take: r.take, schedule: r.schedule.filter((n) => Number.isFinite(n)) };
+    }
+  } catch (_) {}
+  return { take: "", schedule: [] };
+};

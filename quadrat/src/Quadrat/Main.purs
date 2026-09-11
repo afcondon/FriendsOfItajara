@@ -389,7 +389,25 @@ handleAction = case _ of
     -- listen, bend, run again loop cannot survive a page that forgets between
     -- runs, and reloading to pick up a fix is exactly when it forgets.
     pl <- liftEffect (Sweep.restore Sweep.emptyPlan)
-    H.modify_ _ { name = n, sweep = pl }
+    -- **And the schedule of the last run.** The plan survived a reload and the
+    -- schedule did not, so a transect reopened after a reload was divided into
+    -- equal pieces instead — which is right only if the recording stops at the
+    -- last hit, and it never does. Measured 2026-09-11: a 12-cell run at
+    -- 3000 ms filled 38.28 s, giving 3.190 s bands against a 3.000 s schedule,
+    -- with the twelfth 2.09 s adrift and straddling its neighbour.
+    --
+    -- Unconditional, because the daemon still holds the audio of that same run
+    -- — which is precisely why the take is still divisible after a reload. Any
+    -- new capture clears it; see `captureOn`.
+    rn <- liftEffect Sweep.loadRun
+    -- **An equal division should start from the plan the page is holding.**
+    -- 16 is `slicerDivisions`' second entry and was never an answer about THIS
+    -- take; a page holding a 12-cell plan offering to cut a take into 16 is
+    -- asserting something it has no reason to believe.
+    H.modify_ _
+      { name = n, sweep = pl, schedule = rn.schedule
+      , equalN = clamp 2 128 (Encoding.total pl.extent)
+      }
     -- The calibration list, once. Failure is carried as a SENTENCE rather than
     -- as an empty array: "nothing has been measured yet" and "the rig doctor is
     -- not running" are the same empty dropdown and different jobs for you.
@@ -852,6 +870,11 @@ captureOn trimHead src = do
   -- go through, and a stale "kept" badge on a fresh recording is exactly the
   -- confusion the flag exists to remove.
   H.modify_ _ { kept = false, confirmKeep = false }
+  -- **A new capture invalidates the kept schedule.** Restored on reload, a
+  -- schedule belonging to some earlier run would divide THIS take into bands
+  -- that look deliberate and describe nothing. Cleared here and written again
+  -- only when a sweep actually finishes.
+  liftEffect (Sweep.saveRun { take: "", schedule: [] })
   -- A fresh name unless you gave it one that has not been used yet. This is
   -- the whole of the overwrite fix: the write is `cw <name>`, so a name that
   -- already belongs to a take on disk is a name that destroys it.
@@ -929,6 +952,11 @@ runSweep = do
   restCv
   H.modify_ (note ("swept " <> show (Encoding.total p.extent) <> " samples")
     <<< _ { sweepAt = Nothing, sweepFork = Nothing, sweepOpen = false, swept = true })
+  -- **Keep the schedule, because it cannot be recomputed.** It is measured —
+  -- the trigger times as they actually landed — and a reload that loses it
+  -- downgrades a transect to a guess without saying so. See `Sweep.saveRun`.
+  st1 <- H.get
+  liftEffect (Sweep.saveRun { take: st1.name, schedule: st1.schedule })
   handleAction Close
 
 -- | **Stand the instrument at one cell of the transect**, without striking it.
