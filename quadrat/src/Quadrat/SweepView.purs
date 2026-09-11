@@ -15,6 +15,7 @@
 module Quadrat.SweepView
   ( Handlers
   , body
+  , curves
   , settings
   ) where
 
@@ -134,7 +135,19 @@ settings h =
           , HE.onValueInput (h.msg <<< act) ]
       ]
 
+-- | The take's apparatus: what strikes the instrument and at what pitch.
 body :: forall w act. Handlers act -> HH.HTML w act
+body h = part h false
+
+-- | **The curves, given a row of their own.**
+-- |
+-- | Split out rather than moved, because every helper a curve needs lives in
+-- | one where-clause and duplicating them to gain a second entry point would
+-- | be two renderers to keep in step. One function, one flag, two surfaces.
+curves :: forall w act. Handlers act -> HH.HTML w act
+curves h = part h true
+
+part :: forall w act. Handlers act -> Boolean -> HH.HTML w act
 -- | **Three optional sections, ruled apart: what strikes it, what pitch it is
 -- | struck at, and what else moves.**
 -- |
@@ -144,14 +157,10 @@ body :: forall w act. Handlers act -> HH.HTML w act
 -- | three is independently optional and they are answered at different times:
 -- | the trigger when the cable went in, the pitch when you chose the
 -- | instrument, the curves every single run.
-body h =
+part h onlyCurves =
   HH.div [ cls "q-sweep" ]
-    [ triggerSection
-    , HH.hr [ cls "q-swrule" ]
-    , pitchSection
-    , HH.hr [ cls "q-swrule" ]
-    , paramsSection
-    ]
+    ( if onlyCurves then [ paramsSection ]
+      else [ triggerSection, HH.hr [ cls "q-swrule" ], pitchSection ] )
   where
   p = h.plan
 
@@ -335,8 +344,16 @@ body h =
 
   -- | A curve, and the parameter it moves. The sketch's left two columns, kept
   -- | on one row so the arrow between them needs no drawing.
+  -- | **A card: the shape above, what it means below.**
+  -- |
+  -- | Side by side, a curve and its description were two columns that had to
+  -- | stay aligned across every row, which fixed the row height to the taller
+  -- | of them and let four parameters fill a page. Stacked, a card is one
+  -- | object of its own width, and eight of them are a line you read across —
+  -- | which is what a transect's parameters are.
   plainRow i q =
-    [ HH.div [ cls "q-curvecard" ]
+    [ HH.div [ cls "q-pcard" ]
+        [ HH.div [ cls "q-curvecard" ]
         [ HH.button
             [ cls "q-curveface"
             , HP.title (if isDrawn q.curve
@@ -385,6 +402,7 @@ body h =
             , HH.span [ cls "q-swaxis" ]
                 [ HH.text (" · " <> maybe "" _.name (Array.index axs q.axis)) ]
             ]
+        ]
         ]
     ]
       <> (if h.open == Just i then [ sliders i q ] else [])

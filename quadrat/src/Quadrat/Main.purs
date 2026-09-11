@@ -237,12 +237,22 @@ type State =
   -- | finished was one more button away from existing, and the difference was
   -- | invisible. False from the moment a run starts; true only after a set is
   -- | actually written.
+  -- | **Which modal is open, if any.** The two fiddly jobs — how the take was
+  -- | divided, and where a set goes on a card — are each a handful of controls
+  -- | consulted rarely and read never. On the page they crowded the two things
+  -- | you look at constantly: the waveform and the sentence.
+  , modal :: Maybe Modal
   , kept :: Boolean
   -- | **The overwrite question, held open.** A set whose name is already taken
   -- | is replaced wholesale (`msm cut --overwrite` deletes the directory
   -- | first), so the one destructive act on this page asks before it acts.
   , confirmKeep :: Boolean
   }
+
+-- | The two panels that became modals.
+data Modal = DivisionModal | ExportModal
+
+derive instance Eq Modal
 
 data Action
   -- | **Make this parameter a pitch**, or (with an empty label) stop it being
@@ -278,6 +288,7 @@ data Action
   -- | **The two slots in the statement that are not already one action.**
   -- | `SetPitched` turns the pitch axis on or off; `SetTriggerBy` says which
   -- | interface strikes the instrument, or that you do.
+  | OpenModal (Maybe Modal)
   | SetPitched String
   | SetTriggerBy String
   | AskKeep
@@ -319,7 +330,7 @@ component = H.mkComponent
       , sweepFork: Nothing, midiPorts: [], swept: false, sweepEdit: Nothing
       , schedule: [], sets: [], tables: [], tablesErr: "", overran: false
       , page: Bench, fill: Swept, source: 0, pivot: Nothing
-      , kept: false, confirmKeep: false }
+      , modal: Nothing, kept: false, confirmKeep: false }
   , render
   , eval: H.mkEval H.defaultEval { handleAction = handleAction, initialize = Just Init }
   }
@@ -705,6 +716,8 @@ handleAction = case _ of
             -- until the take comes back silent.
             handleAction (SweepMsg (Sweep.SetCv i "8"))
             handleAction (PickPitch i label)
+
+  OpenModal m -> H.modify_ _ { modal = m }
 
   SetPitched v -> do
     st <- H.get
@@ -1277,11 +1290,18 @@ render st =
         -- | eight curves — and it is all one subject, so it takes the wide
         -- | page whole. What came back is a vertical stack of traces and a run
         -- | button, which wants a narrow column and no more.
+        -- | **Specification, result, adjustments — in that order, down the
+        -- | page.**
+        -- |
+        -- | Andrew's arrangement. The sentence says what this run is; the
+        -- | take, full width, is what came of it; the columns beneath are the
+        -- | things you adjust and then stop looking at. Side-by-side pages put
+        -- | the specification and the result in competition for the same
+        -- | glance, and neither won.
         Bench ->
-          HH.div [ HP.class_ (HH.ClassName "q-spread") ]
-            [ HH.section [ HP.class_ (HH.ClassName "q-recto") ]
-                [ HH.h2_ [ HH.text "What came back" ]
-                , inputRow
+          HH.div_
+            [ HH.section [ HP.class_ (HH.ClassName "q-hero") ]
+                [ inputRow
                 , goRow
                 , if not (Array.null st.regions) || st.busy || hasTake
                     then caught
@@ -1289,20 +1309,30 @@ render st =
                       Swept -> expected
                       Played -> waiting
                 ]
-            , HH.section [ HP.class_ (HH.ClassName "q-verso") ]
-                [ HH.h2_ [ HH.text "The take" ]
-                , case st.fill of
-                    Swept -> SweepView.settings
-                      { ports: st.midiPorts, open: st.sweepEdit, plan: st.sweep
-                      , msg: SweepMsg, openParam: OpenParam
-                      , tables: st.tables, tablesErr: st.tablesErr, pickPitch: PickPitch
-                      , rigFires: st.fill == Swept, addPitch: AddPitch }
-                    Played -> handPanel
+            , HH.div [ HP.class_ (HH.ClassName "q-cols") ]
+                [ HH.section [ HP.class_ (HH.ClassName "q-col is-narrow") ]
+                    [ HH.h2_ [ HH.text "Division" ]
+                    , divisionSummary
+                    , sendRow
+                    ]
+                , HH.section [ HP.class_ (HH.ClassName "q-col") ]
+                    [ HH.h2_ [ HH.text "The take" ]
+                    , case st.fill of
+                        Swept -> SweepView.settings (sweepHandlers)
+                        Played -> handPanel
+                    , SweepView.body sweepHandlers
+                    ]
+                ]
+            , HH.section [ HP.class_ (HH.ClassName "q-curverow") ]
+                [ SweepView.curves sweepHandlers
                 , case st.pivot of
                     Just j | st.fill == Swept -> pivotPanel j
                     _ -> HH.text ""
-                , transectPanel
                 ]
+            , case st.modal of
+                Just DivisionModal -> modalBox "Division details" divisionPanel
+                Just ExportModal -> modalBox "Export to card" placeBlock
+                Nothing -> HH.text ""
             ]
         Library ->
           HH.div_ [ setsView, cardView ]
@@ -1324,6 +1354,70 @@ render st =
   -- rather than from a clock here: a page that keeps its own time drifts from
   -- the recording it is describing.
   elapsed = maybe "0" (\c -> fmt c.secs) cp
+
+  sweepHandlers =
+    { ports: st.midiPorts, open: st.sweepEdit, plan: st.sweep
+    , msg: SweepMsg, openParam: OpenParam
+    , tables: st.tables, tablesErr: st.tablesErr, pickPitch: PickPitch
+    , rigFires: st.fill == Swept, addPitch: AddPitch
+    }
+
+  -- | **A modal, for the jobs that are consulted rarely and read never.**
+  -- |
+  -- | Dividing settings and card addresses are each a handful of controls that
+  -- | matter intensely for about ten seconds and then never again. On the page
+  -- | they competed for attention with the two things you look at constantly.
+  modalBox title inner =
+    HH.div
+      [ HP.class_ (HH.ClassName "q-scrim")
+      , HE.onClick \_ -> OpenModal Nothing
+      ]
+      [ HH.div
+          [ HP.class_ (HH.ClassName "q-modal")
+          -- Clicks inside must not reach the scrim, or every control in the
+          -- modal would also close it.
+          , HE.onClick \_ -> OpenModal (st.modal)
+          ]
+          [ HH.div [ HP.class_ (HH.ClassName "q-modalhead") ]
+              [ HH.h2_ [ HH.text title ]
+              , HH.button
+                  [ HP.class_ (HH.ClassName "q-plain")
+                  , HE.onClick \_ -> OpenModal Nothing ]
+                  [ HH.text "done" ]
+              ]
+          , inner
+          ]
+      ]
+
+  -- | What the division came to, in the column — the numbers you read, with
+  -- | the controls that produced them a click away.
+  divisionSummary
+    | Array.null st.regions =
+        HH.p [ HP.class_ (HH.ClassName "q-muted") ]
+          [ HH.text (if hasTake then "Recorded, not divided yet."
+                     else "Nothing recorded yet.") ]
+    | otherwise =
+        HH.div [ HP.class_ (HH.ClassName "q-divsum") ]
+          [ HH.p [ HP.class_ (HH.ClassName "q-divcount") ]
+              [ HH.text (show (Set.size st.keep) <> " of "
+                  <> show (Array.length st.regions) <> " kept") ]
+          , HH.p [ HP.class_ (HH.ClassName "q-muted") ]
+              [ HH.text (if Array.null st.schedule
+                          then "divided by " <> Divider.name st.divider
+                          else "divided by the schedule that made it") ]
+          , HH.div [ HP.class_ (HH.ClassName "q-divbtns") ]
+              [ HH.button
+                  [ HP.class_ (HH.ClassName "q-plain"), HE.onClick \_ -> KeepAll true ]
+                  [ HH.text "Keep all" ]
+              , HH.button
+                  [ HP.class_ (HH.ClassName "q-plain"), HE.onClick \_ -> KeepAll false ]
+                  [ HH.text "Keep none" ]
+              , HH.button
+                  [ HP.class_ (HH.ClassName "q-plain")
+                  , HE.onClick \_ -> OpenModal (Just DivisionModal) ]
+                  [ HH.text "Division details…" ]
+              ]
+          ]
 
   -- | **The whole specification, as one sentence.**
   -- |
@@ -1726,30 +1820,6 @@ render st =
   -- | Not a second HTML page, which was the other option considered. The point
   -- | was room, and a second page would have meant a second Halogen app and a
   -- | second socket to the daemon to get it.
-  -- | **The apparatus**: one curve per parameter you want to move, and the
-  -- | destination deciding the shape of the set.
-  -- |
-  -- | No header of its own and no Run row — the column carries both, because
-  -- | they are the same for a take played by hand and the page should not say
-  -- | so twice.
-  transectPanel =
-    SweepView.body
-      { ports: st.midiPorts
-      , open: st.sweepEdit
-      , plan: st.sweep
-      , msg: SweepMsg
-      , openParam: OpenParam
-      , tables: st.tables
-      , tablesErr: st.tablesErr
-      , pickPitch: PickPitch
-      -- **One fact, one control.** The Transect/By-hand tab and the trigger
-      -- spec were asking the same question in two places; the tab is gone and
-      -- this is the same `Fill` it used to set.
-      , rigFires: st.fill == Swept
-      , addPitch: AddPitch
-      }
-
-
   -- | **The sets on disk**, which are the artefact this page exists to make.
   -- |
   -- | A card is a projection: it says which set is on which voice, in the
@@ -1973,7 +2043,26 @@ render st =
                       ]
                   ]
               _ -> HH.text ""
-          , HH.div [ HP.class_ (HH.ClassName "q-gridhead") ]
+          , if Array.null st.regions && hasTake && not st.busy
+              then
+                HH.div [ HP.class_ (HH.ClassName "q-wholebar") ]
+                  [ HH.button
+                      [ HP.class_ (HH.ClassName "q-plain is-go"), HE.onClick \_ -> Analyse ]
+                      [ HH.text "Divide it" ]
+                  , HH.span [ HP.class_ (HH.ClassName "q-muted") ]
+                      [ HH.text (if st.busy then "dividing…" else "") ]
+                  ]
+              else HH.text ""
+          ]
+
+  -- | **How the take was divided** — the controls, where the numbers are not.
+  -- |
+  -- | A divider, a gap and a lead are decided once and then read never; the
+  -- | counts they produce are read constantly. The column carries the counts
+  -- | and this carries the controls, which is the split the page was missing.
+  divisionPanel =
+    HH.div [ HP.class_ (HH.ClassName "q-divpanel") ]
+      [ HH.div [ HP.class_ (HH.ClassName "q-gridhead") ]
               [ HH.span_
                   [ HH.text (if st.busy then "dividing…"
                              else if Array.null st.regions
@@ -2014,9 +2103,8 @@ render st =
                   , HH.span_ [ HH.text "hover plays" ]
                   ]
               ]
-          , dividerRow
-          , sendRow
-          ]
+      , dividerRow
+      ]
 
   -- | **The rows of a transect.**
   -- |
@@ -2264,7 +2352,19 @@ render st =
     | otherwise =
         HH.div [ HP.class_ (HH.ClassName "q-acts") ]
           [ keepBlock
-          , if placeable then placeBlock else noPlace
+          -- **Exporting is a later, separate act.** A set exists whether or
+          -- not it has an address; putting one on a card is a thing you do
+          -- afterwards, often to a set made an hour ago. So it is a door
+          -- rather than a panel — and for SuperDirt there is no door, because
+          -- the set as stored is already the bank.
+          , if not placeable then noPlace
+            else
+              HH.button
+                [ HP.class_ (HH.ClassName "q-plain")
+                , HP.disabled (Set.isEmpty st.keep)
+                , HE.onClick \_ -> OpenModal (Just ExportModal)
+                ]
+                [ HH.text "Export to card…" ]
           ]
 
   setName = if st.name == "" then "set" else st.name
@@ -2319,7 +2419,7 @@ render st =
 
   noPlace =
     HH.div [ HP.class_ (HH.ClassName "q-place is-moot") ]
-      [ HH.span [ HP.class_ (HH.ClassName "q-acthead") ] [ HH.text "Place" ]
+      [ HH.span [ HP.class_ (HH.ClassName "q-acthead") ] [ HH.text "Export" ]
       , HH.span [ HP.class_ (HH.ClassName "q-scratch") ]
           [ HH.text "SuperDirt — the set as stored is already the bank, so there \
                     \is nothing to place it in" ]
@@ -2327,7 +2427,7 @@ render st =
 
   placeBlock =
     HH.div [ HP.class_ (HH.ClassName "q-place") ]
-      [ HH.span [ HP.class_ (HH.ClassName "q-acthead") ] [ HH.text "Place on a card" ]
+      [ HH.span [ HP.class_ (HH.ClassName "q-acthead") ] [ HH.text "Export to card" ]
       , small "bank" st.bank SetBank
       , small "kit" (if st.kit == "" then setName else st.kit) SetKit
       , HH.label [ HP.class_ (HH.ClassName "q-field is-tight") ]

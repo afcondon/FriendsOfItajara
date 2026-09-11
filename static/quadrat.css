@@ -245,13 +245,7 @@ body {
 /* `stretch`, not `start`: the rule between the pages runs the height of the
    taller one, which is what makes it a spread rather than two stacked boxes
    that happen to be side by side. */
-.q-spread { display: grid; grid-template-columns: minmax(380px, 560px) 1fr;
-  gap: clamp(20px, 2vw, 36px); align-items: stretch; }
-.q-recto { border-right: 1px solid var(--rule); padding-right: clamp(20px, 2vw, 36px); }
-.q-recto, .q-verso { margin-bottom: 30px; }
 @media (max-width: 1180px) {
-  .q-spread { grid-template-columns: 1fr; gap: 0; }
-  .q-recto { border-right: 0; padding-right: 0; }
 }
 
 /* Two pages, named. A text nav rather than boxed tabs: the rule under the
@@ -564,7 +558,7 @@ body {
 .q-say { padding: 20px 0 18px; border-bottom: 1px solid var(--rule); margin-bottom: 20px; }
 .q-sayline {
   margin: 0; font-size: 23px; line-height: 1.55; font-weight: 300;
-  letter-spacing: -0.01em; max-width: 68ch;
+  letter-spacing: -0.01em;
 }
 .q-sayfine { margin: 10px 0 0; font-size: 12px; color: var(--muted); }
 
@@ -598,3 +592,49 @@ body {
   padding: 1px 7px; margin-left: 6px;
 }
 .q-sayfix:hover { background: var(--hot); color: #fff; }
+
+/* ── Specification, result, adjustments ──────────────────────────────────
+   Down the page rather than across it. Side-by-side pages put the
+   specification and the result in competition for the same glance and
+   neither won; stacked, each gets the whole width when it is the thing
+   being read. */
+.q-hero { margin-bottom: 22px; }
+.q-hero .q-whole { margin-bottom: 10px; }
+.q-cols { display: grid; grid-template-columns: minmax(230px, 300px) 1fr; gap: 32px; align-items: start; }
+.q-col { min-width: 0; }
+.q-col h2 { margin: 0 0 12px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); font-weight: 600; }
+.q-curverow { margin-top: 26px; padding-top: 20px; border-top: 1px solid var(--rule); }
+
+/* The division, as numbers. The controls that produced them are a click
+   away — decided once, read never. */
+.q-divsum { display: flex; flex-direction: column; gap: 6px; }
+.q-divcount { margin: 0; font-size: 19px; font-variant-numeric: tabular-nums; }
+.q-divsum p.q-muted { margin: 0; font-size: 12px; }
+.q-divbtns { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.q-divpanel { display: flex; flex-direction: column; gap: 14px; }
+
+/* Cards in a line: the shape above, what it means below. Side by side they
+   were two columns that had to stay aligned across every row, which fixed
+   the height to the taller of them and let four parameters fill a page. */
+.q-curverow .q-curves { display: flex; flex-wrap: wrap; gap: 14px; }
+.q-pcard { width: 232px; display: flex; flex-direction: column; gap: 6px; }
+.q-pcard .q-curvecard { width: 100%; }
+.q-pcard .q-curveparam { width: 100%; }
+
+/* ── Modals ──────────────────────────────────────────────────────────────
+   For the two jobs that matter intensely for ten seconds and then never
+   again: how the take was divided, and where a set goes on a card. */
+.q-scrim {
+  position: fixed; inset: 0; background: rgba(22,22,26,0.28);
+  display: flex; align-items: flex-start; justify-content: center;
+  padding: 8vh 20px 20px; z-index: 50;
+}
+.q-modal {
+  background: #fff; border: 1px solid var(--rule); border-radius: 4px;
+  box-shadow: 0 18px 50px rgba(22,22,26,0.18);
+  padding: 20px 24px 24px; max-width: 900px; width: 100%;
+  max-height: 78vh; overflow-y: auto;
+}
+.q-modalhead { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; }
+.q-modalhead h2 { margin: 0; flex: 1; font-size: 13px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); font-weight: 600; }
+.q-modal .q-place { padding-left: 0; border-left: 0; }
