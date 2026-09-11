@@ -702,3 +702,22 @@ body {
     135deg, rgba(200,80,31,.30) 0 4px, rgba(200,80,31,0) 4px 9px);
   box-shadow: inset 0 -2px 0 #c8501f;
 }
+
+/* Spacing, behind the Trigger door. A dry run is a setting you arrive at, not
+   an act you reach for — it is done once and read from afterwards, and the
+   thing you press repeatedly is still Record. */
+.q-pacing { margin-top: 18px; }
+.q-pace-opt { display: block; margin: 6px 0; font-size: 13px; cursor: pointer; }
+.q-pace-opt.is-moot { color: var(--muted); cursor: default; }
+.q-pace-opt input { margin-right: 7px; }
+.q-pace-act { display: flex; align-items: center; gap: 10px; margin: 10px 0 0; }
+.q-pace-act .q-muted { font-size: 11px; line-height: 1.35; }
+.q-pace-cells {
+  display: flex; flex-wrap: wrap; gap: 4px 10px;
+  margin-top: 10px; font-size: 11px;
+  font-variant-numeric: tabular-nums; color: var(--muted);
+}
+/* Stale numbers are struck through rather than hidden: what they say is still
+   the last thing that was true, and hiding it would lose the only clue to how
+   far off the flat spacing was. */
+.q-pace-cell.is-stale { text-decoration: line-through; opacity: .6; }

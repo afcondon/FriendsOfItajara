@@ -43,6 +43,10 @@ module Quadrat.Sweep
   , Conflict
   , conflicts
   , sayConflict
+  , fingerprint
+  , pacedStale
+  , spacingAt
+  , startsAt
   ) where
 
 import Prelude
@@ -131,6 +135,69 @@ type Trigger =
   , velocity :: Int
   , ms :: Int
   }
+
+-- | **Everything about a plan that changes how it SOUNDS**, as one string.
+-- |
+-- | The point is to say whether a set of measured timings still describes this
+-- | plan. So it covers what the instrument is asked to do — the curves, where
+-- | each parameter is routed, the extent, the trigger, the settle — and
+-- | deliberately NOT `spacingMs`, `guardMs` or `leadMs`.
+-- |
+-- | **Excluding the spacing is the whole trick.** The measurement exists in
+-- | order to choose a spacing; if changing the spacing invalidated it, the
+-- | guard would eat its own output and no measurement could ever be used. The
+-- | name and the encoding are out for the same reason: renaming a set does not
+-- | change how long a decay takes.
+fingerprint :: Plan -> String
+fingerprint p =
+  joinWith "|"
+    ( [ joinWith "," (map show p.extent)
+      , show p.settleMs
+      , maybe "-" show p.trigger.gate
+      , maybe "-" show p.trigger.es5
+      , show p.trigger.gateLevel
+      , maybe "-" show p.trigger.note
+      , show p.trigger.channel <> "/" <> show p.trigger.velocity
+        <> "/" <> show p.trigger.ms
+      ]
+        <> map ofParam p.params
+    )
+  where
+  ofParam q =
+    joinWith "~"
+      [ q.name
+      , maybe "-" show q.cv, show q.cvLo, show q.cvHi
+      , maybe "-" show q.esx
+      , maybe "-" show q.cc, show q.ccLo, show q.ccHi, show q.channel
+      , maybe "-" (\ps -> ps.label <> ":" <> show ps.noteLo <> "-" <> show ps.noteHi) q.pitch
+      , joinWith "," (map show (valuesFor p q))
+      ]
+
+-- | **Measured timings that no longer describe this plan.** True only when
+-- | there ARE timings: never measured is not the same as out of date, and the
+-- | page says so differently.
+pacedStale :: Plan -> Boolean
+pacedStale p = not (Array.null p.paced) && p.pacedFor /= fingerprint p
+
+-- | **The spacing before cell `i`**, in milliseconds.
+-- |
+-- | Measured pacing when there is some, it is in use, and it still describes
+-- | this plan — otherwise the flat one. Falling back rather than refusing is
+-- | deliberate: a stale measurement should cost you the benefit, never the run.
+spacingAt :: Plan -> Int -> Int
+spacingAt p i =
+  if p.usePaced && not (pacedStale p)
+    then fromMaybe p.spacingMs (Array.index p.paced i)
+    else p.spacingMs
+
+-- | **When cell `i` starts, in milliseconds from the run's own zero.**
+-- |
+-- | A sum rather than a multiple, because with measured pacing the cells are
+-- | not the same length. `startsAt p 0` is 0 and `startsAt p n` is how long the
+-- | whole run takes, which is what the estimate in the sentence reads.
+startsAt :: Plan -> Int -> Int
+startsAt p i =
+  Array.foldl (\acc k -> acc + spacingAt p k) 0 (Array.range 0 (i - 1))
 
 -- | **One place, claimed twice.**
 -- |
@@ -238,6 +305,19 @@ type Plan =
   -- | in front of every sample. Both are visible in the tiles — this is a knob
   -- | to set by looking, not a constant to believe. See `Quadrat.Schedule`.
   , leadMs :: Int
+  -- | **What each cell actually needed, in milliseconds, measured.**
+  -- |
+  -- | Empty until a dry run has been done. A transect whose own Decay or
+  -- | velocity is one of the swept parameters has no single right spacing: a
+  -- | uniform worst case pays the longest decay on every cell, and two probes
+  -- | at the extremes cannot see the middle. So run it once, measure what each
+  -- | cell took to go quiet, and pace the real run from that.
+  , paced :: Array Int
+  -- | **The plan those timings were measured under.** See `fingerprint`.
+  , pacedFor :: String
+  -- | Whether to USE them. Kept apart from having them, so measuring does not
+  -- | commit you and changing your mind does not discard the measurement.
+  , usePaced :: Boolean
   }
 
 -- | Twelve layers on one voice and one parameter rising — the smallest thing
@@ -254,6 +334,9 @@ emptyPlan =
   , spacingMs: 2000
   , guardMs: 120
   , leadMs: 30
+  , paced: []
+  , pacedFor: ""
+  , usePaced: false
   }
 
 param :: String -> Int -> Param
@@ -569,6 +652,9 @@ type Plain =
   , spacingMs :: Int
   , guardMs :: Int
   , leadMs :: Int
+  , paced :: Array Int
+  , pacedFor :: String
+  , usePaced :: Boolean
   }
 
 foreign import savePlain :: Plain -> Effect Unit
@@ -626,6 +712,9 @@ flatten p =
   , spacingMs: p.spacingMs
   , guardMs: p.guardMs
   , leadMs: p.leadMs
+  , paced: p.paced
+  , pacedFor: p.pacedFor
+  , usePaced: p.usePaced
   }
   where
   one q =
@@ -681,6 +770,9 @@ unflatten p =
     , spacingMs: clamp 50 20000 p.spacingMs
     , guardMs: clamp 0 2000 p.guardMs
     , leadMs: clamp (-500) 2000 p.leadMs
+    , paced: p.paced
+    , pacedFor: p.pacedFor
+    , usePaced: p.usePaced
     }
   where
   some n = if n < 0 then Nothing else Just n

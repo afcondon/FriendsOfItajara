@@ -132,6 +132,10 @@ type State =
   -- | Indices into `regions`; everything starts kept.
   , keep :: Set Int
   , busy :: Boolean
+  -- | **This run is being made in order to be measured, not kept.** It paces
+  -- | itself flat, divides itself, and hands its per-cell decay times to the
+  -- | plan. See `DryRun`.
+  , dry :: Boolean
   -- | Sweeping across the grid to hear it, rather than clicking each one.
   -- | Off by default: it is the right gesture for comparing forty hits and the
   -- | wrong one for a page you are only reading.
@@ -307,6 +311,10 @@ data Action
   | SweepMsg Sweep.Msg
   | OpenParam (Maybe Int)
   | RunSweep Int
+  -- | **Run it once to find out how long each cell needs.**
+  | DryRun Int
+  -- | Flat spacing, or what the dry run measured.
+  | UsePaced Boolean
   | StopSweep
   | SetLead String
   | RefreshSets
@@ -327,7 +335,7 @@ component = H.mkComponent
   { initialState: \_ ->
       { looper: Nothing, kind: Kind.DrumHits, bars: 1
       , armed: false, name: "", log: []
-      , peaks: Nothing, regions: [], keep: Set.empty, busy: false
+      , peaks: Nothing, regions: [], keep: Set.empty, busy: false, dry: false
       , hoverPlays: false, playing: Nothing, showing: "", waiting: false
       , minGap: 300.0, divider: Divider.Attacks, equalN: 16, mine: false, kitMine: false, layerMode: ""
       , cardView: Nothing, bank: "WORKSHOP", kit: "", voice: 1, cardBusy: false
@@ -994,6 +1002,17 @@ handleAction = case _ of
   -- | choosing the input are: the run has to land inside a take, and a Run
   -- | button that assumed something was already recording would fail silently
   -- | by producing sound nobody caught.
+  -- | **A run made in order to be measured.**
+  -- |
+  -- | The same sweep, at the flat spacing, which then divides itself and keeps
+  -- | only how long each cell took to go quiet. Everything else about it is
+  -- | thrown away — it exists so the REAL run can be paced cell by cell, which
+  -- | is the only way to size a transect whose own Decay or velocity is one of
+  -- | the swept parameters.
+  UsePaced on -> H.modify_ \x -> x { sweep = x.sweep { usePaced = on } }
+  DryRun src -> do
+    H.modify_ \x -> x { dry = true, sweep = x.sweep { usePaced = false } }
+    handleAction (RunSweep src)
   RunSweep src -> do
     st <- H.get
     case st.sweepFork of
@@ -1163,7 +1182,10 @@ runSweep = do
     H.modify_ _ { sweepAt = Just s.index }
     -- **Where this gate belongs, stated before anything is sent.** Everything
     -- that follows is then free to be late without moving the sound.
-    let fireAt = t0 + Int.toNumber (p.spacingMs * s.index + p.settleMs)
+    -- **A sum, not a multiple.** With measured pacing every cell has its own
+    -- spacing — the only way to size a transect whose own Decay or velocity is
+    -- one of the swept parameters. See `Sweep.spacingAt`.
+    let fireAt = t0 + Int.toNumber (Sweep.startsAt p s.index + p.settleMs)
     tIn <- liftEffect Rig.nowMs
     unless (Array.null s.cv && Array.null s.esx) $ void $
       H.liftAff (attempt (toAffE (Rig.setCv { set: s.cv, esx: s.esx })))
@@ -1229,7 +1251,7 @@ runSweep = do
     -- An absolute target cannot accumulate or persist an error. A late step
     -- shortens its own delay and the one after is back on the grid.
     now <- liftEffect Rig.nowMs
-    let due = t0 + Int.toNumber (p.spacingMs * (s.index + 1))
+    let due = t0 + Int.toNumber (Sweep.startsAt p (s.index + 1))
     H.liftAff (delay (Milliseconds (max 0.0 (due - now))))
   -- The last hit gets the same gap as the others and then a little more, so
   -- that closing the take is never the thing that ends its decay. A final
@@ -1246,6 +1268,51 @@ runSweep = do
   st1 <- H.get
   liftEffect (Sweep.saveRun { take: st1.name, schedule: st1.schedule })
   handleAction Close
+  -- **A dry run measures itself.** Divide it, read how long each cell took to
+  -- go quiet, and hand those times to the plan. Nothing else about the take is
+  -- wanted, but it IS written to disk on the way through, because the division
+  -- is done by `msm` over a file.
+  when st1.dry do
+    handleAction Analyse
+    st2 <- H.get
+    case st2.peaks of
+      Nothing -> H.modify_ (note "dry run: no waveform came back to measure"
+                              <<< _ { dry = false })
+      Just pk -> do
+        let total = max 0.001 (maybe 1.0 _.secs (cap st2))
+            bounds = map (\r -> { start: r.start, end: r.end }) st2.regions
+            ds = settledFor pk total bounds
+            -- **Silence after the decay, not just up to it.** A cell that ends
+            -- exactly as it goes quiet leaves no join to see, and `guardMs`
+            -- wants somewhere to close.
+            room = 300
+            paced = map (\d -> clamp 200 30000
+                          (Int.round (d.decay * 1000.0) + room)) ds
+            -- **A cell still sounding at its own end was cut**, so its decay is
+            -- a LOWER BOUND and the pacing derived from it is too short. Said
+            -- out loud, because a dry run that quietly under-measures is worse
+            -- than no dry run: it would hand back confident numbers that are
+            -- wrong in the direction that ruins the samples.
+            cut = Array.length
+                    (Array.filter identity (Array.zipWith overlapping ds bounds))
+        if Array.null paced
+          then H.modify_ (note "dry run: nothing was divided, so nothing measured"
+                            <<< _ { dry = false })
+          else do
+            let said = "dry run: paced " <> show (Array.length paced) <> " cells, "
+                  <> fmt (Int.toNumber (Array.foldl (+) 0 paced) / 1000.0)
+                  <> " s in total"
+                  <> (if cut > 0
+                        then " — but " <> show cut <> " were still sounding when \
+                             \cut, so those are lower bounds: give the sweep \
+                             \more space and dry-run it again"
+                        else "")
+            H.modify_ \x -> note said x
+              { dry = false
+              , sweep = x.sweep { paced = paced
+                                , pacedFor = Sweep.fingerprint x.sweep
+                                , usePaced = true }
+              }
 
 -- | **Stand the instrument at one cell of the transect**, without striking it.
 -- |
@@ -1535,6 +1602,7 @@ render st =
                         Swept -> SweepView.settings sweepHandlers
                         Played -> handPanel
                     , SweepView.triggerView sweepHandlers
+                    , pacingPanel
                     ])
                 -- Opened with the pitch parameter ALREADY expanded: the reason
                 -- to come in here is the values, and a door that opens onto a
@@ -1598,7 +1666,10 @@ render st =
            else show (Set.size st.keep) <> " of "
                   <> show (Array.length st.regions) <> " kept")
           (not (Array.null st.regions) || hasTake)
-      , door TriggerModal "Trigger" triggerSays true
+      , door TriggerModal "Trigger"
+          (triggerSays
+            <> (if Sweep.pacedStale st.sweep then " · pacing is stale" else ""))
+          true
       , door PitchModal "Pitch" pitchSays2 true
       , door SaveModal "Save to disk"
           (if st.kept then "kept as " <> setName
@@ -1637,6 +1708,66 @@ render st =
       [ HH.span [ HP.class_ (HH.ClassName "q-doorname") ] [ HH.text label ]
       , HH.span [ HP.class_ (HH.ClassName "q-doorsays") ] [ HH.text says ]
       ]
+
+-- | **How long each cell gets** — one flat number, or what a dry run measured.
+-- |
+-- | Lives behind the Trigger door rather than in the control row because a dry
+-- | run is a setting you arrive at, not an act you reach for: it is done once,
+-- | read from afterwards, and the thing you press repeatedly is still Record.
+  pacingPanel =
+    let
+      pl = st.sweep
+      n = Encoding.total pl.extent
+      stale = Sweep.pacedStale pl
+      have = not (Array.null pl.paced)
+      total = Int.toNumber (Sweep.startsAt pl n) / 1000.0
+    in
+      HH.div [ HP.class_ (HH.ClassName "q-pacing") ]
+        [ HH.div [ HP.class_ (HH.ClassName "q-gridhead") ] [ HH.span_ [ HH.text "Spacing" ] ]
+        , HH.label [ HP.class_ (HH.ClassName "q-pace-opt") ]
+            [ HH.input
+                [ HP.type_ HP.InputRadio, HP.name "pacing"
+                , HP.checked (not pl.usePaced)
+                , HE.onChange \_ -> UsePaced false
+                ]
+            , HH.text (" flat — " <> show pl.spacingMs <> " ms for every cell")
+            ]
+        , HH.label
+            [ HP.class_ (HH.ClassName ("q-pace-opt" <> if have then "" else " is-moot")) ]
+            [ HH.input
+                [ HP.type_ HP.InputRadio, HP.name "pacing"
+                , HP.checked pl.usePaced, HP.disabled (not have)
+                , HE.onChange \_ -> UsePaced true
+                ]
+            , HH.text (if have
+                         then " measured per cell — " <> fmt total <> " s in total"
+                         else " measured per cell — nothing measured yet")
+            ]
+        , HH.div [ HP.class_ (HH.ClassName "q-pace-act") ]
+            [ HH.button
+                [ HP.class_ (HH.ClassName ("q-plain" <> if stale || not have then " is-go" else ""))
+                , HP.disabled (st.sweepFork /= Nothing || st.busy)
+                , HE.onClick \_ -> DryRun st.source
+                ]
+                [ HH.text "Dry run" ]
+            , HH.span [ HP.class_ (HH.ClassName "q-muted") ]
+                [ HH.text (if not have
+                             then "runs the sweep once at the flat spacing and keeps \
+                                  \only how long each cell took to go quiet"
+                           else if stale
+                             then "a parameter has changed since these were measured, \
+                                  \so they no longer describe this sweep"
+                           else "these describe the sweep as it stands")
+                ]
+            ]
+        , if not have then HH.text "" else
+            HH.div [ HP.class_ (HH.ClassName "q-pace-cells") ]
+              (Array.mapWithIndex
+                (\i ms -> HH.span
+                   [ HP.class_ (HH.ClassName ("q-pace-cell" <> if stale then " is-stale" else "")) ]
+                   [ HH.text (show (i + 1) <> ": " <> fmt (Int.toNumber ms / 1000.0) <> " s") ])
+                pl.paced)
+        ]
 
   triggerSays = case triggerBy of
     "hand" -> "you play it"
