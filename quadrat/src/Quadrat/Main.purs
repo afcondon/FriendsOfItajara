@@ -1078,33 +1078,70 @@ runSweep = do
   t0 <- liftEffect Rig.nowMs
   for_ (Sweep.steps p) \s -> do
     H.modify_ _ { sweepAt = Just s.index }
+    -- **Where this gate belongs, stated before anything is sent.** Everything
+    -- that follows is then free to be late without moving the sound.
+    let fireAt = t0 + Int.toNumber (p.spacingMs * s.index + p.settleMs)
+    tIn <- liftEffect Rig.nowMs
     unless (Array.null s.cv && Array.null s.esx) $ void $
       H.liftAff (attempt (toAffE (Rig.setCv { set: s.cv, esx: s.esx })))
     when (p.port /= "") $ liftEffect $ for_ s.cc \c ->
       Rig.sendCc { port: p.port, channel: c.channel, cc: c.cc, value: c.value }
-    H.liftAff (delay (Milliseconds (Int.toNumber p.settleMs)))
-    -- **Where in the take this hit is about to be**, asked immediately before
-    -- the trigger rather than after it: everything between here and the pulse
-    -- is a few microseconds of arithmetic, where everything after it is a
-    -- round trip of unknown length. See `Quadrat.Schedule`.
+    tCv <- liftEffect Rig.nowMs
+    -- **The settle is a gap on the grid now, not a delay we sit through.** The
+    -- module still gets `settleMs` between its CV and its gate; the difference
+    -- is that the gap is guaranteed by WHEN THE GATE IS ASKED FOR rather than
+    -- by how long this loop happened to wait.
+    -- **Where in the take this hit is about to be.** `Schedule.at` reads the
+    -- capture's position now and the gate is still in the future, so the mark
+    -- is one plus the other — arithmetic, not a second round trip. Both halves
+    -- are read at the same instant, because a mark is only as good as the gap
+    -- between the two clocks it joins. See `Quadrat.Schedule`.
     mk <- liftEffect Schedule.at
-    for_ mk \t -> H.modify_ \s0 -> s0 { schedule = Array.snoc s0.schedule t }
+    tMk <- liftEffect Rig.nowMs
+    for_ mk \t -> H.modify_ \s0 ->
+      s0 { schedule = Array.snoc s0.schedule (t + max 0.0 (fireAt - tMk) / 1000.0) }
+    -- **The gate goes on the daemon's clock, and the page is then out of it.**
+    --
+    -- `Rig.pulse` fired when the message landed, so every millisecond this page
+    -- was late went into the audio and STAYED there. Measured 2026-09-11:
+    -- twelve gates paced from here carried a 120 ms step at the sixth, in the
+    -- same place at 3000 ms and at 5000 ms; the identical sequence paced from
+    -- node through these same endpoints carried none, twice. The page was the
+    -- only difference, and the cause is still unnamed — which is the other
+    -- reason to stop asking it to keep time.
+    --
+    -- `pulseAt` says WHEN. The daemon applies it in its audio callback against
+    -- `current_frame()`, the counter the capture is written from, so the gate
+    -- and the recording share one clock instead of two to be reconciled. Waking
+    -- late now shortens `ahead` rather than moving the sound.
+    -- **Read the clock in the same breath as the send.** `delayMs` counts from
+    -- the moment the daemon RECEIVES this, so anything between measuring it and
+    -- sending it is error that the scheduling was supposed to remove.
+    tSend <- liftEffect Rig.nowMs
+    let ahead = max 0.0 (fireAt - tSend)
     for_ p.trigger.gate \b -> void $
-      H.liftAff (attempt (toAffE (Rig.pulse
-        { bus: b, level: p.trigger.gateLevel, ms: p.trigger.ms })))
+      H.liftAff (attempt (toAffE (Rig.pulseAt
+        { bus: b, level: p.trigger.gateLevel, ms: p.trigger.ms, delayMs: ahead })))
+    -- The ES-5 and MIDI paths have no scheduled form, so they are still fired
+    -- by hand and still have to be waited for. A gate on a bus is already away
+    -- and does not care how well this lands.
+    tPre <- liftEffect Rig.nowMs
+    H.liftAff (delay (Milliseconds (max 0.0 (fireAt - tPre))))
     for_ p.trigger.es5 \b -> void $
       H.liftAff (attempt (toAffE (Rig.es5pulse { bit: b, ms: p.trigger.ms })))
     when (p.port /= "") $ for_ p.trigger.note \n -> liftEffect $
       Rig.sendNote { port: p.port, channel: p.trigger.channel, note: n
                    , velocity: p.trigger.velocity, ms: p.trigger.ms }
+    tFire <- liftEffect Rig.nowMs
+    liftEffect $ Rig.mark
+      { i: s.index + 1, inAt: tIn - t0, cv: tCv - tIn
+      , want: fireAt - t0, ahead, at: tFire - t0 }
     -- **Wait until the next slot, not for an interval.**
     --
     -- Pacing by "spacing minus what this step took" measures the WHOLE step,
     -- including the sends that happen after the trigger has already fired. A
     -- stall in that tail shortens the next delay and advances the phase for
-    -- good: measured 2026-09-11, one 116 ms jump at the sixth step of twelve,
-    -- in the same place at 3000 ms and at 5000 ms, after which every hit sat
-    -- 120 ms before its boundary and every slice caught the next attack.
+    -- good: a run asking for 3000 ms stepped every 3130 ms for a whole morning.
     --
     -- An absolute target cannot accumulate or persist an error. A late step
     -- shortens its own delay and the one after is back on the grid.
@@ -1116,6 +1153,7 @@ runSweep = do
   -- sample that is short because the recording stopped is indistinguishable
   -- from one that is short because the sound was.
   H.liftAff (delay (Milliseconds 300.0))
+  liftEffect Rig.dumpMarks
   restCv
   H.modify_ (note ("swept " <> show (Encoding.total p.extent) <> " samples")
     <<< _ { sweepAt = Nothing, sweepFork = Nothing, sweepOpen = false, swept = true })

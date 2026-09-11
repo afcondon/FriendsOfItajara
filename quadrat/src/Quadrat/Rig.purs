@@ -27,8 +27,11 @@ module Quadrat.Rig
   , sendNote
   , setCv
   , pulse
+  , pulseAt
   , es5pulse
   , nowMs
+  , mark
+  , dumpMarks
   ) where
 
 import Data.Unit (Unit)
@@ -82,10 +85,39 @@ foreign import setCv
 foreign import pulse
   :: { bus :: Int, level :: Number, ms :: Int } -> Effect (Promise Sent)
 
+-- | **A gate at a stated time**, rather than a gate now.
+-- |
+-- | `pulse` fires when the message lands, so every millisecond the page is late
+-- | goes into the audio and stays there. This one carries a delay and the
+-- | daemon applies it in its audio callback at `current_frame() + delayMs` —
+-- | the same frame counter the capture is written from, so the gate and the
+-- | recording share one clock instead of two that have to be reconciled.
+-- |
+-- | `delayMs` is measured from the moment the daemon receives it, so the caller
+-- | computes it against an absolute grid: ask for `target - now`, and waking
+-- | late shortens the delay instead of moving the sound.
+foreign import pulseAt
+  :: { bus :: Int, level :: Number, ms :: Int, delayMs :: Number }
+  -> Effect (Promise Sent)
+
 -- | **An ES-5 gate**, which has no duration of its own — the daemon takes a
 -- | bit and a state, so the hold happens in `server.mjs` rather than here,
 -- | where a round trip would land inside the gate.
 foreign import es5pulse :: { bit :: Int, ms :: Int } -> Effect (Promise Sent)
+
+-- | **One row of a run's timings**, held in `Rig.js` until the run ends.
+-- |
+-- | Collected rather than logged, because logging inside the loop that issues
+-- | the triggers is a way of changing what you are measuring — this rig has
+-- | had a scheduler jittered into looking like a hardware fault by exactly
+-- | that. `dumpMarks` prints them after the last gate.
+foreign import mark
+  :: { i :: Int, inAt :: Number, cv :: Number, want :: Number
+     , ahead :: Number, at :: Number }
+  -> Effect Unit
+
+-- | Print what `mark` collected, and forget it. Safe to call when empty.
+foreign import dumpMarks :: Effect Unit
 
 -- | A monotonic clock in milliseconds, so a run can pace itself by the time it
 -- | has already spent rather than by hope. See `Rig.js`.

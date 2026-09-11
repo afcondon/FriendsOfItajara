@@ -26,6 +26,7 @@
 //                                  and what each sample meant
 //   POST /api/cv                   { set: [{bus, level}], esx: [{slot, level}] }
 //                                  | { pulse: {bus, level, ms} }
+//                                  | { pulseAt: {bus, level, ms, delayMs} }
 //                                  | { es5pulse: {bit, ms} }
 //                                  → OSC to es9-daemon. See the note above it:
 //                                    this reports what was SENT, never what
@@ -740,6 +741,32 @@ function cv(body) {
       { t: "f", v: ms },
     ]));
     said.push(`trig ${bus(p.bus)}=${level(p.level).toFixed(3)} for ${ms}ms`);
+  }
+  // **A gate placed on the daemon's clock, not on the page's.**
+  //
+  // `/cv/trig` fires when the message lands, so every millisecond the browser
+  // is late goes straight into the audio. `/cv/trig/at` carries a delay and the
+  // daemon applies the gate in its audio callback at `current_frame() + delay`
+  // — the same frame counter the capture is written from. So the page says
+  // WHEN instead of NOW, and can subtract its own lateness from the delay it
+  // asks for: waking 200 ms late costs nothing if it asks for 200 ms less.
+  //
+  // Measured 2026-09-11. Twelve gates paced from the browser carried a 120 ms
+  // step at the sixth, in the same place at 3000 ms and at 5000 ms spacing; the
+  // identical sequence paced from node, through these same endpoints and buses,
+  // carried none — twice, to 9 and 17 ms over 36 s. The page was the only
+  // difference. See docs/kb/research/quadrat-slice-drift.md.
+  const pa = body?.pulseAt;
+  if (pa) {
+    const ms = Math.max(1, Math.min(10000, Number(pa.ms) || 10));
+    const delayMs = Math.max(0, Math.min(60000, Number(pa.delayMs) || 0));
+    msgs.push(oscMsg("/cv/trig/at", [
+      { t: "i", v: bus(pa.bus) },
+      { t: "f", v: level(pa.level) },
+      { t: "f", v: ms },
+      { t: "f", v: delayMs },
+    ]));
+    said.push(`trig ${bus(pa.bus)}=${level(pa.level).toFixed(3)} for ${ms}ms at +${delayMs.toFixed(0)}ms`);
   }
   // **An ES-5 gate has no duration of its own**, so a pulse is on, wait, off —
   // and the waiting happens HERE rather than in the browser, because two HTTP

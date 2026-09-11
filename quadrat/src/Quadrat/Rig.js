@@ -83,10 +83,46 @@ const post = (url, body) =>
 export const setCv = (req) => () => post("/api/cv", { set: req.set, esx: req.esx ?? [] });
 export const pulse = (req) => () =>
   post("/api/cv", { pulse: { bus: req.bus, level: req.level, ms: req.ms } });
+// **Ask for a gate at a time, not a gate now.**
+//
+// The daemon applies this one in its audio callback at `current_frame() +
+// delayMs` — the clock the capture is written from. `delayMs` is computed by
+// the caller against its own absolute grid, so the page's lateness is
+// SUBTRACTED rather than recorded: waking 200 ms late costs nothing if it asks
+// for 200 ms less. See `runSweep`.
+export const pulseAt = (req) => () =>
+  post("/api/cv", { pulseAt: { bus: req.bus, level: req.level, ms: req.ms, delayMs: req.delayMs } });
+
 // The ES-5's own gates: a bit and a length, and the daemon has no duration
 // form for them, so `server.mjs` holds it. See its note.
 export const es5pulse = (req) => () =>
   post("/api/cv", { es5pulse: { bit: req.bit, ms: req.ms } });
+
+// **Instrumentation for one run, collected here and printed ONCE.**
+//
+// Never logged per step. A `console.log` in an emit path has jittered this
+// rig's scheduler badly enough to read as a hardware fault, which is exactly
+// the class of mistake this whole measurement was chasing — so the run pushes
+// bare numbers and `dumpMarks` formats them after the last gate has gone.
+let marks = [];
+
+export const mark = (r) => () => {
+  marks.push(r);
+};
+
+export const dumpMarks = () => {
+  if (!marks.length) return;
+  const f = (v) => String(Math.round(v)).padStart(8);
+  console.log("quadrat sweep — ms from t0.  want@ is where the gate was ASKED for;");
+  console.log("slip is how late the hand-fired paths landed, and does NOT move a bus gate.");
+  console.log("    i     in@    cvRT    want@   ahead   hand@    slip");
+  for (const m of marks) {
+    console.log(
+      "  " + String(m.i).padStart(3) + f(m.inAt) + f(m.cv) +
+      f(m.want) + f(m.ahead) + f(m.at) + f(m.at - m.want));
+  }
+  marks = [];
+};
 
 // **A monotonic clock, for pacing the run.**
 //
