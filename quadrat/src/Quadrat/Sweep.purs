@@ -40,14 +40,18 @@ module Quadrat.Sweep
   , adopt
   , saveRun
   , loadRun
+  , Conflict
+  , conflicts
+  , sayConflict
   ) where
 
 import Prelude
 
 import Data.Array as Array
 import Data.Int as Int
-import Data.Maybe (Maybe(..), fromMaybe, maybe)
+import Data.Maybe (Maybe(..), fromMaybe, isJust, maybe)
 import Data.Number as Number
+import Data.String.Common (joinWith)
 import Effect (Effect)
 import Quadrat.Pitch as Pitch
 import Quadrat.Curve (Curve(..), Shape(..), shapeName, shapeOf)
@@ -127,6 +131,80 @@ type Trigger =
   , velocity :: Int
   , ms :: Int
   }
+
+-- | **One place, claimed twice.**
+-- |
+-- | The `who` are the things that both want it, named as the page names them.
+type Conflict = { place :: String, who :: Array String }
+
+-- | **What is physically one piece of metal, said the way the rig says it.**
+-- |
+-- | Buses 8-15 are the ES-9's panel jacks, so bus 15 IS jack 8 — and that
+-- | off-by-seven is not cosmetic. It is why a parameter on "output 8" and a
+-- | trigger on "bus 15" read as two different places for a whole day while
+-- | being one hole in one module. See `conflicts`.
+jackSaid :: Int -> String
+jackSaid b
+  | b >= 8 && b <= 15 = "ES-9 jack " <> show (b - 7)
+  | otherwise = "CV bus " <> show b
+
+-- | **Every claim on a place, from every quarter.** One list, so that a
+-- | parameter and a trigger are compared rather than merely both stored.
+claimsOf :: Plan -> Array { key :: String, place :: String, who :: String }
+claimsOf p =
+  let
+    ofParam q = Array.catMaybes
+      [ map (\b -> { key: "cv" <> show b, place: jackSaid b, who: q.name }) q.cv
+      , map (\x -> { key: "esx" <> show x
+                  , place: "ESX-8CV channel " <> show (x + 1), who: q.name }) q.esx
+      , map (\c -> { key: "cc" <> show q.channel <> "/" <> show c
+                  , place: "MIDI CC " <> show c <> " on channel " <> show q.channel
+                  , who: q.name }) q.cc
+      ]
+    ofTrigger = Array.catMaybes
+      [ map (\b -> { key: "cv" <> show b, place: jackSaid b
+                  , who: "the trigger's gate" }) p.trigger.gate
+      , map (\b -> { key: "es5" <> show b, place: "ES-5 gate " <> show (b + 1)
+                  , who: "the trigger's gate" }) p.trigger.es5
+      ]
+    -- **Bus 4 stops being raw CV the moment an expander is used.** The ES-5's
+    -- gates and the ESX-8CV's channels both ride that one lane, so reaching
+    -- either spends the jack — silently, because nothing about an ESX slot
+    -- number mentions bus 4. Modelled as a claim so it collides by the same
+    -- rule as everything else rather than by a special case.
+    expander =
+      if Array.any (isJust <<< _.esx) p.params || isJust p.trigger.es5
+      then [ { key: "cv4", place: jackSaid 4, who: "the ES-5 / ESX expander lane" } ]
+      else []
+  in
+    Array.concatMap ofParam p.params <> ofTrigger <> expander
+
+-- | **Two things pointed at one place.**
+-- |
+-- | Measured 2026-09-11, and the reason this exists: a swept parameter sat on
+-- | the same bus as the trigger's gate. Every step wrote a rising CV into the
+-- | module's own trigger input, so from the step where that ramp crossed the
+-- | module's threshold the CV ITSELF fired the hit — `settleMs` before the
+-- | gate meant to. Twelve samples, each one cut across the front of the next,
+-- | and nothing anywhere said the two were the same jack.
+-- |
+-- | Note what this deliberately does NOT say: that a place may hold only one
+-- | thing. On MIDI a note IS a pitch and a gate together, and forbidding that
+-- | would forbid playing an instrument. What collides is two claims on a place
+-- | whose transport cannot carry both, which here is every case listed.
+conflicts :: Plan -> Array Conflict
+conflicts p =
+  let cs = claimsOf p
+      at k = Array.filter (\c -> c.key == k) cs
+      pick k = case at k of
+        g -> if Array.length g > 1
+               then map (\h -> { place: h.place, who: map _.who g }) (Array.head g)
+               else Nothing
+  in Array.mapMaybe pick (Array.nub (map _.key cs))
+
+-- | A conflict as one line, naming the jack rather than the bus.
+sayConflict :: Conflict -> String
+sayConflict c = c.place <> " is claimed by " <> joinWith " and " c.who
 
 type Plan =
   { encoding :: Encoding

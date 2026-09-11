@@ -929,12 +929,25 @@ handleAction = case _ of
     case st.sweepFork of
       Just _ -> H.modify_ (note "a sweep is already running")
       Nothing -> do
-        -- No head trim: see `captureOn`. The schedule declares when the
-        -- first hit happens, so nothing needs to find it.
-        captureOn false src
-        H.modify_ _ { swept = false, sweepAt = Nothing, schedule = [] }
-        fid <- H.fork runSweep
-        H.modify_ _ { sweepFork = Just fid }
+        -- **A transect that cannot mean what it says is not recorded.**
+        --
+        -- Refused rather than warned, because the failure is inaudible at the
+        -- time and expensive later: a swept CV sharing the trigger's jack
+        -- fires the module itself once its ramp crosses threshold, so the
+        -- samples come back cut across their own attacks and every number
+        -- measured from them is wrong without looking wrong. Measured
+        -- 2026-09-11; see `Sweep.conflicts`.
+        let clashes = Sweep.conflicts st.sweep
+        if not (Array.null clashes)
+          then H.modify_ (note ("nothing recorded — "
+                 <> joinWith "; " (map Sweep.sayConflict clashes)))
+          else do
+            -- No head trim: see `captureOn`. The schedule declares when the
+            -- first hit happens, so nothing needs to find it.
+            captureOn false src
+            H.modify_ _ { swept = false, sweepAt = Nothing, schedule = [] }
+            fid <- H.fork runSweep
+            H.modify_ _ { sweepFork = Just fid }
   StopSweep -> do
     st <- H.get
     for_ st.sweepFork H.kill
@@ -1632,12 +1645,26 @@ render st =
           , HH.text " for ", slotEncoding
           , HH.text "."
           ]
+      , clashSays
       , HH.p [ HP.class_ (HH.ClassName "q-sayfine") ]
           ( [ HH.text "Calibration scheme: ", slotCalib ]
               <> pitchSays
               <> sweptSays
               <> [ HH.text " · about ", HH.text runSecs, HH.text " to record" ] )
       ]
+
+  -- | **Two things pointed at one jack, said in the sentence.**
+  -- |
+  -- | In the sentence and not in a panel, because both halves of this were
+  -- | already correct and already displayed — the Trigger modal said "bus 15 ·
+  -- | ES-9 jack 8" and the parameter row said "cv 15 (ES-9 jack 8)" — and it
+  -- | still cost a day, because nothing ever put the two in one view or
+  -- | compared them. A fact in the right place that nobody reads beside the
+  -- | fact it contradicts is not information.
+  clashSays = case Sweep.conflicts st.sweep of
+    [] -> HH.text ""
+    cs -> HH.p [ HP.class_ (HH.ClassName "q-clash") ]
+            [ HH.text (joinWith " · " (map Sweep.sayConflict cs)) ]
 
   -- | **The level, beside the input it measures.**
   -- |
