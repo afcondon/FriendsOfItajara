@@ -941,8 +941,13 @@ handleAction = case _ of
     restCv
     H.modify_ (note "sweep stopped" <<< _ { sweepFork = Nothing, sweepAt = Nothing })
     handleAction Close
+  -- **Closing the take stops the rig too.** They are one act: a schedule
+  -- still being played into a take that has ended is sound nobody catches,
+  -- and the next take catches it instead.
   Close -> do
     st <- H.get
+    for_ st.sweepFork H.kill
+    H.modify_ _ { sweepFork = Nothing, sweepAt = Nothing }
     for_ (cap st) \c ->
       if c.on
         then do
@@ -999,6 +1004,19 @@ captureOn trimHead src = do
   -- every kind but `Bars`.
   send (CaptureStop (closeAfter st))
   send (Capture src)
+  -- **Nothing may still be playing the rig when a new take opens.**
+  --
+  -- Measured 2026-09-11 on a take that came back with SEVENTEEN onsets for
+  -- twelve cells: two independent 3.0 s trigger series interleaved 1.58 s
+  -- apart, the older one contributing five more hits before it ran out. A
+  -- sweep is a forked fiber, and only `StopSweep` ever killed it — every other
+  -- way a take can end (Close, the daemon closing at its count, starting the
+  -- next one) left it running and firing into whatever came next.
+  --
+  -- Killed here because this is the one place every run starts, so a stale
+  -- fiber cannot survive into a take by any route.
+  for_ st.sweepFork H.kill
+  H.modify_ _ { sweepFork = Nothing, sweepAt = Nothing }
   -- **A new take is scratch until it is kept.** Cleared here rather than in
   -- either caller, because this is the one place both ways of filling a take
   -- go through, and a stale "kept" badge on a fresh recording is exactly the
@@ -1369,11 +1387,16 @@ render st =
             -- | Behind a door they cost one line, and the line says what is
             -- | inside it rather than showing you.
             , HH.section [ HP.class_ (HH.ClassName "q-curverow") ]
-                [ SweepView.curves sweepHandlers
-                , case st.pivot of
-                    Just j | st.fill == Swept -> pivotPanel j
-                    _ -> HH.text ""
-                ]
+                [ SweepView.curves sweepHandlers ]
+            -- **One hit, every parameter — as a modal.**
+            --
+            -- It opened at the BOTTOM of the page, below the curves, when the
+            -- thing that summoned it was a band in the waveform at the top. So
+            -- clicking a slice appeared to do nothing until you scrolled.
+            , case st.pivot of
+                Just j | st.fill == Swept ->
+                  modalPivot ("Position " <> show (j + 1)) (pivotPanel j)
+                _ -> HH.text ""
             , case st.modal of
                 Just DivisionModal -> modalBox "Division details" divisionPanel
                 Just TriggerModal -> modalBox "Trigger"
@@ -1457,6 +1480,22 @@ render st =
           (if placeable then "bank " <> st.bank <> " · voice " <> show st.voice
            else "SuperDirt — already a bank")
           (placeable && not (Set.isEmpty st.keep))
+      ]
+
+  -- | The pivot's own modal, closed by clearing the pivot rather than the
+  -- | modal — it is summoned by a band and belongs to that band.
+  modalPivot title inner =
+    HH.div [ HP.class_ (HH.ClassName "q-scrim") ]
+      [ HH.div [ HP.class_ (HH.ClassName "q-modal") ]
+          [ HH.div [ HP.class_ (HH.ClassName "q-modalhead") ]
+              [ HH.h2_ [ HH.text title ]
+              , HH.button
+                  [ HP.class_ (HH.ClassName "q-plain")
+                  , HE.onClick \_ -> OpenPivot Nothing ]
+                  [ HH.text "done" ]
+              ]
+          , inner
+          ]
       ]
 
   -- | A door: what is behind it, and what it currently says. The summary is
