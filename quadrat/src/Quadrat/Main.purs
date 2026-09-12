@@ -309,6 +309,9 @@ type State =
   -- | the answers differ in what they cost — twelve layers fill a voice, one
   -- | sliced file uses one of its twelve and leaves eleven.
   , placeSliced :: Boolean
+  -- | Stand beside what is on the voice, or take its place. A voice holds a
+  -- | stack, so the two things you might mean are opposites.
+  , placeAppend :: Boolean
   -- | **What the owner calls each input**, against the wire name the daemon
   -- | uses. A source is identified by `--source board=AUDIO4c:1,2` and has to
   -- | be, because a name that cannot be resolved to jacks is a session
@@ -340,7 +343,7 @@ type State =
   }
 
 -- | The two panels that became modals.
-data Modal = DivisionModal | TriggerModal | PitchModal | SaveModal | ExportModal
+data Modal = DivisionModal | TriggerModal | PitchModal | SaveModal
            | InputsModal
 
 derive instance Eq Modal
@@ -401,6 +404,7 @@ data Action
   | AskWrite (Maybe String)
   -- | Lay a placed set out as one sliced file, or as a stack of layers.
   | SetPlaceSliced Boolean
+  | SetPlaceAppend Boolean
   | Play Int
   | HoverPlay Int
   | SetHoverPlays Boolean
@@ -456,7 +460,7 @@ component = H.mkComponent
       , page: Bench, fill: Swept, pivot: Nothing
       , levels: [], modal: Nothing, kept: false, confirmKeep: false
       , picked: Set.empty, confirmDrop: false, confirmWrite: Nothing
-      , placeSliced: false, srcNames: []
+      , placeSliced: false, placeAppend: false, srcNames: []
       , heard: [], midiIn: [], midiOk: true }
   , render
   , eval: H.mkEval H.defaultEval { handleAction = handleAction, initialize = Just Init }
@@ -839,9 +843,9 @@ handleAction = case _ of
           { set: nm
           , bank: st.bank
           , letter: st.letter
-          , kit: nm
+          , kit: if st.kit == "" then nm else st.kit
           , voice: st.voice
-          , append: false
+          , append: st.placeAppend
           , sliced: st.placeSliced
           , layerMode: st.layerMode })))
     case r of
@@ -984,6 +988,8 @@ handleAction = case _ of
   AskWrite v -> H.modify_ _ { confirmWrite = v }
 
   SetPlaceSliced b -> H.modify_ _ { placeSliced = b }
+
+  SetPlaceAppend b -> H.modify_ _ { placeAppend = b }
 
   WriteCard dest replace -> do
     H.modify_ _ { cardBusy = true, confirmWrite = Nothing }
@@ -2076,7 +2082,12 @@ takeZero st = do
 -- | Shared by the dropdown and by `freeVoice` so the offer and the suggestion
 -- | cannot disagree.
 voicesFor :: Kind -> Array Int
-voicesFor k = if Kind.foldsTo k == ToMono then [ 1, 2, 3, 4 ] else [ 1, 3 ]
+voicesFor = voicesWide <<< (_ /= ToMono) <<< Kind.foldsTo
+
+-- | The same question asked of a stored set, which knows whether it is stereo
+-- | without knowing what kind of material made it.
+voicesWide :: Boolean -> Array Int
+voicesWide wide = if wide then [ 1, 3 ] else [ 1, 2, 3, 4 ]
 
 -- | The nearest voice this kind can use, at or below the one asked for.
 onlyVoices :: Kind -> Int -> Int
@@ -2333,7 +2344,6 @@ render st =
                 -- second door is a door too many.
                 Just PitchModal -> modalBox "Pitch" (SweepView.pitchView sweepHandlers)
                 Just SaveModal -> modalBox "Save to disk" keepBlock
-                Just ExportModal -> modalBox "Export for card" placeBlock
                 Just InputsModal -> modalBox "Name the inputs" inputsPanel
                 Nothing -> HH.text ""
             ]
@@ -2466,10 +2476,6 @@ render st =
           (if st.kept then "kept as " <> setName
            else "\x2192 samples/" <> setName)
           (not (Set.isEmpty st.keep))
-      , door ExportModal "Export for card"
-          (if placeable then "bank " <> st.bank <> " · voice " <> show st.voice
-           else "SuperDirt — already a bank")
-          (placeable && not (Set.isEmpty st.keep))
       ]
 
   -- | The pivot's own modal, closed by clearing the pivot rather than the
@@ -3336,6 +3342,20 @@ render st =
               <> map setRow st.sets
           )
 
+  -- | What already sits at the address the Library is pointing at. Named by
+  -- | the letter, because that is what the module shows and what a write
+  -- | deletes; the bank *name* is only the legend.
+  -- | Whether anything ticked is stereo, and so wants a voice pair.
+  pickedWide =
+    Array.any (\r -> Set.member r.name st.picked && r.stereo) st.sets
+
+  sittingAt = do
+    v <- st.cardView
+    Array.find
+      (\r -> r.letter == st.letter && r.voice == st.voice
+               && (st.kit == "" || r.kit == st.kit))
+      v.rows
+
   -- | **What to do with the ticked ones.**
   -- |
   -- | Above the list rather than below it, because it is the thing you are
@@ -3368,13 +3388,19 @@ render st =
               -- | but say so.
               [ small "letter" st.letter SetLetter
               , small "bank" st.bank SetBank
+              , small "kit" st.kit SetKit
               , HH.label [ HP.class_ (HH.ClassName "q-field is-tight") ]
                   [ HH.span_ [ HH.text "voice" ]
+                  -- A ticked set that is stereo needs a PAIR, so the offer
+                  -- narrows to the two starts a pair can have. Any ticked one
+                  -- being stereo is enough: they are all going to the same
+                  -- voice number.
                   , HH.select [ HE.onValueChange SetVoice ]
                       (map (\vn -> HH.option
                               [ HP.value (show vn), HP.selected (vn == st.voice) ]
-                              [ HH.text (show vn) ])
-                          [ 1, 2, 3, 4 ])
+                              [ HH.text (show vn
+                                  <> (if pickedWide then " + " <> show (vn + 1) else "")) ])
+                          (voicesWide pickedWide))
                   ]
               -- The one thing a set's own description cannot settle, because
               -- it is not a fact about the audio. See `Http.placeSet`.
@@ -3389,6 +3415,35 @@ render st =
                           , { v: "sliced", t: "one sliced file — the start point picks" }
                           ])
                   ]
+              -- **Two things you might mean, and they are opposites.** A voice
+              -- holds a stack, so sending to one that is taken either stands
+              -- beside what is there or takes its place. Offered as a choice
+              -- rather than two buttons because any number of sets can be
+              -- ticked, and "replace" would mean something different for each.
+              , HH.label [ HP.class_ (HH.ClassName "q-field is-tight") ]
+                  [ HH.span_ [ HH.text "if taken" ]
+                  , HH.select [ HE.onValueChange (SetPlaceAppend <<< (_ == "add")) ]
+                      (map (\o -> HH.option
+                              [ HP.value o.v
+                              , HP.selected ((o.v == "add") == st.placeAppend) ]
+                              [ HH.text o.t ])
+                          [ { v: "replace", t: "replace what is there" }
+                          , { v: "add", t: "add as another layer" }
+                          ])
+                  ]
+              -- **How the layer selector moves**, once a voice holds more than
+              -- one thing to choose between. The whole reason to use layers
+              -- rather than slices: these are the modes where the module
+              -- decides for itself.
+              , HH.label [ HP.class_ (HH.ClassName "q-field is-tight") ]
+                  [ HH.span_ [ HH.text "picked by" ]
+                  , HH.select [ HE.onValueChange SetLayerMode ]
+                      (map (\m -> HH.option
+                              [ HP.value m
+                              , HP.selected (m == (if st.layerMode == "" then "manual" else st.layerMode)) ]
+                              [ HH.text m ])
+                          [ "manual", "velocity", "random", "cyclic" ])
+                  ]
               , HH.button
                   [ HP.class_ (HH.ClassName "q-plain")
                   , HP.disabled (st.cardBusy || st.letter == "")
@@ -3400,6 +3455,22 @@ render st =
                   , HE.onClick \_ -> PlacePicked
                   ]
                   [ HH.text ("Onto the card") ]
+              -- **Say what is about to be destroyed, before it is.** A kit's
+              -- voice is an address, and sending to one that is taken replaces
+              -- what is there unless you said to add. It happened four times
+              -- in a row without a word being said, back when the kit name
+              -- stuck to the first take and every later send addressed the
+              -- same slot.
+              , case sittingAt of
+                  Nothing -> HH.text ""
+                  Just r ->
+                    HH.span [ HP.class_ (HH.ClassName "q-warn") ]
+                      [ HH.text (st.letter <> " " <> r.kit <> " voice "
+                          <> show st.voice <> " holds " <> joinWith ", " r.sets
+                          <> (if r.slicer > 0 then " in " <> show r.slicer <> " slots" else "")
+                          <> (if st.placeAppend
+                                then " — this will stand beside them"
+                                else " — this will take their place")) ]
               , if st.confirmDrop
                   then HH.span [ HP.class_ (HH.ClassName "q-twoverbs") ]
                     [ HH.button
@@ -4129,14 +4200,16 @@ render st =
   -- | Where the kept tiles go. Beside them, because it acts on them.
   setName = if st.name == "" then "set" else st.name
 
-  -- | **Placing is a Rample idea.** A SuperDirt set IS the bank as stored, so
-  -- | bank/kit/voice beside one is a question with no answer. Only asked of a
-  -- | swept take: a take played by hand has no encoding to consult.
-  placeable = st.fill /= Swept || Encoding.onCard st.sweep.encoding
-
   keepBlock =
     HH.div [ HP.class_ (HH.ClassName "q-keep") ]
       [ HH.span [ HP.class_ (HH.ClassName "q-acthead") ] [ HH.text "Keep" ]
+      -- A remark, not a guard: the rate is set on the interface and this page
+      -- cannot change it, so all it can usefully do is not let it pass unsaid.
+      -- Beside Keep rather than beside a card, because it is a fact about the
+      -- recording and the recording is what is being committed here.
+      , case rateSays st of
+          Nothing -> HH.text ""
+          Just t -> HH.p [ HP.class_ (HH.ClassName "q-rate") ] [ HH.text t ]
       , if st.confirmKeep
           then
             HH.span [ HP.class_ (HH.ClassName "q-twoverbs") ]
@@ -4223,121 +4296,22 @@ render st =
               \will say nothing about what was played.")
     | otherwise = Nothing
 
-  -- | Whether this material goes to the card as stereo, and so takes a pair.
-  wideKit = Kind.foldsTo st.kind /= ToMono
-
-  placeBlock =
-    HH.div [ HP.class_ (HH.ClassName "q-place") ]
-      [ HH.span [ HP.class_ (HH.ClassName "q-acthead") ] [ HH.text "Export for card" ]
-      -- A remark, not a guard: the rate is set on the interface and this page
-      -- cannot change it, so all it can usefully do is not let it pass unsaid.
-      , case rateSays st of
-          Nothing -> HH.text ""
-          Just t -> HH.p [ HP.class_ (HH.ClassName "q-rate") ] [ HH.text t ]
-      -- **The letter first, because it is the destructive one.** A write
-      -- deletes the slot it lands on, so the letter decides what is lost;
-      -- the name beside it is only the legend on the bank.
-      , small "letter" st.letter SetLetter
-      , small "bank name" st.bank SetBank
-      , small "kit" (if st.kit == "" then setName else st.kit) SetKit
-      -- | **A stereo take has two voices to offer, not four.**
-      -- |
-      -- | A stereo sample plays its left channel on SPn and its right on
-      -- | SP(n+1), so it *consumes* the voice after it: a kit is four mono
-      -- | voices or two stereo ones or a mix. Which makes three of the four
-      -- | offers wrong for stereo, and the list was offering all four —
-      -- | "4 + 5" names a voice the module does not have, and 2 + 3 leaves
-      -- | voice 1 empty, which is the one fault that stops the module opening
-      -- | the kit at all.
-      -- |
-      -- | The same pair `freeVoice` picks from, so the suggestion and the
-      -- | choice cannot disagree. Deliberately the *offers* rather than a
-      -- | validation after the fact: this is a closed set of two, and a
-      -- | dropdown that only contains right answers needs no error message.
-      , HH.label [ HP.class_ (HH.ClassName "q-field is-tight") ]
-          [ HH.span_ [ HH.text (if wideKit then "voice pair" else "voice") ]
-          , HH.select [ HE.onValueChange SetVoice ]
-              (map (\n -> HH.option
-                      [ HP.value (show n), HP.selected (n == st.voice) ]
-                      [ HH.text (show n
-                          <> (if wideKit then " + " <> show (n + 1) else "")) ])
-                  (voicesFor st.kind))
-          ]
-      -- **Two verbs where there was one.**
-      --
-      -- A voice used to hold one set, so sending could only mean "put it
-      -- here". It can now hold a stack, and the two things you might mean
-      -- are opposites: stand beside what is there, or take its place. The
-      -- additive one is offered first and plainly; the destructive one has
-      -- to be aimed at.
-      , case occupant of
-          Nothing ->
-            HH.button
-              [ HP.class_ (HH.ClassName "q-plain is-go")
-              , HP.disabled (st.cardBusy || Set.isEmpty st.keep)
-              , HE.onClick \_ -> SendToCard { place: true, append: false }
-              ]
-              [ HH.text (show (Set.size st.keep) <> " to the kit") ]
-          Just r ->
-            HH.div [ HP.class_ (HH.ClassName "q-twoverbs") ]
-              [ HH.button
-                  [ HP.class_ (HH.ClassName "q-plain is-go")
-                  , HP.disabled (st.cardBusy || Set.isEmpty st.keep)
-                  , HP.title "the layer selector picks between them"
-                  , HE.onClick \_ -> SendToCard { place: true, append: true }
-                  ]
-                  [ HH.text ("add as layer " <> show (Array.length r.sets + 1)) ]
-              , HH.button
-                  [ HP.class_ (HH.ClassName "q-plain is-replacing")
-                  , HP.disabled (st.cardBusy || Set.isEmpty st.keep)
-                  , HE.onClick \_ -> SendToCard { place: true, append: false }
-                  ]
-                  [ HH.text "replace" ]
-              ]
-      -- **How the layer selector moves.** Only worth asking once a voice holds
-      -- more than one thing to choose between — and it is the whole reason to
-      -- use layers rather than slices, since these are the modes where the
-      -- module decides for itself.
-      , case occupant of
-          Just r | Array.length r.sets >= 1 ->
-            HH.label [ HP.class_ (HH.ClassName "q-field is-tight") ]
-              [ HH.span_ [ HH.text "picked by" ]
-              , HH.select [ HE.onValueChange SetLayerMode ]
-                  (map (\m -> HH.option
-                          [ HP.value m
-                          , HP.selected (m == (if st.layerMode == "" then r.mode else st.layerMode)) ]
-                          [ HH.text m ])
-                      [ "manual", "velocity", "random", "cyclic" ])
-              ]
-          _ -> HH.text ""
-      -- **Say what is about to be destroyed, before it is.**
-      --
-      -- A kit's voice is an address, and sending to one that is taken replaces
-      -- what is there. That happened four times in a row without a word being
-      -- said, because the kit name stuck to the first take and every later send
-      -- addressed the same slot. Naming the occupant costs one line and makes
-      -- the whole class of mistake visible while it can still be avoided.
-      , case occupant of
-          Nothing -> HH.text ""
-          Just r ->
-            HH.span [ HP.class_ (HH.ClassName "q-warn") ]
-              [ HH.text ("voice " <> show st.voice <> " holds "
-                  <> joinWith ", " r.sets
-                  <> (if r.slicer > 0 then " in " <> show r.slicer <> " slots" else "")
-                  <> " — add stands beside them, replace puts this in their place") ]
-      ]
-
-  -- | What already sits at the address this send would write to — and only
-  -- | when it is something else, since re-sending the same set is a refresh
-  -- | rather than a loss.
-  occupant =
-    let kitName = if st.kit == "" then st.name else st.kit
-    in do
-      v <- st.cardView
-      Array.find
-        (\r -> r.bank == st.bank && r.kit == kitName
-                 && r.voice == st.voice && r.set /= setName)
-        v.rows
+  -- | **Where a set lands on a card is not part of making it.**
+  -- |
+  -- | This used to be an "Export for card" door on the bench, holding the
+  -- | letter, the bank, the kit, the voice and the two verbs — and every one
+  -- | of those is a fact about a destination, not about a recording. Andrew,
+  -- | 2026-09-12: *"the location on a card for a particular module isn't
+  -- | something that's part of the sampling setup, it should be on the library
+  -- | tab."* Which is right, and it is the cleaner seam as well: the bench
+  -- | MAKES sets and the library PLACES them, so one set can be sent to a
+  -- | Rample voice pair today and a QuadDrum folder tomorrow without the thing
+  -- | that recorded it having an opinion.
+  -- |
+  -- | So the bench keeps one verb — Save to disk — and the address moved whole
+  -- | to the Library's placement bar, where the sets being addressed are.
+  -- | Duplicating it in both places is what made "which bank?" unanswerable
+  -- | from the page you were standing on.
 
   style :: forall r. String -> HH.IProp r Action
   style = HP.attr (HH.AttrName "style")

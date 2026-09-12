@@ -104,6 +104,7 @@ export const storedSets = () =>
       take: String(s.take ?? ""),
       described: !!s.described,
       runnable: !!s.runnable,
+      stereo: !!s.stereo,
       moved: (s.moved ?? []).map(String),
       extent: (s.extent ?? []).map(Number),
       encoding: String(s.encoding ?? ""),

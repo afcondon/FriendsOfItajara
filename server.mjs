@@ -472,6 +472,11 @@ function storedSets() {
       made: set?.made ?? "",
       take: set?.take ?? "",
       runnable: !!set?.spec,
+      // Whether it goes to a card as stereo, which decides how many voices it
+      // occupies — a stereo sample plays its right channel on the voice after
+      // it, so it needs a pair and cannot start on voice 4. The Library places
+      // stored sets, so the Library has to know.
+      stereo: !!set?.stereo,
       // The parameters that were moved, by name, so a list of sets reads as a
       // list of experiments rather than a list of folders.
       moved: (set?.spec?.params ?? []).map((q) => q.name),

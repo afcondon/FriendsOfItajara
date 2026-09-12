@@ -220,6 +220,10 @@ type SetRow =
   , described :: Boolean
   -- | It has a spec, so it can be run again.
   , runnable :: Boolean
+  -- | Goes to a card as stereo, and so occupies a PAIR of voices. See
+  -- | `Kind.foldsTo` — it is a property of the material, decided when the set
+  -- | was cut and recorded in `set.json`.
+  , stereo :: Boolean
   -- | The parameters that moved, by name — so a list of sets reads as a list
   -- | of experiments rather than a list of folders.
   , moved :: Array String
