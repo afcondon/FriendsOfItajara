@@ -1880,6 +1880,32 @@ wontKeepOf st =
                  \makes it move."
     else Nothing
 
+-- | **What the rig is recording at, when that is not what the card wants.**
+-- |
+-- | A Rample card is 44.1 kHz, and this rig's aggregate came back from a
+-- | reboot at 48 — which is a setting on the interface, not a thing this page
+-- | can change. `msm` resamples correctly (measured 2026-09-12: twelve notes
+-- | within four cents of what was asked), so the conversion is not wrong; it
+-- | is simply a non-integer conversion done for no reason, and the reason it
+-- | happens is that nobody was told.
+-- |
+-- | So the page says it, and says it where the decision is: beside the export,
+-- | before a run rather than after one. Setting the aggregate back is a human
+-- | act in Audio MIDI Setup and this deliberately does not pretend otherwise —
+-- | it is a remark, not a guard, and nothing is disabled by it.
+cardRate :: Int
+cardRate = 44100
+
+rateSays :: State -> Maybe String
+rateSays st = do
+  top <- st.looper
+  if top.sampleRate <= 0 || top.sampleRate == cardRate then Nothing
+    else pure (khz top.sampleRate <> " in, " <> khz cardRate <> " out — the \
+               \card wants " <> khz cardRate <> " and msm will resample. Set \
+               \the aggregate in Audio MIDI Setup to record it straight.")
+  where
+  khz n = fmt (Int.toNumber n / 1000.0) <> " kHz"
+
 -- | **How long the take on the bench is.**
 -- |
 -- | The daemon's capture, unless a stored set is open — in which case it is
@@ -3296,7 +3322,7 @@ render st =
                       <> (if st.pivot == Just i then " is-open" else "")))
                   , style ("left:" <> show (Int.toNumber j * w) <> "%;width:" <> show w <> "%")
                   , HP.title ("position " <> show (i + 1)
-                        <> " — every parameter at this hit")
+                        <> " — " <> cellSays steps i)
                   , HE.onClick \_ ->
                       if running then OpenPivot st.pivot
                       else OpenPivot (if st.pivot == Just i then Nothing else Just i)
@@ -3307,35 +3333,66 @@ render st =
 
   -- | **What this cell asks for, in the cell.**
   -- |
-  -- | The note, then every other live parameter as a percentage of its own
-  -- | range, then what Measure says this cell will take. Read across a row,
-  -- | those are the values the inner axis varies; read down a column, the
-  -- | outer's. A parameter on the wrong axis shows as a row that repeats
-  -- | itself, which is the whole reason the numbers are here rather than in a
-  -- | panel that has to be opened one cell at a time.
+  -- | The note, then every other live parameter as its own slider, then what
+  -- | Measure says this cell will take. Read across a row those are the values
+  -- | the inner axis varies; read down a column, the outer's. A parameter on
+  -- | the wrong axis shows as a row that repeats itself, which is the whole
+  -- | reason the values are here rather than in a panel that has to be opened
+  -- | one cell at a time.
+  -- |
+  -- | **Sliders rather than percentages** (2026-09-12). `C2 · 45%` is true and
+  -- | it is the wrong representation for the question the grid is asked, which
+  -- | is never "what is this one" but always "how do these forty-eight relate
+  -- | to one another". Reading that off numerals means reading forty-eight of
+  -- | them and holding the differences in your head; as a stack of little
+  -- | tracks one per parameter, always in the same order and the same place,
+  -- | a column of cells becomes a small-multiple and the shape of the sweep is
+  -- | the shape on the screen. The numbers stay on hover, where a number is
+  -- | what you want.
   planCell steps i =
     let
       means = maybe [] _.means (Array.index steps i)
       pitched = Array.find (\m -> m.note >= 0) means
       others = Array.filter (\m -> m.note < 0) means
-      pct m = show (Int.round (m.at * 100.0)) <> "%"
       -- Only when the measurement still describes THIS sweep; a stale number
       -- in a cell is worse than none, because it reads as a fact.
       pacedFor =
         if Sweep.pacedStale st.sweep then Nothing
         else Array.index st.sweep.paced i
+      -- Clamped because a curve may be edited past its ends while the grid is
+      -- on screen, and a fill wider than its track reads as a different
+      -- parameter rather than as an out-of-range one.
+      slider m =
+        HH.div [ HP.class_ (HH.ClassName "q-cellbar") ]
+          [ HH.span
+              [ HP.class_ (HH.ClassName "q-cellbar-f")
+              , style ("width:" <> show (max 0.0 (min 100.0 (m.at * 100.0))) <> "%")
+              ] []
+          ]
     in
       Array.catMaybes
         [ Just (HH.span [ HP.class_ (HH.ClassName "q-seg-n") ]
             [ HH.text (maybe (show (i + 1)) (\m -> Pitch.noteName m.note) pitched) ])
         , if Array.null others then Nothing
-          else Just (HH.span [ HP.class_ (HH.ClassName "q-cellvals") ]
-                 [ HH.text (joinWith " · " (map pct others)) ])
+          else Just (HH.div [ HP.class_ (HH.ClassName "q-cellbars") ]
+                 (map slider others))
         , map
             (\ms -> HH.span [ HP.class_ (HH.ClassName "q-cellpaced") ]
                       [ HH.text (fmt (Int.toNumber ms / 1000.0) <> " s") ])
             pacedFor
         ]
+
+  -- | The numbers the sliders stand for, for the cell's own tooltip. The
+  -- | picture answers the comparison; this answers "what exactly is that one",
+  -- | which is a different question and wants a different affordance.
+  cellSays steps i =
+    let means = maybe [] _.means (Array.index steps i)
+    in joinWith " · "
+         (map
+           (\m ->
+             if m.note >= 0 then Pitch.noteName m.note
+             else m.name <> " " <> show (Int.round (m.at * 100.0)) <> "%")
+           means)
 
   keepBar i r left wide =
     let kept = Set.member i st.keep
@@ -3511,6 +3568,11 @@ render st =
   placeBlock =
     HH.div [ HP.class_ (HH.ClassName "q-place") ]
       [ HH.span [ HP.class_ (HH.ClassName "q-acthead") ] [ HH.text "Export for card" ]
+      -- A remark, not a guard: the rate is set on the interface and this page
+      -- cannot change it, so all it can usefully do is not let it pass unsaid.
+      , case rateSays st of
+          Nothing -> HH.text ""
+          Just t -> HH.p [ HP.class_ (HH.ClassName "q-rate") ] [ HH.text t ]
       -- **The letter first, because it is the destructive one.** A write
       -- deletes the slot it lands on, so the letter decides what is lost;
       -- the name beside it is only the legend on the bank.

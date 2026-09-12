@@ -553,16 +553,41 @@ body {
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   padding-bottom: 3px;
 }
-/* Three lines in a planned cell: what note, what the other knobs are set to,
+/* Three lines in a planned cell: what note, where the other knobs are set,
    and what Measure says it will take. Stacked, because read across a row they
    are the inner axis's values and read down a column the outer's. */
 .q-seg.is-plan { flex-direction: column; justify-content: center; gap: 1px; }
-.q-cellvals, .q-cellpaced {
+.q-cellpaced {
   font-size: 9px; letter-spacing: .02em; white-space: nowrap;
   pointer-events: none; font-variant-numeric: tabular-nums;
+  color: #2a7d4f;
 }
-.q-cellvals { color: var(--muted); }
-.q-cellpaced { color: #2a7d4f; }
+
+/* One track per parameter, always in the same order and the same place, so a
+   column of cells reads as a small-multiple rather than as a column of
+   numerals. The question the grid is asked is how forty-eight cells relate to
+   one another, and that is a question for a picture. The numbers are still
+   there on hover. */
+.q-cellbars {
+  width: 82%; display: flex; flex-direction: column; gap: 2px;
+  pointer-events: none;
+}
+.q-cellbar {
+  height: 3px; border-radius: 1px; background: var(--rule);
+  overflow: hidden;
+}
+.q-cellbar-f {
+  display: block; height: 100%; background: var(--ink); opacity: .55;
+}
+.q-seg.is-done .q-cellbar-f { background: #2a7d4f; opacity: .7; }
+
+/* The rate remark in the export block. Deliberately not an alarm colour: it
+   is a thing worth knowing before a run, not a fault, and the conversion it
+   describes is correct. */
+.q-rate {
+  margin: 0; font-size: 11px; line-height: 1.45; color: var(--muted);
+  border-left: 2px solid var(--rule); padding-left: 8px;
+}
 
 /* The planned strip: the same picture before there is a take to draw it
    on. Numbered boxes in a grid used to be the only way to reach a position
