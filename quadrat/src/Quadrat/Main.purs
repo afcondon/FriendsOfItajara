@@ -330,6 +330,11 @@ data Action
   | Init
   | Poll
   | NameSource String String
+  -- | Pick the kind from the sentence, where it arrives as its own name
+  -- | rather than as a `Kind` — the slot is a `<select>` and a select carries
+  -- | strings. `Kind.Bars` keeps the bar count the page is holding, because
+  -- | choosing "bars" is not a statement about how many.
+  | PickKindNamed String
   | PickKind Kind
   | SetBars String
   | SetName String
@@ -741,6 +746,13 @@ handleAction = case _ of
         H.modify_ _ { midiPorts = ps }
         unless (Array.null ps) $ H.modify_
           (note (show (Array.length ps) <> " MIDI ports"))
+  PickKindNamed v -> do
+    st <- H.get
+    for_ (Array.find (\k -> Kind.name k == v) (Kind.all))
+      (handleAction <<< PickKind <<< case _ of
+          Kind.Bars _ -> Kind.Bars st.bars
+          other -> other)
+
   PickKind k -> do
     -- **The voice comes with the kind.** Stereo material takes a pair, so the
     -- four offers become two; a voice chosen while the kind was mono can be
@@ -2522,20 +2534,50 @@ render st =
   statement =
     HH.section [ HP.class_ (HH.ClassName "q-say") ]
       [ listening
+      -- **The sentence says what will actually happen, and the two cases do
+      -- not happen alike.**
+      --
+      -- A swept run makes a stated number of samples on a schedule it declares
+      -- in advance, so the count, the pitch axis and the running time are all
+      -- promises it can keep. A take played by hand makes as many samples as
+      -- you play; its extent is unused, nothing tunes it, and no one can say
+      -- how long it will run. Printing "Making 4 × 12 pitched samples" over a
+      -- take that will produce nine chords is not a small inaccuracy — it is
+      -- the page claiming to be in charge of something it is not, and it sent
+      -- somebody looking for the count control that does not exist.
+      --
+      -- **`slotKind` is in both**, and it is the repair for the other half of
+      -- that question: the kind decides the material, and the material decides
+      -- the divider's default, the fold to mono or stereo, the shape on the
+      -- card, and how long a decay the divider waits for — 4 seconds for hits,
+      -- 20 for chords. All of that was chosen behind a door labelled Trigger,
+      -- so the only visible trace of it was the generated name, which looks
+      -- like a name.
       , HH.p [ HP.class_ (HH.ClassName "q-sayline") ]
-          ( [ HH.text "Making ", slotExtent
-            , HH.text " ", slotPitched
-            , HH.text " samples from ", slotSource, slotSourceName
-            , HH.text ", triggered by ", slotTrigger
-            , HH.text ", kept as ", slotName
-            , HH.text " for ", slotEncoding
-            ]
-              -- Named only when there IS one to name: "tuned by nothing" is a
-              -- clause about an absence, and an unpitched run is not missing
-              -- anything.
-              <> (if Sweep.pitched st.sweep
-                    then [ HH.text ", tuned by ", slotCalib ] else [])
-              <> [ HH.text ", about ", HH.text runSecs, HH.text " to record." ] )
+          ( case st.fill of
+              Played ->
+                [ HH.text "Making ", slotKind
+                , HH.text " from ", slotSource, slotSourceName
+                , HH.text ", triggered by ", slotTrigger
+                , HH.text ", kept as ", slotName
+                , HH.text " for ", slotEncoding
+                , HH.text ". As many as you play."
+                ]
+              Swept ->
+                [ HH.text "Making ", slotExtent
+                , HH.text " ", slotPitched
+                , HH.text " ", slotKind
+                , HH.text " from ", slotSource, slotSourceName
+                , HH.text ", triggered by ", slotTrigger
+                , HH.text ", kept as ", slotName
+                , HH.text " for ", slotEncoding
+                ]
+                  -- Named only when there IS one to name: "tuned by nothing"
+                  -- is a clause about an absence, and an unpitched run is not
+                  -- missing anything.
+                  <> (if Sweep.pitched st.sweep
+                        then [ HH.text ", tuned by ", slotCalib ] else [])
+                  <> [ HH.text ", about ", HH.text runSecs, HH.text " to record." ] )
       , clashSays
       , collapseSays
       , heardSays
@@ -2718,6 +2760,29 @@ render st =
                       ]
                   ])
                 ns))
+
+  -- | **What is being recorded**, which is the one thing everything else
+  -- | follows from — the divider's default, the fold to mono or stereo, the
+  -- | shape on the card, and the decay the divider is willing to wait for. It
+  -- | was a row of chips behind the Trigger door, where nothing about it could
+  -- | be seen without opening one; the generated name was the only evidence,
+  -- | and a name reads as a name.
+  slotKind =
+    sel "q-slot" (Kind.name st.kind) PickKindNamed
+      -- `Kind.all` carries `Bars 1` as the representative, so the bar entry has
+      -- to be labelled with the count the page is actually holding — otherwise
+      -- a four-bar take reads "one bar" in its own sentence.
+      (map (\k -> { v: Kind.name k
+                  , t: sentenceKind (case k of
+                          Kind.Bars _ -> Kind.Bars st.bars
+                          other -> other) })
+        Kind.all)
+
+  -- | The kind as it reads mid-sentence: "12 pitched chord hits from …".
+  -- | `Kind.label` is a heading and is capitalised for one.
+  sentenceKind k = case k of
+    Kind.Bars n -> if n == 1 then "one bar" else show n <> " bars"
+    other -> String.toLower (Kind.label other)
 
   slotPitched =
     sel "q-slot" (if pitchOn then "pitched" else "unpitched") SetPitched
