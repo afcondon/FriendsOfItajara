@@ -179,6 +179,12 @@ type State =
   , cardView :: Maybe Http.CardView
   -- | Where a kept set is going: the bank, the kit, and which voice.
   , bank :: String
+  -- | **Which bank LETTER this lands on**, which is the blast radius: a write
+  -- | deletes the slot's whole directory first. `bank` beside it is only the
+  -- | legend printed on the bank, and the two were one field until 2026-09-12,
+  -- | when "L" went into the name, no letter was sent, and the compiler put a
+  -- | 4 x 12 on `A` over Squarp's own content.
+  , letter :: String
   , kit :: String
   , voice :: Int
   , cardBusy :: Boolean
@@ -292,6 +298,7 @@ data Action
   | SetEqualN String
   | RefreshCard
   | SetBank String
+  | SetLetter String
   | SetKit String
   | SetVoice String
   | SendToCard { place :: Boolean, append :: Boolean }
@@ -347,7 +354,7 @@ component = H.mkComponent
       , takeIsDry: false
       , hoverPlays: false, playing: Nothing, showing: "", waiting: false
       , minGap: 300.0, divider: Divider.Attacks, equalN: 16, mine: false, kitMine: false, layerMode: ""
-      , cardView: Nothing, bank: "WORKSHOP", kit: "", voice: 1, cardBusy: false
+      , cardView: Nothing, bank: "WORKSHOP", letter: "", kit: "", voice: 1, cardBusy: false
       , sweep: Sweep.emptyPlan, sweepOpen: false, sweepAt: Nothing
       , sweepFork: Nothing, midiPorts: [], swept: false, sweepEdit: Nothing
       , schedule: [], sets: [], tables: [], tablesErr: "", overran: false
@@ -691,6 +698,7 @@ handleAction = case _ of
     r <- H.liftAff (attempt (toAffE (Http.placeSet
           { set: nm
           , bank: st.bank
+          , letter: st.letter
           , kit: nm
           , voice: st.voice
           , append: false
@@ -720,6 +728,7 @@ handleAction = case _ of
                         <> " — change the extent and run it again"))
             handleAction (OpenSweep true)
   SetBank v -> H.modify_ _ { bank = v }
+  SetLetter v -> H.modify_ _ { letter = v }
   SetKit v -> H.modify_ _ { kit = v, kitMine = v /= "" }
   SetVoice v -> H.modify_ \s -> s { voice = clamp 1 4 (fromMaybe s.voice (Int.fromString v)) }
   WriteCard dest -> do
@@ -782,6 +791,7 @@ handleAction = case _ of
         r <- H.liftAff (attempt (toAffE (Http.addToCard
               { take: st.showing, set: setName
               , bank: st.bank
+              , letter: st.letter
               , kit: if st.kit == "" then setName else st.kit
               , voice: st.voice
               , kind: Kind.name st.kind
@@ -3242,7 +3252,11 @@ render st =
   placeBlock =
     HH.div [ HP.class_ (HH.ClassName "q-place") ]
       [ HH.span [ HP.class_ (HH.ClassName "q-acthead") ] [ HH.text "Export to card" ]
-      , small "bank" st.bank SetBank
+      -- **The letter first, because it is the destructive one.** A write
+      -- deletes the slot it lands on, so the letter decides what is lost;
+      -- the name beside it is only the legend on the bank.
+      , small "letter" st.letter SetLetter
+      , small "bank name" st.bank SetBank
       , small "kit" (if st.kit == "" then setName else st.kit) SetKit
       , HH.label [ HP.class_ (HH.ClassName "q-field is-tight") ]
           [ HH.span_ [ HH.text "voice" ]

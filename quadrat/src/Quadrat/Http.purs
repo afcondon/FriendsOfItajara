@@ -155,7 +155,8 @@ type Meant =
 -- | at the one call site, and JSON on the far side.
 foreign import addToCard
   :: forall spec
-   . { take :: String, set :: String, bank :: String, kit :: String
+   . { take :: String, set :: String, bank :: String, letter :: String
+     , kit :: String
      , voice :: Int, kind :: String, stereo :: Boolean, join :: Boolean
      , append :: Boolean, layerMode :: String, regions :: Array Region
      -- | **Cut it, or cut it and put it on a voice.** Two acts, and they were
@@ -225,7 +226,7 @@ foreign import calibration
 -- | mean "the same take was cut twice". Everything the card needs about the
 -- | shape is in `set.json`, which is what it is for.
 foreign import placeSet
-  :: { set :: String, bank :: String, kit :: String, voice :: Int
+  :: { set :: String, bank :: String, letter :: String, kit :: String, voice :: Int
      , append :: Boolean, layerMode :: String }
   -> Effect (Promise Wrote)
 

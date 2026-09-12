@@ -164,12 +164,25 @@ function asStack(v) {
 }
 
 // What a layer's files are, as the manifest wants them.
+//
+// **A layer is usually a whole set, and on a grid it is a slice of one.** Four
+// velocity layers of twelve notes each are ONE recording: the outer axis picks
+// the layer, the inner becomes the slices inside it, and both live in the same
+// directory because that is what a transect is. So a layer may name its own
+// files rather than globbing the set — and carry its own slot length, because
+// the four decays of a 4 x 12 are four different lengths and SLICER divides
+// each file by proportion. What has to agree across a voice is the slot COUNT,
+// which is the global setting, and that is checked where banks are.
 function layerSource(st, l) {
   const glob = `samples/${l.set}/*.wav`;
-  if (!st.sliced) return q(glob);
-  const bits = [`concat = [${q(glob)}]`, `slot = ${st.slotSecs.toFixed(4)}`];
+  const srcs = (l.files && l.files.length)
+    ? l.files.map((f) => q(`samples/${l.set}/${f}`))
+    : [q(glob)];
+  if (!st.sliced) return srcs.length === 1 ? srcs[0] : `[${srcs.join(", ")}]`;
+  const slot = l.slotSecs != null ? l.slotSecs : st.slotSecs;
+  const bits = [`concat = [${srcs.join(", ")}]`, `slot = ${Number(slot).toFixed(4)}`];
   if (st.slots) bits.push(`slots = ${st.slots}`);
-  bits.push(`name = ${q(l.set)}`);
+  bits.push(`name = ${q(l.name || l.set)}`);
   // What the slots and the layer MEAN. The card records where a sample sits
   // and never what it is, so without these a file of twelve slices is
   // indistinguishable from a field recording by any amount of analysis.
@@ -382,16 +395,28 @@ function storedSet(name) {
 //
 // `shape` is what the voice has to agree about — the module's rules, all of
 // which it enforces silently on its own.
-function placeOnCard({ set, bank: bankIn, kit: kitIn, voice: voiceIn, append,
-                       layerMode, kind, shape }) {
+function placeOnCard({ set, bank: bankIn, letter: letterIn, kit: kitIn, voice: voiceIn,
+                       append, layerMode, kind, shape, grid }) {
   const { sliced, slots, slotSecs } = shape;
   const card = readCard();
   const bankName = String(bankIn || "WORKSHOP").toUpperCase().replace(/[^A-Z0-9 ]/g, "").trim() || "WORKSHOP";
   const kitName = String(kitIn || set);
   const voice = Math.min(4, Math.max(1, Number(voiceIn) || 1));
+  // **The letter is the blast radius.** `msm kit build --write` deletes each
+  // kit slot's whole directory before writing it, so the letter decides what a
+  // write destroys. Without one the compiler picks — it chose `A` on
+  // 2026-09-12, over a bank of Squarp's own content, while the page believed
+  // it had said `L`. It says which, or nothing happens.
+  const letter = String(letterIn || "").toUpperCase().replace(/[^A-Z]/g, "").slice(0, 1);
+  if (!letter) {
+    return { ok: false, output:
+      "no bank letter. A write deletes the slot it lands on, so the letter is " +
+      "the one thing that cannot be left to a default — say A to Z." };
+  }
 
-  let bank = (card.banks ||= []).find((b) => b.name === bankName);
-  if (!bank) { bank = { name: bankName, kits: [] }; card.banks.push(bank); }
+  let bank = (card.banks ||= []).find((b) => b.letter === letter);
+  if (!bank) { bank = { letter, name: bankName, kits: [] }; card.banks.push(bank); }
+  else bank.name = bankName;
   let kit = (bank.kits ||= []).find((k) => k.name === kitName);
   if (!kit) { kit = { name: kitName, voices: {} }; bank.kits.push(kit); }
   // Velocity for a stack of hits, manual for anything chosen deliberately.
@@ -428,6 +453,12 @@ function placeOnCard({ set, bank: bankIn, kit: kitIn, voice: voiceIn, append,
     // The slot has to hold the longest piece of ANY layer.
     there.slotSecs = Math.max(there.slotSecs || 0, slotSecs);
     kit.voices[at] = there;
+  } else if (grid) {
+    // A grid is the whole voice by construction: every layer of it comes from
+    // this one set, and a fifth from somewhere else would have to agree with
+    // all four. Appending to one is possible and is not offered until someone
+    // wants it.
+    kit.voices[at] = { layers: grid.layers, ...shape };
   } else {
     kit.voices[at] = { layers: [{ set }], ...shape };
   }
@@ -442,7 +473,7 @@ function placeOnCard({ set, bank: bankIn, kit: kitIn, voice: voiceIn, append,
   const n = stack.layers.length;
   if (n > 1) {
     stack.layers.forEach((l, i) => {
-      l.velocity = Math.round(((i + 1) / n) * 127);
+      if (l.velocity == null) l.velocity = Math.round(((i + 1) / n) * 127);
     });
   } else {
     delete stack.layers[0].velocity;
@@ -473,6 +504,103 @@ function placeOnCard({ set, bank: bankIn, kit: kitIn, voice: voiceIn, append,
   return { ok: true };
 }
 
+// **A two-axis set, as the module has to hold it.**
+//
+// The outer axis becomes LAYERS — alternatives the module picks between, by
+// velocity or at random — and the inner becomes SLICES inside each layer's
+// file, which only the start point can reach. That asymmetry is the whole
+// reason a transect has two axes (see `Quadrat.Encoding`), and it is why a
+// grid cannot be placed the way a line is: 48 files globbed onto one voice is
+// 48 layers, of which the module plays twelve and drops the rest in silence.
+// Measured 2026-09-12, on a 4 x 12 that reported exactly that.
+//
+// Each layer gets its OWN slot length, because the four decays of a decay
+// sweep are four different lengths and SLICER divides each file by proportion.
+// What must agree is the slot COUNT, which is the one global setting, and
+// `placeOnCard` already refuses a bank whose divisions disagree.
+function gridLayers(set, d, dir) {
+  const ext = (d.spec && d.spec.extent) || [];
+  if (ext.length !== 2 || ext[0] < 2 || ext[1] < 2) return null;
+  const rows = ext[0], cols = ext[1];
+  const sm = d.samples || [];
+  if (sm.length !== rows * cols) return null;
+
+  const layers = [];
+  for (let r = 0; r < rows; r++) {
+    const cells = sm.slice(r * cols, (r + 1) * cols);
+    // `Encoding.cells` varies the inner axis fastest, so a row of the file
+    // order IS a row of the grid — but say so rather than assume it, because a
+    // set written by some later encoding would be silently transposed.
+    if (!cells.every((c, i) => Array.isArray(c.cell) && c.cell[0] === r && c.cell[1] === i)) return null;
+    let longest = 0;
+    for (const c of cells) {
+      const secs = wavSecs(path.join(dir, c.file));
+      if (secs == null) return null;
+      longest = Math.max(longest, secs);
+    }
+    // What this layer STANDS for: the value of whatever moves along the outer
+    // axis. A card records where a sample sits and never what it is, so the
+    // name is the only thing carrying the meaning out of here.
+    // **One parameter names the layer, not all of them.** Joining every knob
+    // that moves along the outer axis gave `decay-33-attack-22-harm-`, cut off
+    // mid-word by the length the module can show — three facts, none of them
+    // readable. The first parameter is the one you chose the axis for; a `+2`
+    // says the others came with it, and the file beside it in `set.json` still
+    // holds all of them exactly.
+    const mine = (cells[0].means || []).filter((m) => m.note < 0);
+    const head = mine[0];
+    // Letters, digits and hyphens only: anything else comes back as a space in
+    // the filename, and `decay-0 2.wav` reads as a mistake rather than as a
+    // note. What else moved along this axis is in `set.json` and in the card's
+    // own index, which are the places that can hold it.
+    const label = head
+      ? `${head.name}-${Math.round(head.at * 100)}`.replace(/[^A-Za-z0-9-]/g, "")
+      : `layer-${r + 1}`;
+    layers.push({
+      set,
+      files: cells.map((c) => c.file),
+      name: label.slice(0, 20),
+      slotSecs: Math.ceil(longest * 100) / 100,
+      velocity: Math.round(((r + 1) / rows) * 127),
+    });
+  }
+  // Distinct, because the name is most of the filename and two layers sharing
+  // one would be a silent overwrite.
+  const seen = new Set();
+  for (let i = 0; i < layers.length; i++) {
+    let nm = layers[i].name;
+    if (seen.has(nm)) nm = `${nm.slice(0, 16)}-${i + 1}`;
+    seen.add(nm);
+    layers[i].name = nm;
+  }
+  return { layers, slots: cols };
+}
+
+// Seconds of a WAV, from its header alone. Enough to size a slot, and it does
+// not read the audio to do it.
+function wavSecs(file) {
+  try {
+    const fd = fs.openSync(file, "r");
+    const head = Buffer.alloc(4096);
+    const n = fs.readSync(fd, head, 0, 4096, 0);
+    fs.closeSync(fd);
+    if (head.slice(0, 4).toString() !== "RIFF") return null;
+    let off = 12, rate = 0, ch = 0, bits = 0, bytes = 0;
+    while (off + 8 <= n) {
+      const id = head.slice(off, off + 4).toString();
+      const size = head.readUInt32LE(off + 4);
+      if (id === "fmt ") {
+        ch = head.readUInt16LE(off + 10);
+        rate = head.readUInt32LE(off + 12);
+        bits = head.readUInt16LE(off + 22);
+      } else if (id === "data") { bytes = size; break; }
+      off += 8 + size + (size & 1);
+    }
+    if (!rate || !ch || !bits || !bytes) return null;
+    return bytes / (rate * ch * (bits / 8));
+  } catch { return null; }
+}
+
 // **A set already on disk, onto a voice.** No take, no cut, no measuring.
 //
 // The other half of the second encoding. SuperDirt needs no projection at all
@@ -497,22 +625,30 @@ function placeStoredSet(body) {
   const files = fs.readdirSync(dir).filter((f) => f.toLowerCase().endsWith(".wav"));
   if (!files.length) return { ok: false, output: `${set} holds no audio` };
 
+  // A grid holds its own shape: layers from the outer axis, slices from the
+  // inner. `set.json` says so and nothing else has to be told.
+  const grid = gridLayers(set, d, dir);
   const placed = placeOnCard({
-    set,
-    bank: body.bank, kit: body.kit, voice: body.voice,
+    set, grid,
+    bank: body.bank, letter: body.letter, kit: body.kit, voice: body.voice,
     append: body.append, layerMode: body.layerMode, kind: d.kind,
-    shape: {
-      kind: d.kind || "",
-      stereo: !!d.stereo,
-      sliced: !!d.sliced,
-      slots: d.slots || 0,
-      slotSecs: d.slotSecs || 0,
-    },
+    shape: grid
+      ? { kind: d.kind || "", stereo: !!d.stereo, sliced: true,
+          slots: grid.slots, slotSecs: Math.max(...grid.layers.map((l) => l.slotSecs)) }
+      : { kind: d.kind || "",
+          stereo: !!d.stereo,
+          sliced: !!d.sliced,
+          slots: d.slots || 0,
+          slotSecs: d.slotSecs || 0,
+        },
   });
   if (!placed.ok) return placed;
   return {
     ok: true,
-    output: `${set} (${files.length} samples) on voice ${Math.min(4, Math.max(1, Number(body.voice) || 1))}`,
+    output: grid
+      ? `${set} on voice ${Math.min(4, Math.max(1, Number(body.voice) || 1))} — `
+          + `${grid.layers.length} layers of ${grid.slots} slices`
+      : `${set} (${files.length} samples) on voice ${Math.min(4, Math.max(1, Number(body.voice) || 1))}`,
     card: readCard(),
     sets: sets(),
   };
@@ -617,7 +753,7 @@ async function addToCard(body) {
 
   const placed = placeOnCard({
     set,
-    bank: body.bank, kit: body.kit, voice: body.voice,
+    bank: body.bank, letter: body.letter, kit: body.kit, voice: body.voice,
     append: body.append, layerMode: body.layerMode, kind: body.kind,
     shape: { kind: body.kind || "", stereo: !!body.stereo, sliced, slots, slotSecs },
   });
