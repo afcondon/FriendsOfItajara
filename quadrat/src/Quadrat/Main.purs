@@ -3990,6 +3990,21 @@ render st =
       , case wontKeep of
           Nothing -> HH.text ""
           Just why -> HH.span [ HP.class_ (HH.ClassName "q-warn") ] [ HH.text why ]
+      -- | **What this set will NOT be able to say, said before it is written.**
+      -- |
+      -- | A played take's notes exist only in the page, only until the next
+      -- | capture opens. Every other shortcoming of a set can be repaired
+      -- | afterwards — re-cut it, re-measure it, rename it — and this one
+      -- | cannot: the performance is over. So it is a remark at the moment of
+      -- | saving, not a refusal, because a set of chords with no notes is still
+      -- | a set of chords and you may not want them.
+      -- |
+      -- | It says it after the fact for the same reason `heardSays` says it
+      -- | before: on 2026-09-12 twelve chords were saved with empty `notes` and
+      -- | nothing on the page objected at either end.
+      , case notesMissing of
+          Nothing -> HH.text ""
+          Just why -> HH.span [ HP.class_ (HH.ClassName "q-scratch") ] [ HH.text why ]
       -- **Say where it lands, at the moment of landing it.** The one place a
       -- path is shown, so the name in `The take` and the directory on disk
       -- cannot drift apart again.
@@ -4003,6 +4018,22 @@ render st =
             HH.span [ HP.class_ (HH.ClassName "q-scratch") ]
               [ HH.text "scratch — the next run replaces this take" ]
       ]
+
+  -- | **Why this set will carry no notes**, or nothing. Only ever a remark.
+  notesMissing
+    | st.fill /= Played = Nothing
+    | Maybe.isJust st.opened = Nothing
+    | Array.null st.midiIn =
+        Just "no MIDI reached the page, so this set will say nothing about \
+             \what was played. That cannot be added later."
+    | st.sweep.notesFrom == "" =
+        Just "no MIDI input was chosen, so this set will say nothing about \
+             \what was played. Choose one above and keep it again — the \
+             \notes are still held until the next take opens."
+    | Array.null (believed st) =
+        Just ("nothing arrived on " <> st.sweep.notesFrom <> ", so this set \
+              \will say nothing about what was played.")
+    | otherwise = Nothing
 
   -- | Whether this material goes to the card as stereo, and so takes a pair.
   wideKit = Kind.foldsTo st.kind /= ToMono
