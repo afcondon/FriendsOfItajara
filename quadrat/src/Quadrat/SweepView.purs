@@ -246,6 +246,22 @@ part h which =
       [ sectionHead "Pitch sweep"
           "optional — a measured table turns notes into the volts this \
           \instrument needs for them"
+      -- **The tuning, where you came to change the tuning.** The card carries
+      -- the notes, which is what you check at a glance; the curve says how
+      -- faithfully this signal path renders them, which is what you look at
+      -- when you are deciding whether to trust it.
+      , case thePitch of
+          Just x ->
+            HH.div [ cls "q-calib" ]
+              [ HH.div [ cls "q-calibpic" ] [ pitchFace x.spec ]
+              , HH.span [ cls "q-muted" ]
+                  [ HH.text ("volts across, pitch up — " <> x.spec.label
+                      <> " tracks V/oct where this is straight. The two rules \
+                         \are the notes this run asks for; outside the measured \
+                         \span the realiser clamps and every hit comes back on \
+                         \one pitch.") ]
+              ]
+          Nothing -> HH.text ""
       , if Array.any (\q -> isJust q.pitch) p.params
           then HH.div [ cls "q-curves" ] (rowsWhere true)
           else newPitch
@@ -334,7 +350,7 @@ part h which =
                 -- | answer. So it is on the face of the card, not behind it.
                 , foot: maybe "not in use" (_.spec >>> _.label) thePitch
                 , face: maybe (HH.div [ cls "q-fixedface" ] [])
-                          (_.spec >>> pitchFace) thePitch
+                          keyboardFace thePitch
                 , switch: map (\x -> { i: x.i, q: x.q }) thePitch
                 , moot: maybe true (_.q >>> _.off) thePitch
                 , act: h.openPitch
@@ -554,6 +570,53 @@ part h which =
       , HE.onClick \_ -> h.msg (SetOff i (not q.off))
       ]
       [ HH.text (if q.off then "off" else "on") ]
+
+  -- | **The notes, on a keyboard.**
+  -- |
+  -- | Andrew, 2026-09-12: *"why not show a piano or a stave with the notes
+  -- | we're sampling"*. `C2-C6 chromatic` is a true sentence that nobody can
+  -- | picture; twelve keys lit across four octaves is the same fact as a
+  -- | shape, and it answers the two questions the sentence cannot — how far
+  -- | apart the samples are, and whether they land where you think they do.
+  -- |
+  -- | The lit keys are the notes the run ACTUALLY asks for, taken through the
+  -- | parameter's own curve and the size of its axis. So a curve left on
+  -- | something other than Linear shows up as keys bunching at one end, and a
+  -- | pitch axis with four cells shows four keys rather than the range's full
+  -- | chromatic span.
+  keyboardFace x =
+    let
+      ps = x.spec
+      lo = min ps.noteLo ps.noteHi
+      hi = max ps.noteLo ps.noteHi
+      ns = Array.range lo hi
+      white n = Array.elem (mod n 12) [ 0, 2, 4, 5, 7, 9, 11 ]
+      whites = Array.filter white ns
+      nW = max 1 (Array.length whites)
+      w = 1.0 / Int.toNumber nW
+      -- How many white keys sit below this one — the x of its left edge for a
+      -- white key, and of its CENTRE for a black one, which is what makes a
+      -- black key straddle the boundary the way it does on the instrument.
+      below n = Int.toNumber (Array.length (Array.filter (\m -> m < n) whites))
+      -- The notes this run plays, not the range it was declared over.
+      sung = map (Pitch.noteAt ps.noteLo ps.noteHi) (valuesFor p x.q)
+      on n = Array.elem n sung
+      whiteKey n =
+        el "rect"
+          [ attr "x" (show (below n * w)), attr "y" "0"
+          , attr "width" (show w), attr "height" "1"
+          , attr "class" ("q-key" <> if on n then " is-on" else "") ] []
+      blackKey n =
+        el "rect"
+          [ attr "x" (show (below n * w - w * 0.3)), attr "y" "0"
+          , attr "width" (show (w * 0.6)), attr "height" "0.62"
+          , attr "class" ("q-key is-black" <> if on n then " is-on" else "") ] []
+    in
+      el "svg"
+        [ attr "viewBox" "0 0 1 1", attr "preserveAspectRatio" "none"
+        , attr "class" "q-keys" ]
+        ( map whiteKey whites
+            <> map blackKey (Array.filter (not <<< white) ns) )
 
   -- | **The calibration, drawn.**
   -- |

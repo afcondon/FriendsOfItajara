@@ -43,6 +43,7 @@ module Quadrat.Sweep
   , Conflict
   , conflicts
   , sayConflict
+  , collapsed
   , fingerprint
   , pacedStale
   , spacingAt
@@ -289,6 +290,36 @@ conflicts p =
 -- | A conflict as one line, naming the jack rather than the bus.
 sayConflict :: Conflict -> String
 sayConflict c = c.place <> " is claimed by " <> joinWith " and " c.who
+
+-- | **A grid that is really a line.**
+-- |
+-- | Measured 2026-09-12: a 12 x 4 `rample-grid` ran with BOTH parameters on
+-- | axis 0. Pitch and decay therefore moved in lockstep down the layers while
+-- | the four slices were four identical repeats — a twelve-point diagonal
+-- | wearing a matrix's file layout. Every part of that is legal, and nothing
+-- | anywhere refused it.
+-- |
+-- | Not a conflict, because it breaks no rule and is occasionally what you
+-- | want: four repeats of one transect is a reasonable thing to record. It is
+-- | a QUESTION, asked once, in the place the shape is chosen.
+collapsed :: Plan -> Maybe String
+collapsed p =
+  let
+    axs = Encoding.axes p.encoding
+    live = Array.filter (not <<< _.off) p.params
+    used a = Array.any (\q -> q.axis == a) live
+    bare = Array.filter (\a -> not (used a) && sizeOfAxis p a > 1)
+             (Array.range 0 (Array.length axs - 1))
+    nameOf a = maybe ("axis " <> show a) _.name (Array.index axs a)
+  in
+    if Array.length axs < 2 || Array.null live || Array.null bare then Nothing
+    else Just
+      (joinWith " and "
+         (map (\a -> nameOf a <> " \xd7 " <> show (sizeOfAxis p a)) bare)
+        <> " carries no parameter, so those are repeats. Every parameter is on "
+        <> joinWith " and "
+             (map nameOf (Array.filter used (Array.range 0 (Array.length axs - 1))))
+        <> " — a grid needs one on each axis.")
 
 type Plan =
   { encoding :: Encoding

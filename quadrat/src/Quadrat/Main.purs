@@ -887,12 +887,25 @@ handleAction = case _ of
           Just o -> handleAction (SweepMsg (Sweep.SetPort o))
           Nothing -> H.modify_ (note "no MIDI port named FH-2 — is the module on?")
 
+  -- | **A silent take does not get written to disk.**
+  -- |
+  -- | 2026-09-12: forty-eight files of digital silence, peak 0.00012 in every
+  -- | one, from a transect whose ES-9 input stream had died on a power cycle.
+  -- | The page said so — `spread` prints "nothing was recorded" — and the page
+  -- | saying so is evidently not enough, because this was the second transect
+  -- | lost the same way. A warning you can walk past is a warning that will be
+  -- | walked past; the fix is to refuse, and to say what to do instead.
   AskKeep -> do
     st <- H.get
     let setName = if st.name == "" then "set" else st.name
-    if Array.any (\r -> r.name == setName) st.sets
-      then H.modify_ _ { confirmKeep = true }
-      else handleAction (SendToCard { place: false, append: false })
+        loud = fromMaybe 0.0 (Array.last (Array.sort (map _.peak st.regions)))
+    if not (Array.null st.regions) && loud < 0.003
+      then H.modify_ (note "not saved — the loudest sample in this take peaks at \
+                           \silence. Check the input is the one the module is \
+                           \patched to, and that a gate makes it move.")
+      else if Array.any (\r -> r.name == setName) st.sets
+        then H.modify_ _ { confirmKeep = true }
+        else handleAction (SendToCard { place: false, append: false })
 
   CancelKeep -> H.modify_ _ { confirmKeep = false }
 
@@ -1930,6 +1943,7 @@ render st =
           , HH.text "."
           ]
       , clashSays
+      , collapseSays
       , HH.p [ HP.class_ (HH.ClassName "q-sayfine") ]
           ( [ HH.text "Calibration scheme: ", slotCalib ]
               <> pitchSays
@@ -1949,6 +1963,15 @@ render st =
     [] -> HH.text ""
     cs -> HH.p [ HP.class_ (HH.ClassName "q-clash") ]
             [ HH.text (joinWith " · " (map Sweep.sayConflict cs)) ]
+
+  -- | **A grid that is really a line**, said beside the conflicts because it
+  -- | is the same kind of mistake: a fact about the plan that is legal,
+  -- | silent, and produces a set shaped nothing like the one you asked for.
+  -- | Softer than a clash, because four repeats of one transect is sometimes
+  -- | exactly what you meant.
+  collapseSays = case Sweep.collapsed st.sweep of
+    Nothing -> HH.text ""
+    Just says -> HH.p [ HP.class_ (HH.ClassName "q-clash is-soft") ] [ HH.text says ]
 
   -- | **The level, beside the input it measures.**
   -- |
@@ -2518,7 +2541,11 @@ render st =
         -- the plan implies is the same picture the recording will fill in, so
         -- a position is reached the same way before and after, and the page
         -- stops having two grammars for one thing.
-        , HH.div_ (map plannedRow (rowsOf (Array.length cells)))
+        , HH.div [ HP.class_ (HH.ClassName "q-grid") ]
+            ( Array.cons colHead
+                (Array.mapWithIndex
+                  (\k rng -> gridRow k (plannedRow rng))
+                  (rowsOf (Array.length cells))) )
         , HH.p [ HP.class_ (HH.ClassName "q-blurb") ]
             [ HH.text (if running
                 then "Each one fills as it sounds. The take closes itself when \
@@ -2545,7 +2572,11 @@ render st =
           [ case st.peaks of
               Just pk | Array.length pk.hi > 0 ->
                 HH.div [ HP.class_ (HH.ClassName "q-whole") ]
-                  [ HH.div_ (map (strip pk) (rowsOf (Array.length st.regions)))
+                  [ HH.div [ HP.class_ (HH.ClassName "q-grid") ]
+                      ( Array.cons colHead
+                          (Array.mapWithIndex
+                            (\k rng -> gridRow k (strip pk rng))
+                            (rowsOf (Array.length st.regions))) )
                   -- | **The take's length, on the take.**
                   -- |
                   -- | It sat among Record/play/stop and grew a digit as the
@@ -2619,6 +2650,43 @@ render st =
   innerN = case st.sweep.extent of
     [ _, i ] | i > 1 -> i
     _ -> 0
+
+  -- | **The destination's own word for each axis**, never "x" and "y": the
+  -- | axis decides WHO chooses along it when the set is played, and a Rample
+  -- | picks a layer itself where a slice is a position only you can send it
+  -- | to. See `Encoding.axes`.
+  axisNameOf a =
+    maybe "" _.name (Array.index (Encoding.axes st.sweep.encoding) a)
+
+  -- | **A row, named by where it sits on the outer axis.**
+  -- |
+  -- | Andrew, 2026-09-12, after a 12 × 4 that turned out to be a 12-long line
+  -- | repeated four times: *"I need a visual reminder of the layer/slice
+  -- | distinction BEFORE I measure or sample"*. Both parameters had been left
+  -- | on axis 0, which is legal and was said once in the sentence and nowhere
+  -- | else. With the axis named down the side and the values drawn in the
+  -- | cells, a collapsed grid is unmissable: every row reads the same four
+  -- | times across.
+  gridRow k inner
+    | innerN <= 0 = inner
+    | otherwise =
+        HH.div [ HP.class_ (HH.ClassName "q-gridrow") ]
+          [ HH.span [ HP.class_ (HH.ClassName "q-rowlab") ]
+              [ HH.text (axisNameOf 0 <> " " <> show (k + 1)) ]
+          , HH.div [ HP.class_ (HH.ClassName "q-rowbody") ] [ inner ]
+          ]
+
+  colHead
+    | innerN <= 0 = HH.text ""
+    | otherwise =
+        HH.div [ HP.class_ (HH.ClassName "q-gridrow is-head") ]
+          [ HH.span [ HP.class_ (HH.ClassName "q-rowlab") ] [ HH.text "" ]
+          , HH.div [ HP.class_ (HH.ClassName "q-rowbody q-colheads") ]
+              (map
+                (\j -> HH.span [ HP.class_ (HH.ClassName "q-colhead") ]
+                         [ HH.text (axisNameOf 1 <> " " <> show (j + 1)) ])
+                (Array.range 0 (innerN - 1)))
+          ]
 
   rowsOf n
     | n <= 0 = []
@@ -2732,18 +2800,41 @@ render st =
                       if running then OpenPivot st.pivot
                       else OpenPivot (if st.pivot == Just i then Nothing else Just i)
                   ]
-                  [ HH.span [ HP.class_ (HH.ClassName "q-seg-n") ]
-                      [ HH.text (labelOf steps i) ] ])
+                  (planCell steps i))
               (if k <= 0 then [] else Array.range 0 (k - 1)))
         ]
 
-  -- | **A position, named by what it asks for.** The note when the run has a
-  -- | pitch axis, the position number otherwise — `Meaning.note` is -1 on a
-  -- | parameter that is not a pitch, so finding one IS the test.
-  labelOf steps i =
-    case Array.index steps i >>= \sp -> Array.find (\x -> x.note >= 0) sp.means of
-      Just m -> Pitch.noteName m.note
-      Nothing -> show (i + 1)
+  -- | **What this cell asks for, in the cell.**
+  -- |
+  -- | The note, then every other live parameter as a percentage of its own
+  -- | range, then what Measure says this cell will take. Read across a row,
+  -- | those are the values the inner axis varies; read down a column, the
+  -- | outer's. A parameter on the wrong axis shows as a row that repeats
+  -- | itself, which is the whole reason the numbers are here rather than in a
+  -- | panel that has to be opened one cell at a time.
+  planCell steps i =
+    let
+      means = maybe [] _.means (Array.index steps i)
+      pitched = Array.find (\m -> m.note >= 0) means
+      others = Array.filter (\m -> m.note < 0) means
+      pct m = show (Int.round (m.at * 100.0)) <> "%"
+      -- Only when the measurement still describes THIS sweep; a stale number
+      -- in a cell is worse than none, because it reads as a fact.
+      pacedFor =
+        if Sweep.pacedStale st.sweep then Nothing
+        else Array.index st.sweep.paced i
+    in
+      Array.catMaybes
+        [ Just (HH.span [ HP.class_ (HH.ClassName "q-seg-n") ]
+            [ HH.text (maybe (show (i + 1)) (\m -> Pitch.noteName m.note) pitched) ])
+        , if Array.null others then Nothing
+          else Just (HH.span [ HP.class_ (HH.ClassName "q-cellvals") ]
+                 [ HH.text (joinWith " · " (map pct others)) ])
+        , map
+            (\ms -> HH.span [ HP.class_ (HH.ClassName "q-cellpaced") ]
+                      [ HH.text (fmt (Int.toNumber ms / 1000.0) <> " s") ])
+            pacedFor
+        ]
 
   keepBar i r left wide =
     let kept = Set.member i st.keep

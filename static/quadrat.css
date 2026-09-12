@@ -490,12 +490,48 @@ body {
    arrangement imposed on it. */
 .q-strip + .q-strip { margin-top: 5px; }
 
+/* ── The grid, named down the side and across the top ────────────────────
+   A 12 x 4 came out as a 12-long line repeated four times, because both
+   parameters had been left on axis 0 — legal, said once in the sentence, and
+   invisible everywhere else. Named axes plus values in the cells make a
+   collapsed grid unmissable: every row reads the same, all the way across.
+   Never x and y: the axis decides WHO chooses along it at play time. */
+.q-grid { display: flex; flex-direction: column; gap: 5px; }
+.q-gridrow { display: flex; align-items: stretch; gap: 8px; }
+.q-gridrow.is-head { align-items: flex-end; }
+.q-rowlab {
+  flex: 0 0 58px; display: flex; align-items: center; justify-content: flex-end;
+  font-size: 10px; letter-spacing: .03em; color: var(--muted);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.q-rowbody { flex: 1 1 auto; min-width: 0; }
+/* The grid owns the spacing between its rows; the strip's own sibling margin
+   would be added on top of the gap and double it. */
+.q-grid .q-strip + .q-strip { margin-top: 0; }
+.q-colheads { display: flex; }
+.q-colhead {
+  flex: 1 1 0; min-width: 0; text-align: center;
+  font-size: 10px; letter-spacing: .03em; color: var(--muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  padding-bottom: 3px;
+}
+/* Three lines in a planned cell: what note, what the other knobs are set to,
+   and what Measure says it will take. Stacked, because read across a row they
+   are the inner axis's values and read down a column the outer's. */
+.q-seg.is-plan { flex-direction: column; justify-content: center; gap: 1px; }
+.q-cellvals, .q-cellpaced {
+  font-size: 9px; letter-spacing: .02em; white-space: nowrap;
+  pointer-events: none; font-variant-numeric: tabular-nums;
+}
+.q-cellvals { color: var(--muted); }
+.q-cellpaced { color: #2a7d4f; }
+
 /* The planned strip: the same picture before there is a take to draw it
    on. Numbered boxes in a grid used to be the only way to reach a position
    that did not exist yet; an empty strip divided into the bands the plan
    implies says the same thing in the shape the recording will fill. */
 .q-strip.is-planned {
-  height: 44px; border: 1px dashed var(--rule); border-radius: 3px; background: #fff;
+  height: 54px; border: 1px dashed var(--rule); border-radius: 3px; background: #fff;
 }
 .q-seg.is-plan { border-left-color: var(--rule); align-items: center; }
 .q-seg.is-plan .q-seg-n { padding-bottom: 0; }
@@ -550,6 +586,12 @@ body {
   color: #8c2f16;
   background: #fdf0ea;
   border-left: 3px solid #c8501f;
+}
+/* A collapsed grid is legal and occasionally meant — four repeats of one
+   transect is a reasonable thing to record — so it is a question, not an
+   accusation. Same shape as a clash; quieter voice. */
+.q-clash.is-soft {
+  color: #7a5a12; background: #fdf7ea; border-left-color: #c8a05a; font-weight: 500;
 }
 
 .q-slot {
@@ -789,6 +831,22 @@ body {
 .q-pitchface { display: block; width: 100%; height: 52px; }
 .q-pitchline { fill: none; stroke: var(--ink); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
 .q-pitchrule { stroke: #c8722f; stroke-width: 1; vector-effect: non-scaling-stroke; }
+
+/* The notes, on a keyboard. "C2-C6 chromatic" is a true sentence nobody can
+   picture; twelve lit keys across four octaves is the same fact as a shape,
+   and it answers what the sentence cannot — how far apart the samples are,
+   and whether they land where you thought. */
+.q-keys { display: block; width: 100%; height: 52px; }
+.q-key { fill: #fff; stroke: #ded7c6; stroke-width: 0.6; vector-effect: non-scaling-stroke; }
+.q-key.is-black { fill: #55503f; stroke: #3b3830; }
+.q-key.is-on { fill: var(--hot); stroke: #a8442a; }
+.q-key.is-black.is-on { fill: #e0764f; stroke: #a8442a; }
+
+/* The calibration, in the modal — the card carries the notes you check at a
+   glance, this carries how faithfully the path renders them. */
+.q-calib { display: flex; align-items: center; gap: 14px; margin: 0 0 16px; }
+.q-calibpic { flex: 0 0 210px; border: 1px solid var(--rule); border-radius: 3px; background: #fff; }
+.q-calib .q-muted { flex: 1 1 auto; font-size: 12px; }
 
 /* Kept, but not sent. A switch rather than a deletion, so auditioning a run
    without one parameter does not cost its routing or its measured table. */
