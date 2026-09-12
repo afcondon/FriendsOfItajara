@@ -26,6 +26,7 @@ module Quadrat.Rig
   , listenMidi
   , inPorts
   , midiAvailable
+  , Struck
   , heardNotes
   , forgetHeard
   , sendCc
@@ -88,8 +89,12 @@ foreign import midiAvailable :: Effect Boolean
 
 -- | Everything heard since the last `forgetHeard`, stamped in the same clock
 -- | as `nowMs`.
-foreign import heardNotes
-  :: Effect (Array { note :: Int, at :: Number, from :: String })
+-- | One note-on as it arrived: which note, when (in `nowMs`'s clock), and the
+-- | two things that say whether it was meant for us — the port it came in on
+-- | and the channel it was sent on.
+type Struck = { note :: Int, at :: Number, from :: String, chan :: Int }
+
+foreign import heardNotes :: Effect (Array Struck)
 
 -- | Dropped when a capture opens, so a soundcheck cannot end up in a take.
 foreign import forgetHeard :: Effect Unit

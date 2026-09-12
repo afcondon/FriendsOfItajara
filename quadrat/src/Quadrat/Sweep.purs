@@ -380,6 +380,14 @@ type Plan =
   -- | A port that records the wrong performance is worse than one that records
   -- | nothing, because nothing is visible.
   , notesFrom :: String
+  -- | **Which MIDI channel on that port**, or 0 for all of them.
+  -- |
+  -- | The port narrows it to one cable and that is often not enough: a surface
+  -- | handshake, a sequencer and a keyboard can share one port and differ only
+  -- | by channel. Measured 2026-09-12 — chord regions came back holding 36 and
+  -- | 42 notes spread from 0 to 123, arriving in bursts every fifty seconds or
+  -- | so, against real chords of five to seven in a register you could sing.
+  , notesChan :: Int
   -- | **How long after setting the parameters before the trigger.**
   -- |
   -- | The one number here that can silently ruin a run: too short and the hit
@@ -434,6 +442,7 @@ emptyPlan =
   , leadMs: 30
   , source: ""
   , notesFrom: ""
+  , notesChan: 0
   , paced: []
   , pacedFor: ""
   , usePaced: false
@@ -499,6 +508,8 @@ data Msg
   | SetSource String
   -- | Which MIDI input the notes are taken from. See `Plan.notesFrom`.
   | SetNotesFrom String
+  -- | Which channel on it, or "0" for all. See `Plan.notesChan`.
+  | SetNotesChan String
   | SetGate String
   | SetEs5 String
   | SetGateLevel String
@@ -607,6 +618,7 @@ applyMsg = case _ of
   SetPort v -> \p -> p { port = v }
   SetSource v -> \p -> p { source = v }
   SetNotesFrom v -> \p -> p { notesFrom = v }
+  SetNotesChan v -> \p -> p { notesChan = clamp 0 16 (fromMaybe 0 (Int.fromString v)) }
   SetGate v -> onTrig \t -> t { gate = busOf v }
   SetEs5 v -> onTrig \t -> t { es5 = slotOf v }
   SetGateLevel v -> onTrig \t -> t { gateLevel = level t.gateLevel v }
@@ -785,6 +797,8 @@ type Plain =
   , source :: String
   -- | The MIDI input the notes came from. See `Plan.notesFrom`.
   , notesFrom :: String
+  -- | The channel on it, 0 for all. See `Plan.notesChan`.
+  , notesChan :: Int
   , settleMs :: Int
   , spacingMs :: Int
   , guardMs :: Int
@@ -847,6 +861,7 @@ flatten p =
   , port: p.port
   , source: p.source
   , notesFrom: p.notesFrom
+  , notesChan: p.notesChan
   , settleMs: p.settleMs
   , spacingMs: p.spacingMs
   , guardMs: p.guardMs
@@ -957,6 +972,7 @@ unflatten' p =
     , port: p.port
     , source: p.source
   , notesFrom: p.notesFrom
+  , notesChan: p.notesChan
     , settleMs: clamp 0 5000 p.settleMs
     , spacingMs: clamp 50 20000 p.spacingMs
     , guardMs: clamp 0 2000 p.guardMs

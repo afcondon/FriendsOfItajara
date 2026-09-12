@@ -166,6 +166,15 @@ type Meant =
   -- | keeping. Naming them is a separate question with a separate answer
   -- | (`Harmonia.Recognise`), and it is not this field's job.
   , notes :: Array Int
+  -- | **The same notes as the chords they were struck as**, in order.
+  -- |
+  -- | Usually one entry holding what `notes` holds. Not always: two chords
+  -- | deliberately stacked into one sample are two entries, and flattened they
+  -- | would read as a single voicing of eleven notes — a different musical
+  -- | object from the two that were played, and the difference is the whole
+  -- | content of "these two go together". A resend of a chord still ringing is
+  -- | not a second entry; see `strikesIn`.
+  , struck :: Array (Array Int)
   }
 
 -- | Cut the kept regions into a named set and put that set on a voice — and
@@ -285,7 +294,9 @@ type StoredSet =
   -- | The notes struck inside each region, one array per sample and in the
   -- | same order. See `Meant.notes` — this is the way back in, so a chord set
   -- | reopened next month still shows its voicings.
-  , notes :: Array (Array Int) }
+  , notes :: Array (Array Int)
+  -- | And the chords each was struck as. See `Meant.struck`.
+  , struck :: Array (Array (Array Int)) }
 
 foreign import loadSet :: String -> Effect (Promise StoredSet)
 

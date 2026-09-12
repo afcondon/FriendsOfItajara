@@ -151,6 +151,9 @@ type State =
       -- | A stored set's notes are a fact about it, not about this page's MIDI
       -- | buffer, so an opened set reads them from disk and never from `heard`.
       , notes :: Array (Array Int)
+      -- | And the same, kept as the chords they were struck as. See
+      -- | `Http.Meant.struck`.
+      , struck :: Array (Array (Array Int))
       }
   -- | **Whether the take on the page came from a measuring run.**
   -- |
@@ -310,7 +313,7 @@ type State =
   -- |
   -- | Stamped in `Rig.nowMs`'s clock and converted to take-relative seconds
   -- | only at the end; see `notesFor`.
-  , heard :: Array { note :: Int, at :: Number, from :: String }
+  , heard :: Array Rig.Struck
   -- | The MIDI inputs the browser can see, so the page can say that it is
   -- | listening to nothing BEFORE a take rather than after one.
   , midiIn :: Array String
@@ -873,7 +876,7 @@ handleAction = case _ of
                       , page = Bench
                       , pivot = Nothing
                       , opened = Just { set: nm, take: v.take, secs: p.secs
-                                     , notes: v.notes }
+                                     , notes: v.notes, struck: v.struck }
                       , peaks = Just
                           { loop: 0, frames: p.frames, from: 0, to: p.frames
                           , buckets: p.buckets, winIn: 0, winOut: 0, rot: 0
@@ -1008,6 +1011,7 @@ handleAction = case _ of
                 -- when nothing was listening — which the page says out loud
                 -- before a take rather than after one.
                 , notes: maybe [] (\t0 -> notesIn (believed st) t0 r) (takeZero st)
+                , struck: maybe [] (\t0 -> strikesIn (believed st) t0 r) (takeZero st)
                 })
             st.regions)
     if Array.null keptRegions
@@ -1930,10 +1934,14 @@ occupantOf st =
 -- | Empty when no port has been chosen, which is deliberate — a set that
 -- | records the wrong performance is worse than one that records none, because
 -- | none is visible and the page says so before you play.
-believed :: State -> Array { note :: Int, at :: Number, from :: String }
+believed :: State -> Array Rig.Struck
 believed st
   | st.sweep.notesFrom == "" = []
-  | otherwise = Array.filter (\h -> h.from == st.sweep.notesFrom) st.heard
+  | otherwise =
+      Array.filter
+        (\h -> h.from == st.sweep.notesFrom
+                 && (st.sweep.notesChan == 0 || h.chan == st.sweep.notesChan))
+        st.heard
 
 -- | **The notes struck inside each region**, in register and in order.
 -- |
@@ -1969,22 +1977,54 @@ notesIn
   -> Number
   -> { start :: Number, end :: Number | r }
   -> Array Int
-notesIn heard t0 r =
-  -- **Distinct pitches, because the answer is a SET.** Progressions resends a
-  -- chord that is held past a bar, so most chords arrive twice and a few three
-  -- times; the same pitch struck again is the same pitch, and a voicing that
-  -- says D3 twice is not a fourteen-note chord. `nub` also absorbs a port that
-  -- is carrying the same performance twice, which is the other way one note
-  -- becomes two. What it deliberately loses is re-articulation — irrelevant
-  -- here, where the sample already records how the chord was played and this
-  -- field exists to say which notes were in it.
-  Array.nub
-    (Array.sort
-      (map _.note
+notesIn heard t0 r = Array.nub (Array.sort (join (strikesIn heard t0 r)))
+
+-- | **The chords struck inside a region, in order, as separate chords.**
+-- |
+-- | A region usually holds one voicing. It does not always: *"I deliberately
+-- | played two chords on the last two samples as an experiment... they sounded
+-- | really nice."* Flattened, that pair is an eleven-note voicing, which is a
+-- | different musical object and not the one that was played — and telling the
+-- | two apart is exactly what a later tool wants, since bridging between two
+-- | chords needs to know there were two.
+-- |
+-- | **A strike is a cluster in time.** Notes of one chord arrive within a few
+-- | milliseconds of each other even when a keyboard is played by hand; 50 ms
+-- | is wider than any of that and far narrower than a deliberate second chord.
+-- |
+-- | **A repeat of the group before it is dropped.** Progressions resends a
+-- | chord held past about a bar, so most chords arrive twice; two strikes of
+-- | the same pitches are one chord that went on ringing, and the sample
+-- | already records how long for. Two strikes of DIFFERENT pitches are two
+-- | chords and both are kept.
+strikesIn
+  :: forall r s
+   . Array { note :: Int, at :: Number | s }
+  -> Number
+  -> { start :: Number, end :: Number | r }
+  -> Array (Array Int)
+strikesIn heard t0 r =
+  let
+    mine =
+      Array.sortWith _.at
         (Array.filter
           (\h -> let t = (h.at - t0) / 1000.0
                  in t >= r.start - 0.120 && t < r.end)
-          heard)))
+          heard)
+    -- Walked rather than grouped by a key, because the boundary is the GAP
+    -- between one note and the last, not any property of the notes.
+    clump acc h = case Array.last acc of
+      Just grp | Just prev <- Array.last grp, h.at - prev.at <= 50.0 ->
+        fromMaybe acc
+          (Array.modifyAt (Array.length acc - 1) (\g -> Array.snoc g h) acc)
+      _ -> Array.snoc acc [ h ]
+    grouped = map (Array.nub <<< Array.sort <<< map _.note)
+                (Array.foldl clump [] mine)
+  in
+    Array.filter (not <<< Array.null)
+      (Array.mapWithIndex
+        (\i g -> if Array.index grouped (i - 1) == Just g then [] else g)
+        grouped)
 
 -- | The page-clock instant that the take's own zero corresponds to, or nothing
 -- | when there is not enough to anchor on. See `notesIn`.
@@ -2671,9 +2711,12 @@ render st =
                        1 -> "1 note from "
                        n -> show n <> " notes from ")
           , notesFromPick
+          , HH.text ", "
+          , notesChanPick
           , HH.text (case Array.length (believed st) of
                        0 -> " — nothing played yet. " <> tallySays
                        _ -> ". " <> tallySays)
+          , HH.text chanSays
           ]
 
   -- | What each port has said, named. The point is the comparison.
@@ -2681,6 +2724,34 @@ render st =
     [] -> ""
     ts -> "Heard so far: "
             <> joinWith ", " (map (\t -> t.name <> " " <> show t.n) ts) <> "."
+
+  -- | **What each channel on the chosen port has said.**
+  -- |
+  -- | The port narrows it to one cable, which is often not enough: a surface
+  -- | handshake, a sequencer and a keyboard can share a port and differ only
+  -- | by channel. Counted rather than guessed, because the tell is the
+  -- | *proportion* — five to seven notes at a time is somebody playing chords,
+  -- | and forty in a burst is not.
+  chanTally =
+    let onPort = Array.filter (\h -> h.from == st.sweep.notesFrom) st.heard
+    in Array.sortWith _.c
+         (map (\c -> { c, n: Array.length (Array.filter (\h -> h.chan == c) onPort) })
+           (Array.nub (map _.chan onPort)))
+
+  chanSays = case Array.filter (\t -> t.n > 0) chanTally of
+    -- One channel is not a choice worth showing; it is just where the notes
+    -- are.
+    [ _ ] -> ""
+    [] -> ""
+    ts -> " By channel: "
+            <> joinWith ", " (map (\t -> show t.c <> " \x2192 " <> show t.n) ts)
+            <> "."
+
+  notesChanPick =
+    sel "q-slot is-small" (show st.sweep.notesChan) (SweepMsg <<< Sweep.SetNotesChan)
+      (Array.cons { v: "0", t: "any channel" }
+        (map (\c -> { v: show c, t: "channel " <> show c })
+          (Array.range 1 16)))
 
   notesFromPick =
     sel "q-slot is-small" st.sweep.notesFrom (SweepMsg <<< Sweep.SetNotesFrom)
@@ -3722,6 +3793,21 @@ render st =
   -- | A voicing as you would say it: low to high, in register.
   saidAs ns = joinWith " " (map Pitch.noteName ns)
 
+  -- | The chords struck inside region `i`, as chords. A stored set has them
+  -- | flattened in `notes` and separate in `struck`; a live one is grouped
+  -- | here by the same function that will write it.
+  struckAt i = case st.opened of
+    Just o -> case Array.index o.struck i of
+      Just gs | not (Array.null gs) -> gs
+      -- A set stored before strikes were recorded has only the flat list, and
+      -- one chord is the honest reading of it.
+      _ -> case fromMaybe [] (Array.index o.notes i) of
+             [] -> []
+             ns -> [ ns ]
+    Nothing -> case takeZero st, Array.index st.regions i of
+      Just t0, Just rg -> strikesIn (believed st) t0 rg
+      _, _ -> []
+
   segment i r left wide =
     let
       kept = Set.member i st.keep
@@ -3749,9 +3835,11 @@ render st =
                    <> (if kept then ";background:" <> w.tint else ""))
         , HP.title (w.label <> " — " <> fmt (r.end - r.start) <> " s at "
                       <> fmt r.start <> " s."
-                      <> (case playedAt i of
+                      <> (case struckAt i of
                             [] -> ""
-                            ns -> " Played: " <> saidAs ns <> ".")
+                            [ one ] -> " Played: " <> saidAs one <> "."
+                            gs -> " Played: "
+                                    <> joinWith " then " (map saidAs gs) <> ".")
                       <> (if still then ringingSays else "")
                       <> " Click for every parameter here.")
         , HE.onMouseEnter \_ -> HoverPlay i

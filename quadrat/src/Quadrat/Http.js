@@ -112,7 +112,7 @@ export const loadSet = (name) => () =>
   fetch("/api/sets/" + encodeURIComponent(name))
     .then(j)
     .then((d) => {
-      if (!d.ok || !d.set) return { ok: false, output: String(d.output ?? "no such set"), take: "", regions: [], schedule: [], notes: [] };
+      if (!d.ok || !d.set) return { ok: false, output: String(d.output ?? "no such set"), take: "", regions: [], schedule: [], notes: [], struck: [] };
       const s = d.set;
       const regions = (s.samples ?? []).map((x) => ({
         start: Number(x.start ?? 0), end: Number(x.end ?? 0),
@@ -130,6 +130,10 @@ export const loadSet = (name) => () =>
         // one cut before this was recorded — both of which are the same thing
         // to draw, which is nothing.
         notes: (s.samples ?? []).map((x) => (x.notes ?? []).map(Number)),
+        // And the chords each was struck as. A set stored before this existed
+        // has none, and the page falls back to reading `notes` as one chord.
+        struck: (s.samples ?? []).map((x) =>
+          (x.struck ?? []).map((g) => (g ?? []).map(Number))),
       };
     });
 
