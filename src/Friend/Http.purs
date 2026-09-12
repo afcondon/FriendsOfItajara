@@ -12,6 +12,8 @@ module Friend.Http
   , listSticks
   , listTakes
   , harvest
+  , SourceName
+  , sourceLabels
   ) where
 
 import Prelude
@@ -68,6 +70,18 @@ foreign import saveNotesImpl :: String -> Notes -> Effect (Promise Unit)
 foreign import listSticksImpl :: Effect (Promise (Array String))
 foreign import listTakesImpl :: Effect (Promise (Array String))
 foreign import harvestImpl :: HarvestRequest -> Effect (Promise HarvestResult)
+
+-- | **A name the owner chose, against the wire name the daemon uses.**
+-- |
+-- | Read-only on this page. The naming happens in Quadrat, where a misread
+-- | source costs a whole transect; this reads the same file so that one jack
+-- | cannot end up with two names on one rig.
+type SourceName = { wire :: String, label :: String }
+
+foreign import sourceLabelsImpl :: Effect (Promise (Array SourceName))
+
+sourceLabels :: Effect (Promise (Array SourceName))
+sourceLabels = sourceLabelsImpl
 
 loadNotes :: String -> Effect (Promise Notes)
 loadNotes = loadNotesImpl

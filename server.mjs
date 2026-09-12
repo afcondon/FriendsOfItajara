@@ -9,6 +9,8 @@
 //   PORT=3030 MSM=/path/msm    override the port and the msm binary
 //
 //   GET  /api/takes                the takes under ~/.itajara/takes, newest first
+//   GET  /api/sources              what the owner calls each of the daemon's inputs
+//   PUT  /api/sources              { labels: { wireName: label } }, merged
 //   GET  /api/takes/:name/notes    the take's notes.json, or {}
 //   PUT  /api/takes/:name/notes    write it
 //   GET  /api/sticks               mounted volumes that look like an Arbhar stick
@@ -1144,6 +1146,68 @@ function harvest(body) {
   });
 }
 
+// ------------------------------------------------------------ source labels
+//
+// **What the user calls the thing on the other end of the cable.**
+//
+// The daemon's source names are wire names: `--source board=AUDIO4c:1,2` says
+// which jacks, and it has to, because a source that cannot be resolved against
+// the interface is a session recorded off the wrong input. But a wire name is
+// a poor thing to pick from under pressure — `board` and `hits` sit next to
+// each other in a list and read alike, and on 2026-09-11 a whole 4 x 12 was
+// recorded from the wrong one of them and came back silent.
+//
+// A rename in the launch args would fix that pair and no others, because the
+// right name is not a fact about this rig: it is "Jupiter 8", or "the Neumann",
+// or whatever the person actually has plugged in. So the wire name stays as
+// the identity and a *label* sits on top of it, chosen once by whoever owns
+// the rig and read everywhere afterwards.
+//
+// Keyed by the wire name deliberately. The spec of a stored set records the
+// source it was recorded from BY WIRE NAME, so a set stays readable when a
+// label is changed, and `sourceLost` in the page still fires on the one thing
+// that genuinely breaks it — a source that is no longer plugged in at all.
+// Labels are cosmetic by construction; nothing routes on them.
+
+const SOURCES = path.join(os.homedir(), ".itajara", "sources.json");
+
+function sourceLabels() {
+  try {
+    const conf = JSON.parse(fs.readFileSync(SOURCES, "utf8"));
+    if (!conf || typeof conf !== "object" || Array.isArray(conf)) return {};
+    const out = {};
+    for (const [k, v] of Object.entries(conf)) {
+      const label = String(v ?? "").trim();
+      if (k && label) out[k] = label.slice(0, 40);
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+// A merge rather than a replace, and an empty label deletes rather than
+// storing "". A page that knows about three sources should not be able to
+// forget the label on a fourth just by not having seen it.
+function setSourceLabels(body) {
+  const want = body && typeof body.labels === "object" && !Array.isArray(body.labels)
+    ? body.labels : null;
+  if (!want) return { ok: false, output: "expected { labels: { wireName: label } }" };
+  const now = sourceLabels();
+  for (const [k, v] of Object.entries(want)) {
+    const label = String(v ?? "").trim().slice(0, 40);
+    if (label) now[String(k)] = label;
+    else delete now[String(k)];
+  }
+  try {
+    fs.mkdirSync(path.dirname(SOURCES), { recursive: true });
+    fs.writeFileSync(SOURCES, JSON.stringify(now, null, 2) + "\n");
+  } catch (e) {
+    return { ok: false, output: String(e.message || e) };
+  }
+  return { ok: true, labels: now };
+}
+
 // ---------------------------------------------------------------- libraries
 //
 // A *library* is a directory of scenes; a *scene* is any directory whose
@@ -1387,6 +1451,13 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === "/api/card/place" && req.method === "POST") {
       const body = await readBody(req);
       return json(res, 200, placeStoredSet(body));
+    }
+    // What the owner calls each input. See `sourceLabels`.
+    if (url.pathname === "/api/sources" && req.method === "GET") {
+      return json(res, 200, { ok: true, labels: sourceLabels() });
+    }
+    if (url.pathname === "/api/sources" && req.method === "PUT") {
+      return json(res, 200, setSourceLabels(await readBody(req)));
     }
     if (url.pathname === "/api/sets" && req.method === "GET") {
       return json(res, 200, { ok: true, sets: storedSets() });

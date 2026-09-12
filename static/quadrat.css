@@ -710,6 +710,28 @@ body {
 .q-slot.is-name { min-width: 12em; cursor: text; }
 .q-slot.is-fixed { border-bottom: 1px dotted var(--rule); cursor: default; }
 
+/* The way in to naming the inputs, set as a marginal note rather than as a
+   control: it is a one-time exercise, it sits inside a sentence, and anything
+   with a button's weight there would compete with the choices around it. */
+.q-rename {
+  border: 0; background: none; padding: 0 0 0 5px; margin: 0;
+  font: inherit; font-size: 11px; color: var(--muted);
+  cursor: pointer; vertical-align: baseline;
+}
+.q-rename:hover { color: var(--ink); text-decoration: underline; }
+
+/* One row per input: the name you gave it, and the wire name beside it. The
+   wire name is not hidden by the label — the label is what you read, and the
+   wire name is what you check against a patch cable when something is wrong. */
+.q-inputs { display: flex; flex-direction: column; gap: 10px; }
+.q-inputrow { display: flex; align-items: baseline; gap: 12px; }
+.q-inputrow .q-slot.is-name { flex: 0 0 auto; }
+.q-inputwire {
+  font-size: 11px; color: var(--muted); letter-spacing: .02em;
+  font-variant-numeric: tabular-nums;
+}
+.q-note { margin: 0; font-size: 12px; line-height: 1.5; color: var(--muted); max-width: 46em; }
+
 /* The input is chosen in the sentence; only the measurement stays by the
    Run button, because a meter moves and a name does not. */
 

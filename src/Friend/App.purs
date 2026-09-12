@@ -17,7 +17,7 @@ import Prelude
 import Control.Monad.Rec.Class (forever)
 import Control.Promise (toAffE)
 import Data.Array as Array
-import Data.Either (Either(..))
+import Data.Either (Either(..), either)
 import Data.Foldable (for_, traverse_)
 import Data.Int as Int
 import Data.Looper.Duty (Duty, Subject(..))
@@ -147,6 +147,12 @@ type State =
   -- | (from one). And the empty loop the pointer is over, if any.
   , drag :: Maybe { loop :: Int, layer :: Maybe Int }
   , dropOn :: Maybe Int
+  -- | **What the owner calls each input.** Read-only here — the naming is done
+  -- | in Quadrat, where a misread source costs a whole transect — but read at
+  -- | all, so that one jack cannot carry two names on one rig. Empty is the
+  -- | honest answer both when nothing has been named and when the server is
+  -- | not answering: every source falls back to its wire name.
+  , srcNames :: Array Http.SourceName
   }
 
 -- | One modal at a time: the loop in hand's edit, the take's notes, or the
@@ -235,7 +241,7 @@ component =
         , session: { loop: 0, label: "kick", want: 10, secs: 2.0, base: 0, running: false, pending: false }
         , harvestOut: "", harvestBusy: false, drag: Nothing, dropOn: Nothing
         , shelves: [], shelfId: Nothing, openScene: Nothing, sceneAt: Library.emptyScene
-        , hearing: Nothing, libStatus: "" }
+        , hearing: Nothing, libStatus: "", srcNames: [] }
     , render
     , eval: H.mkEval H.defaultEval { handleAction = handleAction, initialize = Just Initialize }
     }
@@ -269,6 +275,8 @@ handleAction = case _ of
       pure (Aff.launchAff_ (Aff.killFiber (Aff.error "poll stopped") fiber))
     handleAction RefreshTakes
     handleAction RefreshSticks
+    lab <- H.liftAff (attempt (toAffE Http.sourceLabels))
+    H.modify_ _ { srcNames = either (const []) identity lab }
 
   Poll -> do
     status <- liftEffect Socket.status
@@ -1008,20 +1016,31 @@ render st =
                ]
                <> Array.mapWithIndex (srcChip one) top.sources )
 
+  -- | The name the owner gave this input, or the wire name if they gave none.
+  -- | See `Friend.Http.SourceName` — the label is only ever what is DRAWN.
+  labelFor wire = case Array.find (\r -> r.wire == wire) st.srcNames of
+    Just r | r.label /= "" -> r.label
+    _ -> wire
+
   srcChip one n src =
     HH.button
       [ HP.class_ (HH.ClassName ("friend-src"
           <> (if one == Just (n + 1) then " on" else "")
           <> (if src.available then "" else " off")))
       , HP.disabled (not src.available)
+      -- The wire name is in the tooltip even when a label is showing: the
+      -- label is what you read, and the wire name is what you check against a
+      -- patch cable when something is wrong.
       , HP.title (if src.available
-                    then "every loop hears " <> src.name
+                    then "every loop hears " <> labelFor src.name
                            <> (if src.mono then " (mono)" else " (stereo)")
-                    else src.name <> " is on an interface that is not switched on. "
+                           <> " — " <> src.name
+                    else labelFor src.name <> " (" <> src.name <> ") is on an "
+                           <> "interface that is not switched on. "
                            <> "It keeps its place in the list so nothing else is renumbered.")
       , HE.onClick \_ -> SetSourceAll (n + 1)
       ]
-      [ HH.text src.name ]
+      [ HH.text (labelFor src.name) ]
 
   -- The open record's word on a face with a fixed length says it is the open
   -- one; everywhere else it is the record word as it was.
@@ -1258,7 +1277,7 @@ render st =
                           , HP.selected (maybe false (\l -> l.src == n + 1) lp)
                           , HP.disabled (not src.available)
                           ]
-                          [ HH.text (src.name
+                          [ HH.text (labelFor src.name
                               <> (if src.mono then " (mono)" else " (stereo)")
                               <> (if src.available then "" else " — not switched on")) ])
                         top.sources)

@@ -63,3 +63,16 @@ export const harvestImpl = (req) => () =>
     headers: { "content-type": "application/json" },
     body: JSON.stringify(req),
   }).then(j);
+
+// **What the owner calls each input.** Read-only here: the naming is done in
+// Quadrat, on the page where a misread source costs a whole run. This page
+// reads the same file so that one jack cannot have two names on one rig.
+export const sourceLabelsImpl = () =>
+  fetch("/api/sources")
+    .then(j)
+    .then((d) =>
+      Object.entries(d.labels ?? {}).map(([wire, label]) => ({
+        wire: String(wire),
+        label: String(label),
+      })))
+    .catch(() => []);

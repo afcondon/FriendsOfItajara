@@ -15,6 +15,9 @@ module Quadrat.Http
   , addToCard
   , SetRow
   , storedSets
+  , SourceName
+  , sourceLabels
+  , nameSource
   , CalibRow
   , calibrations
   , calibration
@@ -196,6 +199,20 @@ type SetRow =
   , extent :: Array Int
   , encoding :: String
   }
+
+-- | **A name the owner chose, against the wire name the daemon uses.**
+-- |
+-- | `wire` is what `--source` called it — the identity, and the thing a stored
+-- | set records. `label` is what the person with the cable in their hand calls
+-- | the thing on the other end of it, which is "Jupiter 8" far more usefully
+-- | than it is "pedalboard stereo". Nothing routes on the label.
+type SourceName = { wire :: String, label :: String }
+
+foreign import sourceLabels :: Effect (Promise (Array SourceName))
+
+-- | One label. Empty clears it, and the source goes back to showing its wire
+-- | name, so there is no second control for forgetting.
+foreign import nameSource :: String -> String -> Effect (Promise Wrote)
 
 foreign import storedSets :: Effect (Promise { ok :: Boolean, sets :: Array SetRow })
 

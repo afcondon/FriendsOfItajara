@@ -45,7 +45,7 @@ import Control.Monad.Rec.Class (forever)
 import Data.Array as Array
 import Data.Foldable (for_)
 import Data.Int as Int
-import Data.Either (Either(..))
+import Data.Either (Either(..), either)
 import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Data.Maybe as Maybe
 import Data.Nullable as Nullable
@@ -284,10 +284,21 @@ type State =
   , picked :: Set String
   -- | Deleting is the one thing here that destroys work, so it is asked.
   , confirmDrop :: Boolean
+  -- | **What the owner calls each input**, against the wire name the daemon
+  -- | uses. A source is identified by `--source board=AUDIO4c:1,2` and has to
+  -- | be, because a name that cannot be resolved to jacks is a session
+  -- | recorded off the wrong one — but a wire name is a poor thing to pick
+  -- | from under pressure, and `board` and `hits` beside each other cost a
+  -- | whole 4 x 12 on 2026-09-11. The right name is not a fact about this rig:
+  -- | it is "Jupiter 8", or "the Neumann", and only the person holding the
+  -- | cable knows it. So the wire name stays the identity and this sits on
+  -- | top, chosen once and read everywhere. Nothing routes on it.
+  , srcNames :: Array Http.SourceName
   }
 
 -- | The two panels that became modals.
 data Modal = DivisionModal | TriggerModal | PitchModal | SaveModal | ExportModal
+           | InputsModal
 
 derive instance Eq Modal
 
@@ -298,6 +309,7 @@ data Action
   = PickPitch Int String
   | Init
   | Poll
+  | NameSource String String
   | PickKind Kind
   | SetBars String
   | SetName String
@@ -387,7 +399,7 @@ component = H.mkComponent
       , schedule: [], sets: [], tables: [], tablesErr: "", overran: false
       , page: Bench, fill: Swept, pivot: Nothing
       , levels: [], modal: Nothing, kept: false, confirmKeep: false
-      , picked: Set.empty, confirmDrop: false }
+      , picked: Set.empty, confirmDrop: false, srcNames: [] }
   , render
   , eval: H.mkEval H.defaultEval { handleAction = handleAction, initialize = Just Init }
   }
@@ -612,6 +624,11 @@ handleAction = case _ of
       Right r
         | r.ok -> _ { tables = r.tables, tablesErr = "" }
         | otherwise -> _ { tables = [], tablesErr = "calibrations unavailable — is `deepstar serve` up on :3027?" }
+    -- The labels, once. An empty list is the honest answer both when nothing
+    -- has been named and when the server is not answering: neither is a fault
+    -- here, because every source falls back to its wire name.
+    lab <- H.liftAff (attempt (toAffE Http.sourceLabels))
+    H.modify_ _ { srcNames = either (const []) identity lab }
     handleAction RefreshCard
     liftEffect $ Socket.connect Socket.defaultUrl
     void $ H.subscribe $ HS.makeEmitter \emit -> do
@@ -1223,6 +1240,20 @@ handleAction = case _ of
   -- | different jack, where a remembered name either resolves or visibly does
   -- | not.
   PickSource v -> handleAction (SweepMsg (Sweep.SetSource v))
+  -- | **Name an input after the thing on the end of the cable.** Written
+  -- | through immediately rather than on a Save button: it is one short string
+  -- | in a file of them, and a labelling pass that can be half-done is a
+  -- | labelling pass someone abandons. An empty label clears it and the source
+  -- | goes back to showing its wire name.
+  NameSource wire v -> do
+    H.modify_ \s0 ->
+      s0 { srcNames =
+             if v == "" then Array.filter (\r -> r.wire /= wire) s0.srcNames
+             else case Array.findIndex (\r -> r.wire == wire) s0.srcNames of
+               Just i -> fromMaybe s0.srcNames
+                           (Array.modifyAt i (_ { label = v }) s0.srcNames)
+               Nothing -> Array.snoc s0.srcNames { wire, label: v } }
+    void $ H.liftAff (attempt (toAffE (Http.nameSource wire v)))
   -- | **Choosing how to fill the take**, and asking the browser for MIDI the
   -- | first time a transect is chosen.
   -- |
@@ -1880,6 +1911,18 @@ wontKeepOf st =
                  \makes it move."
     else Nothing
 
+-- | **The name the owner gave this input, or the wire name if they gave none.**
+-- |
+-- | One function, because the page names the source in five places and four of
+-- | them being right is how the fifth becomes the one you read. `wire` is
+-- | always the value that goes into the spec and into a `<select>`; the label
+-- | is only ever what is DRAWN.
+labelFor :: State -> String -> String
+labelFor st wire =
+  case Array.find (\r -> r.wire == wire) st.srcNames of
+    Just r | r.label /= "" -> r.label
+    _ -> wire
+
 -- | **What the rig is recording at, when that is not what the card wants.**
 -- |
 -- | A Rample card is 44.1 kHz, and this rig's aggregate came back from a
@@ -2025,6 +2068,7 @@ render st =
                 Just PitchModal -> modalBox "Pitch" (SweepView.pitchView sweepHandlers)
                 Just SaveModal -> modalBox "Save to disk" keepBlock
                 Just ExportModal -> modalBox "Export for card" placeBlock
+                Just InputsModal -> modalBox "Name the inputs" inputsPanel
                 Nothing -> HH.text ""
             ]
         Library ->
@@ -2322,7 +2366,7 @@ render st =
       , HH.p [ HP.class_ (HH.ClassName "q-sayline") ]
           ( [ HH.text "Making ", slotExtent
             , HH.text " ", slotPitched
-            , HH.text " samples from ", slotSource
+            , HH.text " samples from ", slotSource, slotSourceName
             , HH.text ", triggered by ", slotTrigger
             , HH.text ", kept as ", slotName
             , HH.text " for ", slotEncoding
@@ -2341,11 +2385,13 @@ render st =
       -- | other half of it.
       , if not sourceLost then HH.text "" else
           HH.p [ HP.class_ (HH.ClassName "q-clash is-soft") ]
-            [ HH.text ("this set was recorded from \x201c" <> st.sweep.source
+            [ HH.text ("this set was recorded from \x201c"
+                <> labelFor st st.sweep.source
                 <> "\x201d, which the rig is not offering — using \x201c"
-                <> srcName <> "\x201d instead. Sources are named per interface \
-                   \and jack, so a renamed or re-ordered aggregate loses the \
-                   \reference rather than pointing it somewhere wrong.") ]
+                <> labelFor st srcName <> "\x201d instead. Sources are named \
+                   \per interface and jack, so a renamed or re-ordered \
+                   \aggregate loses the reference rather than pointing it \
+                   \somewhere wrong.") ]
       ]
 
   -- | **Two things pointed at one jack, said in the sentence.**
@@ -2464,8 +2510,71 @@ render st =
     Just top ->
       sel "q-slot" srcName PickSource
         (map (\src -> { v: src.name
-                      , t: src.name <> (if src.available then "" else " — off") })
+                      , t: labelFor st src.name
+                             <> (if src.available then "" else " — off") })
           top.sources)
+
+  -- | **The way in to naming the inputs**, beside the input it renames.
+  -- |
+  -- | It is a one-time exercise and it belongs at the one moment you notice it
+  -- | is needed, which is while reading the sentence and not recognising what
+  -- | it says. Not a door in the action row: those are things you do on every
+  -- | run, and a sixth of them for a thing done once would be the row's worst
+  -- | entry.
+  slotSourceName = case st.looper of
+    Nothing -> HH.text ""
+    Just _ ->
+      HH.button
+        [ HP.class_ (HH.ClassName "q-rename")
+        , HP.title "name the inputs after what is plugged into them"
+        , HE.onClick \_ -> OpenModal (Just InputsModal)
+        ]
+        [ HH.text "name\x2026" ]
+
+  -- | **Name each input after the thing on the other end of the cable.**
+  -- |
+  -- | The daemon's names are wire names and have to be: `--source
+  -- | board=AUDIO4c:1,2` resolves against the interface, and a name that
+  -- | cannot be resolved is a session recorded off the wrong jack. But nobody
+  -- | picks "hits" out of a list at speed — on 2026-09-11 a whole 4 x 12 was
+  -- | recorded from "board" instead and came back silent — and no rename in
+  -- | the launch args could fix that generally, because the right name is not
+  -- | a fact about this rig. It is "Jupiter 8", or "the Neumann", and only the
+  -- | person holding the cable knows it.
+  -- |
+  -- | So the wire name is shown beside the field rather than hidden by it: the
+  -- | label is what you read afterwards, and the wire name is what you check
+  -- | against a patch cable when something is wrong.
+  inputsPanel = case st.looper of
+    Nothing ->
+      HH.p [ HP.class_ (HH.ClassName "q-note") ]
+        [ HH.text "not connected to the daemon, so there are no inputs to name." ]
+    Just top ->
+      HH.div [ HP.class_ (HH.ClassName "q-inputs") ]
+        ( [ HH.p [ HP.class_ (HH.ClassName "q-note") ]
+              [ HH.text "Name each input after whatever is plugged into it. \
+                        \The name on the right is the one the daemon was \
+                        \launched with and is what a stored set records, so \
+                        \renaming here never orphans a set — and clearing a \
+                        \name puts that one back." ]
+          ]
+            <> map
+                 (\src ->
+                   HH.label [ HP.class_ (HH.ClassName "q-inputrow") ]
+                     [ HH.input
+                         [ HP.class_ (HH.ClassName "q-slot is-name")
+                         , HP.type_ HP.InputText
+                         , HP.value (maybe "" _.label
+                             (Array.find (\r -> r.wire == src.name) st.srcNames))
+                         , HP.placeholder src.name
+                         , HE.onValueInput (NameSource src.name)
+                         ]
+                     , HH.span [ HP.class_ (HH.ClassName "q-inputwire") ]
+                         [ HH.text (src.name
+                             <> (if src.mono then " · mono" else " · stereo")
+                             <> (if src.available then "" else " · off")) ]
+                     ])
+                 top.sources )
 
   slotTrigger =
     sel "q-slot" triggerBy SetTriggerBy

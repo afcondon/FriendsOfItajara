@@ -180,3 +180,28 @@ export const calibration = (label) => () =>
       .map((p) => ({ volts: Number(p.volts), hz: Number(p.hz) })),
     error: String(d.error ?? ""),
   })).catch((e) => ({ ok: false, label, module: "", coarse: "", measuredAt: "", points: [], error: String(e.message ?? e) }));
+
+// **What the owner calls each input.** Keyed by the daemon's own source name,
+// which is the wire identity (`--source board=AUDIO4c:1,2`) and stays the
+// identity: a stored set records the source it came from by wire name, so
+// renaming the label never orphans one. See `sourceLabels` in server.mjs.
+export const sourceLabels = () =>
+  fetch("/api/sources")
+    .then(j)
+    .then((d) =>
+      Object.entries(d.labels ?? {})
+        .map(([wire, label]) => ({ wire: String(wire), label: String(label) }))
+        .sort((a, b) => (a.wire < b.wire ? -1 : a.wire > b.wire ? 1 : 0)))
+    .catch(() => []);
+
+// One label at a time, merged server-side. An empty label clears it, which is
+// how you get back to the wire name without a second control for "forget this".
+export const nameSource = (wire) => (label) => () =>
+  fetch("/api/sources", {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ labels: { [wire]: label } }),
+  })
+    .then(j)
+    .then((d) => ({ ok: !!d.ok, output: String(d.output ?? "") }))
+    .catch((e) => ({ ok: false, output: String(e.message ?? e) }));
