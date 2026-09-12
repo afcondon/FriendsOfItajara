@@ -242,7 +242,6 @@ type State =
   -- | silently armed on the wrong one. The answer is not to hide the choice
   -- | but to put it where it cannot be missed: in the masthead, with the
   -- | level it is reading right now, and named on the button that uses it.
-  , source :: Int
   -- | **Has this take been written as a set yet?**
   -- |
   -- | A run always leaves a take on disk, and until 2026-09-11 nothing on the
@@ -352,7 +351,7 @@ component = H.mkComponent
       , sweep: Sweep.emptyPlan, sweepOpen: false, sweepAt: Nothing
       , sweepFork: Nothing, midiPorts: [], swept: false, sweepEdit: Nothing
       , schedule: [], sets: [], tables: [], tablesErr: "", overran: false
-      , page: Bench, fill: Swept, source: 0, pivot: Nothing
+      , page: Bench, fill: Swept, pivot: Nothing
       , levels: [], modal: Nothing, kept: false, confirmKeep: false }
   , render
   , eval: H.mkEval H.defaultEval { handleAction = handleAction, initialize = Just Init }
@@ -594,6 +593,16 @@ handleAction = case _ of
     snap <- liftEffect Socket.latest
     pk <- liftEffect Socket.latestPeaks
     H.modify_ _ { looper = snap, peaks = pk }
+    -- | **Write the default down.** An unset source resolves to the first
+    -- | available one, which is the right behaviour and a bad record: a set
+    -- | saved that way says it was recorded from "", when the one question
+    -- | worth asking afterwards is which input it came from. Adopted once,
+    -- | when the rig first says what it has, and never over a choice.
+    do
+      stw <- H.get
+      when (stw.sweep.source == "") $
+        for_ (stw.looper >>= \top -> Array.find _.available top.sources) \src ->
+          handleAction (SweepMsg (Sweep.SetSource src.name))
     -- The daemon draws; ask it to, the first time a capture comes into view.
     -- That covers a reload as well as a recording — the daemon did not forget
     -- what it is holding just because the page did.
@@ -1066,7 +1075,14 @@ handleAction = case _ of
   -- | the first time, and a permission dialog appearing in the middle of a run
   -- | would cost the take.
   GoTo pg -> H.modify_ _ { page = pg }
-  PickSource v -> H.modify_ \s0 -> s0 { source = fromMaybe s0.source (Int.fromString v) }
+  -- | **The input is part of the plan now**, so it survives a reload like
+  -- | every other choice. It was page state and reset to the first available
+  -- | source every time the page loaded — which is how a transect went to
+  -- | `board`. Stored by NAME: the rig's audio is an aggregate whose member
+  -- | order is not stable, so a remembered index can come back pointing at a
+  -- | different jack, where a remembered name either resolves or visibly does
+  -- | not.
+  PickSource v -> handleAction (SweepMsg (Sweep.SetSource v))
   -- | **Choosing how to fill the take**, and asking the browser for MIDI the
   -- | first time a transect is chosen.
   -- |
@@ -1510,8 +1526,14 @@ restCv = do
 levelNow :: State -> Number
 levelNow s =
   let
-    ix = fromMaybe 1 (if s.source > 0 then Just s.source
-                      else map (_ + 1) (s.looper >>= \t -> Array.findIndex _.available t.sources))
+    -- The same resolution `srcNow` does, and for the same reason: by name,
+    -- falling back to the first available one. A meter reading a different
+    -- source from the one the run will record is worse than no meter.
+    ix = fromMaybe 1
+      (s.looper >>= \t ->
+        case Array.findIndex (\x -> x.name == s.sweep.source) t.sources of
+          Just i -> Just (i + 1)
+          Nothing -> map (_ + 1) (Array.findIndex _.available t.sources))
     db = maybe (-120.0) _.db (s.looper >>= \t -> Array.index t.sources (ix - 1))
   in
     max 0.0 (min 1.0 ((db + 60.0) / 60.0))
@@ -1880,7 +1902,7 @@ render st =
           , HP.title "run the sweep once at the flat spacing and keep only how \
                      \long each cell took to go quiet — then every later run is \
                      \paced by what this instrument actually does"
-          , HE.onClick \_ -> DryRun st.source
+          , HE.onClick \_ -> DryRun srcNow
           ]
           [ HH.span [ HP.class_ (HH.ClassName "q-doorname") ] [ HH.text "Measure" ]
           , HH.span [ HP.class_ (HH.ClassName "q-doorsays") ] [ HH.text measureSays ]
@@ -2092,6 +2114,17 @@ render st =
               <> [ HH.text ", about ", HH.text runSecs, HH.text " to record." ] )
       , clashSays
       , collapseSays
+      -- | **A remembered input that is not on this rig.** Silently falling
+      -- | back to whatever is first is how the whole morning went to `board`;
+      -- | the fallback is still the right behaviour, and saying so is the
+      -- | other half of it.
+      , if not sourceLost then HH.text "" else
+          HH.p [ HP.class_ (HH.ClassName "q-clash is-soft") ]
+            [ HH.text ("this set was recorded from \x201c" <> st.sweep.source
+                <> "\x201d, which the rig is not offering — using \x201c"
+                <> srcName <> "\x201d instead. Sources are named per interface \
+                   \and jack, so a renamed or re-ordered aggregate loses the \
+                   \reference rather than pointing it somewhere wrong.") ]
       ]
 
   -- | **Two things pointed at one jack, said in the sentence.**
@@ -2208,10 +2241,9 @@ render st =
   slotSource = case st.looper of
     Nothing -> HH.span [ HP.class_ (HH.ClassName "q-slot is-fixed") ] [ HH.text "…" ]
     Just top ->
-      sel "q-slot" (show srcNow) PickSource
-        (Array.mapWithIndex
-          (\i src -> { v: show (i + 1)
-                     , t: src.name <> (if src.available then "" else " — off") })
+      sel "q-slot" srcName PickSource
+        (map (\src -> { v: src.name
+                      , t: src.name <> (if src.available then "" else " — off") })
           top.sources)
 
   slotTrigger =
@@ -2464,10 +2496,22 @@ render st =
     (Array.index (Encoding.cells st.sweep.encoding st.sweep.extent) j)
 
   -- Whichever is chosen, or the first the daemon says is available.
-  srcNow =
-    if st.source > 0 then st.source
-    else 1 + fromMaybe 0
-      (st.looper >>= \top -> Array.findIndex _.available top.sources)
+  -- | **The remembered name, resolved against what the rig actually has.**
+  -- |
+  -- | Falls back to the first available source when the name is unset or gone,
+  -- | and `sourceLost` says so out loud rather than quietly recording from
+  -- | somewhere else — which is the failure this whole field exists to stop.
+  srcNow = case st.looper of
+    Nothing -> 1
+    Just top ->
+      case Array.findIndex (\s0 -> s0.name == st.sweep.source) top.sources of
+        Just i -> i + 1
+        Nothing -> 1 + fromMaybe 0 (Array.findIndex _.available top.sources)
+
+  sourceLost = case st.looper of
+    Just top | st.sweep.source /= ""
+             , Array.all (\s0 -> s0.name /= st.sweep.source) top.sources -> true
+    _ -> false
   srcDb = maybe (-120.0) _.db
     (st.looper >>= \top -> Array.index top.sources (srcNow - 1))
   -- | **Below this nobody is playing into it.**

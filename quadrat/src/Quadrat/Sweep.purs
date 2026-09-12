@@ -341,6 +341,19 @@ type Plan =
   , trigger :: Trigger
   -- | A substring of a WebMIDI output's name. Empty means MIDI is unused.
   , port :: String
+  -- | **Which input the rig is recorded from**, by NAME.
+  -- |
+  -- | Beside `port` because they are the same kind of fact from opposite ends:
+  -- | where the instructions go out and where the sound comes back. It was
+  -- | page state, so it reset to the first available source on every reload —
+  -- | and on 2026-09-12 a whole transect went to `board` because of it.
+  -- |
+  -- | By name and never by index. The rig's audio is an aggregate whose member
+  -- | order is not stable, so a stored `4` can come back pointing at a
+  -- | different jack; a stored name either resolves or visibly does not. It is
+  -- | also the one thing `set.json` could not say about a take, which made
+  -- | "recorded from the wrong input" unanswerable after the fact.
+  , source :: String
   -- | **How long after setting the parameters before the trigger.**
   -- |
   -- | The one number here that can silently ruin a run: too short and the hit
@@ -393,6 +406,7 @@ emptyPlan =
   , spacingMs: 2000
   , guardMs: 120
   , leadMs: 30
+  , source: ""
   , paced: []
   , pacedFor: ""
   , usePaced: false
@@ -454,6 +468,8 @@ data Msg
   | ToCurve Int
   | SetValue Int Int String
   | SetPort String
+  -- | Which input the rig is recorded from, by name. See `Plan.source`.
+  | SetSource String
   | SetGate String
   | SetEs5 String
   | SetGateLevel String
@@ -560,6 +576,7 @@ applyMsg = case _ of
                    (Int.toNumber (intOr 0 v) / 100.0) q.curve })
       p
   SetPort v -> \p -> p { port = v }
+  SetSource v -> \p -> p { source = v }
   SetGate v -> onTrig \t -> t { gate = busOf v }
   SetEs5 v -> onTrig \t -> t { es5 = slotOf v }
   SetGateLevel v -> onTrig \t -> t { gateLevel = level t.gateLevel v }
@@ -734,6 +751,8 @@ type Plain =
   , velocity :: Int
   , holdMs :: Int
   , port :: String
+  -- | The input, by name. See `Plan.source`.
+  , source :: String
   , settleMs :: Int
   , spacingMs :: Int
   , guardMs :: Int
@@ -794,6 +813,7 @@ flatten p =
   , velocity: p.trigger.velocity
   , holdMs: p.trigger.ms
   , port: p.port
+  , source: p.source
   , settleMs: p.settleMs
   , spacingMs: p.spacingMs
   , guardMs: p.guardMs
@@ -885,6 +905,7 @@ unflatten' p =
         , ms: clamp 1 5000 p.holdMs
         }
     , port: p.port
+    , source: p.source
     , settleMs: clamp 0 5000 p.settleMs
     , spacingMs: clamp 50 20000 p.spacingMs
     , guardMs: clamp 0 2000 p.guardMs
