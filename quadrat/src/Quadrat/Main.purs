@@ -293,6 +293,13 @@ type State =
   , picked :: Set String
   -- | Deleting is the one thing here that destroys work, so it is asked.
   , confirmDrop :: Boolean
+  -- | **The replace question, held open against one card.**
+  -- |
+  -- | A write refuses a kit slot that already exists, and the way past it is
+  -- | `--overwrite`, which deletes each slot's whole directory first. That is
+  -- | the most destructive thing this page can do, so it is asked, and the
+  -- | asking names the slots it would delete.
+  , confirmWrite :: Maybe String
   -- | **What the owner calls each input**, against the wire name the daemon
   -- | uses. A source is identified by `--source board=AUDIO4c:1,2` and has to
   -- | be, because a name that cannot be resolved to jacks is a session
@@ -376,7 +383,13 @@ data Action
   | AskKeep
   | CancelKeep
   | SetLayerMode String
-  | WriteCard String
+  -- | Compile the manifest onto a card. The flag is `--overwrite`, which
+  -- | **deletes each kit slot's whole directory before writing it** — so it is
+  -- | a separate press with the letters it destroys named on it, never a
+  -- | default. See `askWrite`.
+  | WriteCard String Boolean
+  -- | Hold the replace question open, or drop it.
+  | AskWrite (Maybe String)
   | Play Int
   | HoverPlay Int
   | SetHoverPlays Boolean
@@ -431,7 +444,7 @@ component = H.mkComponent
       , schedule: [], sets: [], tables: [], tablesErr: "", overran: false
       , page: Bench, fill: Swept, pivot: Nothing
       , levels: [], modal: Nothing, kept: false, confirmKeep: false
-      , picked: Set.empty, confirmDrop: false, srcNames: []
+      , picked: Set.empty, confirmDrop: false, confirmWrite: Nothing, srcNames: []
       , heard: [], midiIn: [], midiOk: true }
   , render
   , eval: H.mkEval H.defaultEval { handleAction = handleAction, initialize = Just Init }
@@ -955,9 +968,11 @@ handleAction = case _ of
   SetKit v -> H.modify_ _ { kit = v, kitMine = v /= "" }
   SetVoice v -> H.modify_ \s ->
     s { voice = onlyVoices s.kind (clamp 1 4 (fromMaybe s.voice (Int.fromString v))) }
-  WriteCard dest -> do
-    H.modify_ _ { cardBusy = true }
-    r <- H.liftAff (attempt (toAffE (Http.writeToCard dest)))
+  AskWrite v -> H.modify_ _ { confirmWrite = v }
+
+  WriteCard dest replace -> do
+    H.modify_ _ { cardBusy = true, confirmWrite = Nothing }
+    r <- H.liftAff (attempt (toAffE (Http.writeToCard dest replace)))
     case r of
       Left e -> H.modify_ (note (Aff.message e) <<< _ { cardBusy = false })
       Right w -> H.modify_ (note (lastLine w.output) <<< _ { cardBusy = false })
@@ -4468,10 +4483,55 @@ render st =
                          [ HP.class_ (HH.ClassName "q-chip is-arm")
                          , HP.disabled (st.cardBusy || not v.ok)
                          , HP.title ("compile the manifest onto " <> c)
-                         , HE.onClick \_ -> WriteCard c
+                         , HE.onClick \_ -> WriteCard c false
                          ]
                          [ HH.text c ]) v.cards)
+      -- | **The way past a slot that is already there.**
+      -- |
+      -- | A write refuses rather than replacing, and refuses ALL of it — one
+      -- | occupied slot and nothing lands, including the kits that were free.
+      -- | Which is the right default and left the page with no way to update a
+      -- | card at all: every second write of anything hit it.
+      -- |
+      -- | So the flag exists here, and it is asked for, because `--overwrite`
+      -- | deletes each kit slot's whole directory before writing it. The
+      -- | question names the slots — `L0, L1` — rather than the cards, because
+      -- | **the slots are the blast radius** and a letter chosen by accident
+      -- | once cost a bank of Squarp's own content.
+      , case st.confirmWrite of
+          Just c ->
+            HH.span [ HP.class_ (HH.ClassName "q-twoverbs") ]
+              [ HH.button
+                  [ HP.class_ (HH.ClassName "q-plain is-replacing")
+                  , HP.disabled st.cardBusy
+                  , HE.onClick \_ -> WriteCard c true
+                  ]
+                  [ HH.text ("delete and rewrite " <> slotsSays v <> " on " <> c) ]
+              , HH.button
+                  [ HP.class_ (HH.ClassName "q-plain")
+                  , HE.onClick \_ -> AskWrite Nothing ]
+                  [ HH.text "cancel" ]
+              ]
+          Nothing
+            | Array.null v.cards -> HH.text ""
+            | otherwise ->
+                HH.div [ HP.class_ (HH.ClassName "q-chips") ]
+                  (map (\c -> HH.button
+                          [ HP.class_ (HH.ClassName "q-chip")
+                          , HP.disabled (st.cardBusy || not v.ok)
+                          , HP.title "for a slot that already has something in it"
+                          , HE.onClick \_ -> AskWrite (Just c)
+                          ]
+                          [ HH.text ("replace on " <> c) ]) v.cards)
       ]
+
+  -- | The kit slots this manifest occupies, in the module's own names. **The
+  -- | slot number is the kit's position in its bank**, so the first kit of
+  -- | bank L is L0 and the second is L1 — which is also why a bank holding
+  -- | only the new kit would write it as L0, over whatever L0 was.
+  slotsSays v =
+    let slots = Array.nub (map (\r -> r.letter <> show r.kitIx) v.rows)
+    in if Array.null slots then "the manifest" else joinWith ", " slots
 
   kindBtn k =
     HH.button

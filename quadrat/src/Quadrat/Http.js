@@ -32,7 +32,12 @@ const j = (r) => r.json();
 export const card = () =>
   fetch("/api/card").then(j).then((d) => ({
     rows: (d.card?.banks ?? []).flatMap((b) =>
-      (b.kits ?? []).flatMap((k) =>
+      // `ki` is the kit's POSITION in its bank, and that position IS the slot
+      // the module will see: `kit build` names each one `{letter}{index}`, so
+      // the first kit of bank L is L0 and the second is L1. Carried out here
+      // because the slot is the blast radius of a write, and a page that can
+      // ask "delete and rewrite" has to be able to say what it would delete.
+      (b.kits ?? []).flatMap((k, ki) =>
         Object.entries(k.voices ?? {}).map(([v, val]) => {
           // Read both shapes: a voice used to be one set, and is now an
           // ordered stack of layers.
@@ -43,6 +48,8 @@ export const card = () =>
           const sets = st.layers.map((l) => String(l.set ?? ""));
           return {
             bank: String(b.name ?? ""),
+            letter: String(b.letter ?? ""),
+            kitIx: ki,
             kit: String(k.name ?? ""),
             voice: Number(v),
             set: sets[0] ?? "",
@@ -66,7 +73,8 @@ const post = (url, body) =>
     .catch((e) => ({ ok: false, output: String(e.message ?? e) }));
 
 export const addToCard = (req) => () => post("/api/card/add", req);
-export const writeToCard = (dest) => () => post("/api/card/write", { dest });
+export const writeToCard = (dest) => (replace) => () =>
+  post("/api/card/write", { dest, replace });
 export const placeSet = (req) => () => post("/api/card/place", req);
 
 // A take's envelope, read off the file. Shaped like the daemon's own peaks so

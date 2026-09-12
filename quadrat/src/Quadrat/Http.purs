@@ -88,6 +88,11 @@ foreign import divisions
 -- | table holds.
 type CardRow =
   { bank :: String
+  -- | The bank's LETTER, and the kit's position in it. Together they are the
+  -- | slot the module sees — `kit build` names each kit `{letter}{index}` —
+  -- | and the slot is what a write deletes.
+  , letter :: String
+  , kitIx :: Int
   , kit :: String
   , voice :: Int
   , set :: String
@@ -322,4 +327,7 @@ foreign import loadSpec
   -> Effect (Promise { ok :: Boolean, output :: String, spec :: spec })
 
 -- | Compile the manifest onto a mounted card.
-foreign import writeToCard :: String -> Effect (Promise Wrote)
+-- | Compile the manifest onto a card. The `Boolean` is `--overwrite`, which
+-- | **deletes each kit slot's whole directory before writing it** — so it is
+-- | never a default and the page asks before sending it true.
+foreign import writeToCard :: String -> Boolean -> Effect (Promise Wrote)
