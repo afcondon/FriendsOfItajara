@@ -568,12 +568,18 @@ body {
    in a line of prose is a form with prose between it, which is the thing
    this replaces. So: no borders, inherited type, and a dotted underline
    that says "this is settable" without saying "this is a widget". */
-.q-say { padding: 20px 0 14px; margin-bottom: 6px; }
+/* **Half width, centred, and given room.** Run the full width of a wide
+   screen and a statement reads as a caption: the eye takes it as a strip of
+   page furniture above the real thing. At half width it is a paragraph with a
+   shape, it wraps to three or four lines, and it is unmistakably the first
+   thing on the page rather than the label of what follows. */
+.q-say { width: 50%; margin: 0 auto; padding: 40px 0 34px; }
 .q-sayline {
   margin: 0; font-size: 23px; line-height: 1.55; font-weight: 300;
   letter-spacing: -0.01em;
 }
-.q-sayfine { margin: 10px 0 0; font-size: 12px; color: var(--muted); }
+/* Narrow enough that half of it is not a column any more. */
+@media (max-width: 1180px) { .q-say { width: 100%; padding: 26px 0 22px; } }
 
 /* Two things pointed at one jack. Loud, and in the sentence, because both
    halves of this were already displayed correctly in two different panels and

@@ -2060,24 +2060,37 @@ render st =
   -- |
   -- | Each slot is the ONLY control for what it says. Where a panel below used
   -- | to ask the same question it no longer does.
+  -- | **One paragraph, and nothing under it.**
+  -- |
+  -- | It had a second line in small grey type carrying the calibration, the
+  -- | note range, which parameter was on which axis, and how long the run
+  -- | would take. Every one of those is now said better somewhere it can be
+  -- | acted on: the keyboard draws the notes, the grid names the axes and
+  -- | prints the per-cell times, and Measure's own subtitle carries the total.
+  -- | What was left was a footnote restating the page, in the one place that
+  -- | is supposed to be the page's whole claim in a breath.
+  -- |
+  -- | So the calibration joins the sentence — it is a choice, and every other
+  -- | choice is in here — and the rest goes. Half width and centred, because a
+  -- | statement that runs the full width of a wide screen reads as a caption.
   statement =
     HH.section [ HP.class_ (HH.ClassName "q-say") ]
       [ HH.p [ HP.class_ (HH.ClassName "q-sayline") ]
-          [ HH.text "Making ", slotExtent
-          , HH.text " ", slotPitched
-          , HH.text " samples from ", slotSource, listening
-          , HH.text ", triggered by ", slotTrigger
-          , HH.text ", kept as ", slotName
-          , HH.text " for ", slotEncoding
-          , HH.text "."
-          ]
+          ( [ HH.text "Making ", slotExtent
+            , HH.text " ", slotPitched
+            , HH.text " samples from ", slotSource, listening
+            , HH.text ", triggered by ", slotTrigger
+            , HH.text ", kept as ", slotName
+            , HH.text " for ", slotEncoding
+            ]
+              -- Named only when there IS one to name: "tuned by nothing" is a
+              -- clause about an absence, and an unpitched run is not missing
+              -- anything.
+              <> (if Array.any (\q -> Maybe.isJust q.pitch) st.sweep.params
+                    then [ HH.text ", tuned by ", slotCalib ] else [])
+              <> [ HH.text ", about ", HH.text runSecs, HH.text " to record." ] )
       , clashSays
       , collapseSays
-      , HH.p [ HP.class_ (HH.ClassName "q-sayfine") ]
-          ( [ HH.text "Calibration scheme: ", slotCalib ]
-              <> pitchSays
-              <> sweptSays
-              <> [ HH.text " · about ", HH.text runSecs, HH.text " to record" ] )
       ]
 
   -- | **Two things pointed at one jack, said in the sentence.**
@@ -2213,41 +2226,11 @@ render st =
   -- | case for saying it rather than preventing it.
   -- |
   -- | Not auto-corrected for the same reason. A pitch axis picked fresh
-  -- | defaults to one degree per cell; one restored from an older plan keeps
-  -- | the range it was given, and gets told.
-  pitchSays = case Array.findIndex (\q -> Maybe.isJust q.pitch) st.sweep.params of
-    Nothing -> []
-    Just i -> case Array.index st.sweep.params i >>= _.pitch of
-      Nothing -> []
-      Just ps ->
-          [ HH.text (" · " <> Pitch.noteName ps.noteLo <> "–"
-                       <> Pitch.noteName ps.noteHi <> " chromatic") ]
-
-  -- | What is being moved, by name only. The shapes and the ranges are in the
-  -- | panel; this says how many knobs are in play, which is the part you want
-  -- | at a glance and the part a list of curves does not tell you.
-  -- | **What is moving, and along which axis.**
-  -- |
-  -- | Grouped by axis rather than listed flat, because on a grid that grouping
-  -- | IS the shape: two parameters that both sit on `layer` make a single long
-  -- | line wearing a matrix's file layout, and nothing else on the page would
-  -- | say so. An axis with nothing on it is called out as repeats — which is
-  -- | sometimes exactly what you want, and never something to discover later.
-  sweptSays =
-    let
-      axs = Encoding.axes st.sweep.encoding
-      named a = map _.name (Array.filter (\q -> q.axis == a) st.sweep.params)
-      part a ax =
-        let ns = named a
-        in if Array.null ns
-             then ax.name <> ": nothing varies — "
-                    <> show (fromMaybe 1 (Array.index st.sweep.extent a)) <> " repeats"
-             else ax.name <> ": " <> joinWith ", " ns
-    in
-      if Array.null st.sweep.params then []
-      else if Array.length axs < 2
-        then [ HH.text (" · sweeping " <> joinWith ", " (map _.name st.sweep.params)) ]
-        else [ HH.text (" · " <> joinWith " · " (Array.mapWithIndex part axs)) ]
+  -- **`pitchSays` and `sweptSays` lived here.** The first printed the note
+  -- range, which the keyboard now draws; the second grouped the parameters by
+  -- axis to catch a grid that was really a line, which the grid itself now
+  -- shows and `Sweep.collapsed` now says out loud. Both were footnotes
+  -- restating the page under the one line that is meant to BE the page.
 
   -- | **What the run will actually take**, which with measured pacing is a sum
   -- | and not a multiple. Read off the same function the run paces itself by,
