@@ -2757,11 +2757,18 @@ render st =
           [ case st.peaks of
               Just pk | Array.length pk.hi > 0 ->
                 HH.div [ HP.class_ (HH.ClassName "q-whole") ]
+                  -- **No column heads over a recorded row.** The planned
+                  -- grid divides its row into equal cells, so one header
+                  -- lines up with all of them; a recorded row draws each band
+                  -- over the stretch of take that made it, and with measured
+                  -- pacing those are all different widths — and different
+                  -- from row to row. A header saying "slice 10" above a band
+                  -- that is slice 12 is worse than no header, and the bands
+                  -- name themselves anyway.
                   [ HH.div [ HP.class_ (HH.ClassName "q-grid") ]
-                      ( Array.cons colHead
-                          (Array.mapWithIndex
-                            (\k rng -> gridRow k (strip pk rng))
-                            (rowsOf (Array.length st.regions))) )
+                      (Array.mapWithIndex
+                        (\k rng -> gridRow k (strip pk rng))
+                        (rowsOf (Array.length st.regions)))
                   -- | **The take's length, on the take.**
                   -- |
                   -- | It sat among Record/play/stop and grew a digit as the

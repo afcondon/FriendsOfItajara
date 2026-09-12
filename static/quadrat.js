@@ -15734,7 +15734,7 @@
         })])([text5("replace")])]);
       }
       ;
-      throw new Error("Failed pattern match at Quadrat.Main (line 3207, column 9 - line 3230, column 16): " + [occupant.constructor.name]);
+      throw new Error("Failed pattern match at Quadrat.Main (line 3214, column 9 - line 3237, column 16): " + [occupant.constructor.name]);
     })(), (function() {
       if (occupant instanceof Just && length3(occupant.value0.sets) >= 1) {
         return label4([class_("q-field is-tight")])([span_([text5("picked by")]), select3([onValueChange(SetLayerMode.create)])(map30(function(m) {
@@ -15766,7 +15766,7 @@
         })() + " \u2014 add stands beside them, replace puts this in their place")))))]);
       }
       ;
-      throw new Error("Failed pattern match at Quadrat.Main (line 3254, column 9 - line 3261, column 86): " + [occupant.constructor.name]);
+      throw new Error("Failed pattern match at Quadrat.Main (line 3261, column 9 - line 3268, column 86): " + [occupant.constructor.name]);
     })()]);
     var modalPivot = function(title4) {
       return function(inner) {
@@ -15850,7 +15850,7 @@
         })())]);
       }
       ;
-      throw new Error("Failed pattern match at Quadrat.Main (line 3316, column 3 - line 3351, column 77): ");
+      throw new Error("Failed pattern match at Quadrat.Main (line 3323, column 3 - line 3358, column 77): ");
     })();
     var listening = (function() {
       var recent = takeEnd(20)(st.levels);
@@ -15956,7 +15956,7 @@
         })(range2(0)(div1(n - 1 | 0)(innerN)));
       }
       ;
-      throw new Error("Failed pattern match at Quadrat.Main (line 2877, column 3 - line 2882, column 47): " + [n.constructor.name]);
+      throw new Error("Failed pattern match at Quadrat.Main (line 2884, column 3 - line 2889, column 47): " + [n.constructor.name]);
     };
     var door = function(m) {
       return function(label9) {
@@ -16094,7 +16094,7 @@
         return span3([class_("q-warn")])([text5("you swept " + (show14(total(st.sweep.extent)) + (" samples and this divided into " + (show14(length3(st.regions)) + " \u2014 try another divider, or a wider gap, before sending it"))))]);
       }
       ;
-      throw new Error("Failed pattern match at Quadrat.Main (line 3356, column 3 - line 3373, column 80): ");
+      throw new Error("Failed pattern match at Quadrat.Main (line 3363, column 3 - line 3380, column 80): ");
     })();
     var cp = cap(st);
     var elapsed = maybe("0")(function(c) {
@@ -16123,7 +16123,7 @@
         })(), span3([class_("q-muted")])([text5(blurb2(st.divider))])]);
       }
       ;
-      throw new Error("Failed pattern match at Quadrat.Main (line 3077, column 3 - line 3097, column 12): ");
+      throw new Error("Failed pattern match at Quadrat.Main (line 3084, column 3 - line 3104, column 12): ");
     })();
     var dryTakeSays = (function() {
       if (!st.takeIsDry) {
@@ -16138,7 +16138,7 @@
         return span3([class_("q-warn")])([text5("this is the measuring pass \u2014 flat spacing, so every sample carries the trailing silence the measurement is for. Press Record for the paced one.")]);
       }
       ;
-      throw new Error("Failed pattern match at Quadrat.Main (line 3307, column 3 - line 3314, column 56): ");
+      throw new Error("Failed pattern match at Quadrat.Main (line 3314, column 3 - line 3321, column 56): ");
     })();
     var divisionPanel = div3([class_("q-divpanel")])([div3([class_("q-gridhead")])([span_([text5((function() {
       if (st.busy) {
@@ -16354,7 +16354,7 @@
         };
       }
       ;
-      throw new Error("Failed pattern match at Quadrat.Main (line 3054, column 7 - line 3062, column 12): " + [noted.constructor.name]);
+      throw new Error("Failed pattern match at Quadrat.Main (line 3061, column 7 - line 3069, column 12): " + [noted.constructor.name]);
     };
     var segment = function(i2) {
       return function(r) {
@@ -16382,7 +16382,7 @@
                 })(st.regions)))(i2));
               }
               ;
-              throw new Error("Failed pattern match at Quadrat.Main (line 2937, column 15 - line 2943, column 77): " + [st.peaks.constructor.name]);
+              throw new Error("Failed pattern match at Quadrat.Main (line 2944, column 15 - line 2950, column 77): " + [st.peaks.constructor.name]);
             })();
             var kept = member3(i2)(st.keep);
             return div3([class_("q-seg" + ((function() {
@@ -16551,7 +16551,7 @@
         ;
       }
       ;
-      throw new Error("Failed pattern match at Quadrat.Main (line 3388, column 9 - line 3407, column 20): " + [st.cardView.constructor.name]);
+      throw new Error("Failed pattern match at Quadrat.Main (line 3395, column 9 - line 3414, column 20): " + [st.cardView.constructor.name]);
     })()]);
     var canMeasure = eq7(st.sweepFork)(Nothing.value) && (!st.busy && eq9(st.fill)(Swept.value));
     var doors = div3([class_("q-doors")])([button([class_("q-door" + ((function() {
@@ -16623,7 +16623,7 @@
         })(range2(0)(innerN - 1 | 0)))]);
       }
       ;
-      throw new Error("Failed pattern match at Quadrat.Main (line 2865, column 3 - line 2875, column 12): ");
+      throw new Error("Failed pattern match at Quadrat.Main (line 2872, column 3 - line 2882, column 12): ");
     })();
     var gridRow = function(k) {
       return function(inner) {
@@ -16635,18 +16635,18 @@
           return div3([class_("q-gridrow")])([span3([class_("q-rowlab")])([text5(axisNameOf(0) + (" " + show14(k + 1 | 0)))]), div3([class_("q-rowbody")])([inner])]);
         }
         ;
-        throw new Error("Failed pattern match at Quadrat.Main (line 2856, column 3 - line 2863, column 12): " + [k.constructor.name, inner.constructor.name]);
+        throw new Error("Failed pattern match at Quadrat.Main (line 2863, column 3 - line 2870, column 12): " + [k.constructor.name, inner.constructor.name]);
       };
     };
     var caught = (function() {
       if (otherwise) {
         return div_([(function() {
           if (st.peaks instanceof Just && length3(st.peaks.value0.hi) > 0) {
-            return div3([class_("q-whole")])([div3([class_("q-grid")])(cons2(colHead)(mapWithIndex2(function(k) {
+            return div3([class_("q-whole")])([div3([class_("q-grid")])(mapWithIndex2(function(k) {
               return function(rng) {
                 return gridRow(k)(strip(st.peaks.value0)(rng));
               };
-            })(rowsOf(length3(st.regions))))), div3([class_("q-taketime")])([text5(maybe("")(function(c) {
+            })(rowsOf(length3(st.regions)))), div3([class_("q-taketime")])([text5(maybe("")(function(c) {
               return fmt(c.secs) + " s";
             })(cap(st)))])]);
           }
@@ -16655,7 +16655,7 @@
         })(), text5("")]);
       }
       ;
-      throw new Error("Failed pattern match at Quadrat.Main (line 2754, column 3 - line 2781, column 12): ");
+      throw new Error("Failed pattern match at Quadrat.Main (line 2754, column 3 - line 2788, column 12): ");
     })();
     var expected = (function() {
       var cells3 = cells2(st.sweep.encoding)(st.sweep.extent);
