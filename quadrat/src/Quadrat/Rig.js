@@ -165,12 +165,19 @@ export const listenMidi = () => {
   for (const i of access.inputs.values()) {
     if (wired.has(i.id)) continue;
     wired.add(i.id);
+    const from = i.name;
     i.onmidimessage = (e) => {
       const d = e.data;
       if (!d || d.length < 3) return;
       // Note-on, and a note-on with velocity 0 is a note-off by convention.
       if ((d[0] & 0xf0) !== 0x90 || d[2] === 0) return;
-      heard.push({ note: d[1], at: e.timeStamp });
+      // **Which port it came from, kept with the note.** Every input is
+      // listened to, and exactly one is believed — the page picks. Collecting
+      // from all of them is what the first version did, and on a machine whose
+      // IAC buses carry the rig's own traffic it swept a sequencer's output
+      // into a chord. Kept rather than filtered here so the page can SHOW the
+      // ports it is hearing, which is how you notice the wrong one.
+      heard.push({ note: d[1], at: e.timeStamp, from });
       // A ceiling, because this is held for the life of the page and a page
       // left open all day should not grow without bound.
       if (heard.length > 8192) heard.shift();

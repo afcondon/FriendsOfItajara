@@ -709,6 +709,9 @@ body {
 .q-slot.is-num::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .q-slot.is-name { min-width: 12em; cursor: text; }
 .q-slot.is-fixed { border-bottom: 1px dotted var(--rule); cursor: default; }
+/* A slot inside one of the small lines under the statement rather than inside
+   the statement itself: same control, the size of the prose around it. */
+.q-slot.is-small { font-size: inherit; font-weight: 500; }
 
 /* The way in to naming the inputs, set as a marginal note rather than as a
    control: it is a one-time exercise, it sits inside a sentence, and anything

@@ -367,6 +367,19 @@ type Plan =
   -- | also the one thing `set.json` could not say about a take, which made
   -- | "recorded from the wrong input" unanswerable after the fact.
   , source :: String
+  -- | **Which MIDI input the NOTES come from**, by name, or empty for none.
+  -- |
+  -- | The exact counterpart of `source`: that says where the sound comes back,
+  -- | this says where the performance does. Separate fields because they are
+  -- | separate cables — the audio arrives on an interface and the notes on a
+  -- | MIDI port, and on this rig they are not the same device.
+  -- |
+  -- | **Empty means none, not all.** Listening to every input is what the first
+  -- | version did, and on a machine whose IAC buses carry the rig's own traffic
+  -- | that collected 204 notes from a sequencer into one four-second chord.
+  -- | A port that records the wrong performance is worse than one that records
+  -- | nothing, because nothing is visible.
+  , notesFrom :: String
   -- | **How long after setting the parameters before the trigger.**
   -- |
   -- | The one number here that can silently ruin a run: too short and the hit
@@ -420,6 +433,7 @@ emptyPlan =
   , guardMs: 120
   , leadMs: 30
   , source: ""
+  , notesFrom: ""
   , paced: []
   , pacedFor: ""
   , usePaced: false
@@ -483,6 +497,8 @@ data Msg
   | SetPort String
   -- | Which input the rig is recorded from, by name. See `Plan.source`.
   | SetSource String
+  -- | Which MIDI input the notes are taken from. See `Plan.notesFrom`.
+  | SetNotesFrom String
   | SetGate String
   | SetEs5 String
   | SetGateLevel String
@@ -590,6 +606,7 @@ applyMsg = case _ of
       p
   SetPort v -> \p -> p { port = v }
   SetSource v -> \p -> p { source = v }
+  SetNotesFrom v -> \p -> p { notesFrom = v }
   SetGate v -> onTrig \t -> t { gate = busOf v }
   SetEs5 v -> onTrig \t -> t { es5 = slotOf v }
   SetGateLevel v -> onTrig \t -> t { gateLevel = level t.gateLevel v }
@@ -766,6 +783,8 @@ type Plain =
   , port :: String
   -- | The input, by name. See `Plan.source`.
   , source :: String
+  -- | The MIDI input the notes came from. See `Plan.notesFrom`.
+  , notesFrom :: String
   , settleMs :: Int
   , spacingMs :: Int
   , guardMs :: Int
@@ -827,6 +846,7 @@ flatten p =
   , holdMs: p.trigger.ms
   , port: p.port
   , source: p.source
+  , notesFrom: p.notesFrom
   , settleMs: p.settleMs
   , spacingMs: p.spacingMs
   , guardMs: p.guardMs
@@ -936,6 +956,7 @@ unflatten' p =
         }
     , port: p.port
     , source: p.source
+  , notesFrom: p.notesFrom
     , settleMs: clamp 0 5000 p.settleMs
     , spacingMs: clamp 50 20000 p.spacingMs
     , guardMs: clamp 0 2000 p.guardMs

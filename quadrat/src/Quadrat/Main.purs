@@ -310,7 +310,7 @@ type State =
   -- |
   -- | Stamped in `Rig.nowMs`'s clock and converted to take-relative seconds
   -- | only at the end; see `notesFor`.
-  , heard :: Array { note :: Int, at :: Number }
+  , heard :: Array { note :: Int, at :: Number, from :: String }
   -- | The MIDI inputs the browser can see, so the page can say that it is
   -- | listening to nothing BEFORE a take rather than after one.
   , midiIn :: Array String
@@ -989,7 +989,7 @@ handleAction = case _ of
                 -- pitch is in `means` because the run asked for it, and empty
                 -- when nothing was listening — which the page says out loud
                 -- before a take rather than after one.
-                , notes: maybe [] (\t0 -> notesIn st.heard t0 r) (takeZero st)
+                , notes: maybe [] (\t0 -> notesIn (believed st) t0 r) (takeZero st)
                 })
             st.regions)
     if Array.null keptRegions
@@ -1892,6 +1892,21 @@ occupantOf st =
       (\r -> r.bank == st.bank && r.kit == kitName && r.voice == st.voice)
       v.rows
 
+-- | **The notes this take is actually listening to.**
+-- |
+-- | One port, named in the plan, and nothing from any other. The first version
+-- | collected every input on the machine, which on this rig means the IAC
+-- | buses the sequencers talk over: a four-second chord came back holding 204
+-- | notes, none of which anybody played.
+-- |
+-- | Empty when no port has been chosen, which is deliberate — a set that
+-- | records the wrong performance is worse than one that records none, because
+-- | none is visible and the page says so before you play.
+believed :: State -> Array { note :: Int, at :: Number, from :: String }
+believed st
+  | st.sweep.notesFrom == "" = []
+  | otherwise = Array.filter (\h -> h.from == st.sweep.notesFrom) st.heard
+
 -- | **The notes struck inside each region**, in register and in order.
 -- |
 -- | ## Aligning two clocks without either one telling you where it started
@@ -1921,8 +1936,8 @@ occupantOf st =
 -- | caused. 120 ms is far larger than any interface latency and far smaller
 -- | than the silences these takes are divided on.
 notesIn
-  :: forall r
-   . Array { note :: Int, at :: Number }
+  :: forall r s
+   . Array { note :: Int, at :: Number | s }
   -> Number
   -> { start :: Number, end :: Number | r }
   -> Array Int
@@ -1938,7 +1953,7 @@ notesIn heard t0 r =
 -- | when there is not enough to anchor on. See `notesIn`.
 takeZero :: State -> Maybe Number
 takeZero st = do
-  first <- Array.head st.heard
+  first <- Array.head (believed st)
   r0 <- Array.head st.regions
   pure (first.at - r0.start * 1000.0)
 
@@ -2551,6 +2566,14 @@ render st =
   -- |
   -- | Silent for a swept run, which asks for its own pitches and does not need
   -- | to be told.
+  -- | Every port, and how much each has said. Traffic on a port nobody played
+  -- | is the whole diagnosis — a sequencer on an IAC bus looks exactly like a
+  -- | performance until you see it counted beside the one you meant.
+  portTally =
+    map (\nm -> { name: nm
+                , n: Array.length (Array.filter (\h -> h.from == nm) st.heard) })
+        st.midiIn
+
   heardSays
     | st.fill /= Played = HH.text ""
     | Array.null st.midiIn =
@@ -2559,13 +2582,37 @@ render st =
                     \recorded about what you play. The audio is unaffected — \
                     \but a chord set without its notes cannot be given them \
                     \afterwards." ]
+    | st.sweep.notesFrom == "" =
+        HH.p [ HP.class_ (HH.ClassName "q-clash is-soft") ]
+          [ HH.text ("nothing is being kept about what you play: choose which \
+                     \MIDI input carries it. " <> tallySays
+                     <> " Listening to all of them is not the answer — the \
+                        \rig's own buses are on this machine too.")
+          , HH.span_ [ HH.text " " ]
+          , notesFromPick
+          ]
     | otherwise =
         HH.p [ HP.class_ (HH.ClassName "q-note is-quiet") ]
-          [ HH.text (case Array.length st.heard of
-                       0 -> "listening on " <> joinWith ", " st.midiIn
-                              <> " — nothing played yet."
-                       1 -> "1 note heard on " <> joinWith ", " st.midiIn
-                       n -> show n <> " notes heard on " <> joinWith ", " st.midiIn) ]
+          [ HH.text (case Array.length (believed st) of
+                       0 -> "listening to "
+                       1 -> "1 note from "
+                       n -> show n <> " notes from ")
+          , notesFromPick
+          , HH.text (case Array.length (believed st) of
+                       0 -> " — nothing played yet. " <> tallySays
+                       _ -> ". " <> tallySays)
+          ]
+
+  -- | What each port has said, named. The point is the comparison.
+  tallySays = case Array.filter (\t -> t.n > 0) portTally of
+    [] -> ""
+    ts -> "Heard so far: "
+            <> joinWith ", " (map (\t -> t.name <> " " <> show t.n) ts) <> "."
+
+  notesFromPick =
+    sel "q-slot is-small" st.sweep.notesFrom (SweepMsg <<< Sweep.SetNotesFrom)
+      (Array.cons { v: "", t: "\x2014 choose an input \x2014" }
+        (map (\nm -> { v: nm, t: nm }) st.midiIn))
 
   -- | **Two things pointed at one jack, said in the sentence.**
   -- |
@@ -3573,7 +3620,7 @@ render st =
     -- some other session's chords and has no business describing this one.
     Just o -> fromMaybe [] (Array.index o.notes i)
     Nothing -> case takeZero st, Array.index st.regions i of
-      Just t0, Just rg -> notesIn st.heard t0 rg
+      Just t0, Just rg -> notesIn (believed st) t0 rg
       _, _ -> []
 
   -- | A voicing as you would say it: low to high, in register.

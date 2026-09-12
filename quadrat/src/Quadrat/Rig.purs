@@ -80,7 +80,8 @@ foreign import inPorts :: Effect (Array String)
 
 -- | Everything heard since the last `forgetHeard`, stamped in the same clock
 -- | as `nowMs`.
-foreign import heardNotes :: Effect (Array { note :: Int, at :: Number })
+foreign import heardNotes
+  :: Effect (Array { note :: Int, at :: Number, from :: String })
 
 -- | Dropped when a capture opens, so a soundcheck cannot end up in a take.
 foreign import forgetHeard :: Effect Unit
