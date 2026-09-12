@@ -211,9 +211,21 @@ spacingAt p i =
 -- | A sum rather than a multiple, because with measured pacing the cells are
 -- | not the same length. `startsAt p 0` is 0 and `startsAt p n` is how long the
 -- | whole run takes, which is what the estimate in the sentence reads.
+-- | **`Array.range` counts DOWN when the end is below the start**, so
+-- | `range 0 (-1)` is `[0, -1]` and not the empty array this was written for.
+-- |
+-- | `startsAt p 0` therefore came out as `spacingAt 0 + spacingAt (-1)` — the
+-- | first cell's spacing plus, because a negative index misses, the flat
+-- | fallback. Measured 2026-09-12: the first gate of every run was scheduled
+-- | about two and a half seconds later than the grid it belonged to, while the
+-- | wait after it was computed from `startsAt 1`, which is a smaller number.
+-- | So cell 1 and cell 2 fired together, every single run, and cell 1 came
+-- | back clipped to a tenth of a second. It survived a whole day of looking at
+-- | the other end of the problem because it looks exactly like a late start.
 startsAt :: Plan -> Int -> Int
-startsAt p i =
-  Array.foldl (\acc k -> acc + spacingAt p k) 0 (Array.range 0 (i - 1))
+startsAt p i
+  | i <= 0 = 0
+  | otherwise = Array.foldl (\acc k -> acc + spacingAt p k) 0 (Array.range 0 (i - 1))
 
 -- | **One place, claimed twice.**
 -- |

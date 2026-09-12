@@ -1060,7 +1060,9 @@ handleAction = case _ of
   ToggleKeep i -> H.modify_ \s ->
     s { keep = if Set.member i s.keep then Set.delete i s.keep else Set.insert i s.keep }
   KeepAll on -> H.modify_ \s ->
-    s { keep = if on then Set.fromFoldable (Array.range 0 (Array.length s.regions - 1)) else Set.empty }
+    s { keep = if on && Array.length s.regions > 0
+                 then Set.fromFoldable (Array.range 0 (Array.length s.regions - 1))
+                 else Set.empty }
   ArmOn src -> captureOn true src
   -- | **The sweep modal**, and asking the browser for MIDI when it opens.
   -- |
@@ -1471,6 +1473,16 @@ runSweep = do
                                 , pacedFor = Sweep.fingerprint x.sweep
                                 , usePaced = true }
               }
+            -- | **Write it down.** Andrew, 2026-09-12: *"measures didn't
+            -- | appear to have survived reload"*. They did not: the plan is
+            -- | persisted by `SweepMsg` and only by `SweepMsg`, so a
+            -- | measurement made here lived in memory until some unrelated
+            -- | edit happened to save the plan around it. A measurement is
+            -- | the most expensive thing on the page to reproduce — it costs
+            -- | a whole run — so it is the last thing that should depend on
+            -- | an accident for its survival.
+            stp <- H.get
+            liftEffect (Sweep.remember stp.sweep)
 
 -- | **Stand the instrument at one cell of the transect**, without striking it.
 -- |
@@ -1575,10 +1587,15 @@ analyse write = do
         Right d
           | not d.ok -> H.modify_ (note d.output <<< _ { busy = false })
           | otherwise -> do
+              -- `Array.range 0 (-1)` is `[0, -1]`, not empty — so a take
+              -- that divided into nothing used to come back with two ghost
+              -- keeps, and the page would offer to save no samples under the
+              -- name of two. Same trap as `Sweep.startsAt`.
               let n = Array.length d.regions
               H.modify_ _
                 { regions = d.regions
-                , keep = Set.fromFoldable (Array.range 0 (n - 1))
+                , keep = if n <= 0 then Set.empty
+                         else Set.fromFoldable (Array.range 0 (n - 1))
                 , busy = false
                 , showing = takeName
                 }
