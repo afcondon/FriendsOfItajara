@@ -657,11 +657,25 @@ body {
 .q-spark.is-quiet { color: var(--rule); }
 
 /* Record and the four doors are peers: all of them are things you do to
-   this take, and a row each implied a separation that is not there. */
-.q-actbar { display: flex; align-items: stretch; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
-.q-actbar .q-go { margin: 0; flex: 0 0 auto; align-items: center; }
-.q-doors { display: flex; flex-wrap: wrap; gap: 10px; flex: 1 1 auto; }
-.q-doors .q-door { flex: 1 1 150px; }
+   this take, and a row each implied a separation that is not there.
+
+   **One height, and no stretching.** Only the doors were growing to the
+   row's height and to the page's width, so Record came out shorter than its
+   own peers and three buttons spanned a metre of screen. The rule that was
+   on .q-go — which is only one item in the bar — moves to the bar, so it
+   spans what it is dividing. */
+.q-actbar {
+  display: flex; align-items: stretch; gap: 10px; flex-wrap: wrap;
+  border-top: 1px solid var(--rule); padding-top: 14px; margin: 16px 0 8px;
+}
+.q-actbar .q-go {
+  margin: 0; padding: 0; border-top: 0; flex: 0 0 auto; align-items: stretch;
+}
+.q-actbar .q-go .q-state { display: flex; align-items: center; flex: 0 1 auto; }
+/* Vertical padding would fight the stretch; the words centre themselves. */
+.q-actbar .q-big { padding: 0 26px; display: inline-flex; align-items: center; }
+.q-doors { display: flex; flex-wrap: wrap; gap: 10px; flex: 0 1 auto; }
+.q-doors .q-door { flex: 0 1 auto; min-width: 136px; max-width: 260px; justify-content: center; }
 
 /* The level sits inside the sentence, next to the input it measures —
    quiet enough to be part of a line of prose. */
@@ -727,6 +741,9 @@ body {
    itself, by velocity or at random, where a slice is a position only you can
    send it to. X and Y would say neither thing. */
 .q-swaxisbar { display: inline-flex; margin-left: 8px; vertical-align: middle; }
+/* One axis is still worth saying: hidden, the absence read as a missing
+   control rather than as "this destination is a line". */
+.q-swaxisbar.is-lone .q-swaxisbtn { cursor: default; }
 .q-swaxisbtn {
   font: inherit; font-size: 10px; letter-spacing: .04em; text-transform: uppercase;
   padding: 2px 8px; border: 1px solid var(--rule); background: #fff;
@@ -737,26 +754,24 @@ body {
 .q-swaxisbtn:last-child  { border-radius: 0 3px 3px 0; }
 .q-swaxisbtn.is-on { background: #1f2d3d; border-color: #1f2d3d; color: #fff; }
 
-/* The trigger and the pitch, as cards beside the parameters they belong with
-   in meaning. Ruled apart from them, because the trigger is not a parameter:
-   every parameter answers "what value at this cell", the trigger answers "and
-   now hit it". Same size so the row reads evenly; tinted so there is no
-   mistaking them for something with a curve. */
-.q-fixedcards {
-  display: flex; gap: 10px; margin: 0 0 14px;
-  padding-bottom: 14px; border-bottom: 1px solid var(--rule);
-}
-.q-fixedcard {
-  flex: 1 1 0; min-width: 0; text-align: left; cursor: pointer;
-  font: inherit; padding: 9px 12px;
-  background: #f4f1ea; border: 1px solid #ded7c6; border-radius: 3px;
-}
-.q-fixedcard:hover { border-color: #b9ad93; }
-.q-fixedcard.is-moot { background: var(--bg); color: var(--muted); opacity: .6; }
-.q-fixedname { display: block; font-weight: 600; font-size: 13px; }
-.q-fixedsays {
-  display: block; margin-top: 2px; font-size: 11px; color: var(--muted);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+/* The trigger and the pitch, as parameter cards in the same line as the
+   parameters — because in a modular output sense they are identical: a hole
+   in a module, chosen once. Tinted, so there is no mistaking which two are
+   always there; the face is empty only until a gate's shape and a pitch run's
+   notes are drawn into it. */
+.q-pcard.is-fixed .q-curvecard { background: #f7f4ed; border-color: #ded7c6; }
+.q-pcard.is-fixed .q-curveface:hover { background: #f1ece0; }
+.q-pcard.is-fixed.is-moot .q-curvecard { background: var(--bg); border-color: var(--rule); }
+.q-pcard.is-fixed.is-moot .q-swname,
+.q-pcard.is-fixed.is-moot .q-swsays { color: var(--muted); }
+/* The height a thumbnail occupies, so the cards line up whether or not there
+   is anything to draw in them yet. */
+.q-fixedface { height: 52px; }
+/* A name that is what it is: Trigger and Pitch cannot be called anything
+   else, so they are set rather than typed — same size and baseline as the
+   field beside them, without the box that invites an edit. */
+.q-swname.is-static {
+  padding: 5px 0; font-size: 13px; font-weight: 600; flex: 1;
 }
 
 /* Divide, in the slot that becomes the Division door once it has run. */

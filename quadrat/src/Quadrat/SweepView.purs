@@ -291,39 +291,32 @@ part h which =
     HH.div [ cls (if h.rigFires then "" else "is-moot") ]
       [ sectionHead "Parameter sweep"
           "optional — one curve for every knob you want moved across the take"
-      -- | **What strikes it, and what pitch it is struck at — as cards.**
+      -- | **What strikes it, and what pitch it is struck at — as parameter
+      -- | cards, in the same line as the rest.**
       -- |
       -- | They were two doors in the control row, which put them a page away
-      -- | from the parameters they sit beside in meaning. Here they read in
-      -- | one sweep with everything else that is set per run.
+      -- | from the parameters they sit beside in meaning; then a tinted row of
+      -- | their own, which still said they were a different kind of thing.
       -- |
-      -- | Ruled APART from the parameters rather than mixed in, because the
-      -- | trigger is not one: every parameter answers "what value at this
-      -- | cell", and the trigger answers "and now hit it". It has no curve, no
-      -- | value per cell and no axis — so it carries no axis control at all,
-      -- | rather than a disabled one. A greyed control invites you to wonder
-      -- | why; an absent one says this is not that kind of thing.
-      , HH.div [ cls "q-fixedcards" ]
-          [ HH.button
-              [ cls ("q-fixedcard" <> if p.trigger.gate == Nothing
-                                        && p.trigger.es5 == Nothing
-                                        && p.trigger.note == Nothing
-                                      then " is-moot" else "")
-              , HE.onClick \_ -> h.openTrigger
-              ]
-              [ HH.span [ cls "q-fixedname" ] [ HH.text "Trigger" ]
-              , HH.span [ cls "q-fixedsays" ] [ HH.text (triggerLine p) ]
-              ]
-          , HH.button
-              [ cls ("q-fixedcard" <> if Array.any (\q -> isJust q.pitch) p.params
-                                      then "" else " is-moot")
-              , HE.onClick \_ -> h.openPitch
-              ]
-              [ HH.span [ cls "q-fixedname" ] [ HH.text "Pitch" ]
-              , HH.span [ cls "q-fixedsays" ] [ HH.text (pitchLine p) ]
-              ]
-          ]
-      , HH.div [ cls "q-curves" ] (rowsWhere false)
+      -- | Andrew, 2026-09-12: *"they are completely identical in a modular
+      -- | output sense"*. A gate on ES-9 jack 8 and a morph CV on jack 1 are
+      -- | one hole each in one module, chosen once, and the card that says
+      -- | where a thing goes should be the same card whatever the thing is.
+      -- | So: same card, same size, same place — tinted only so you cannot
+      -- | mistake which two are always there, and with an empty face where a
+      -- | parameter carries its curve, because a trigger has no curve to draw
+      -- | YET. A gate's own shape and the pitch run's notes both belong in
+      -- | that space and will go there.
+      , HH.div [ cls "q-curves" ]
+          ( [ fixedCard "Trigger" (triggerLine p)
+                ( p.trigger.gate == Nothing
+                    && p.trigger.es5 == Nothing
+                    && p.trigger.note == Nothing )
+                h.openTrigger
+            , fixedCard "Pitch" (pitchLine p)
+                (not (Array.any (\q -> isJust q.pitch) p.params))
+                h.openPitch
+            ] <> rowsWhere false )
       , HH.div [ cls "q-swadd" ]
           [ HH.button
               [ cls "q-plain"
@@ -384,7 +377,6 @@ part h which =
                 , HE.onClick \_ -> h.msg (DropParam i) ]
                 [ HH.text "×" ]
             ]
-        , if isJust q.pitch then HH.text "" else pitchPick i q
         , HH.div [ cls "q-swsays" ]
             [ HH.text (routing q)
             , axisBar i q
@@ -474,6 +466,36 @@ part h which =
     ]
       <> (if h.open == Just i then [ sliders i q ] else [])
 
+  -- | **A card for the two that are always there.**
+  -- |
+  -- | Built out of the same pieces as `plainRow` — face, foot, name, routing
+  -- | line — so that "consistent with the other parameters" is a fact about
+  -- | the markup rather than a resemblance to be maintained by hand. Two
+  -- | things differ, and both are real: the name is a label rather than a
+  -- | field, because Trigger and Pitch are what they are; and there is no
+  -- | axis bar, because neither has a value per cell to place on an axis.
+  fixedCard name says moot act =
+    HH.div [ cls ("q-pcard is-fixed" <> if moot then " is-moot" else "") ]
+      [ HH.div [ cls "q-curvecard" ]
+          [ HH.button
+              [ cls "q-curveface"
+              , HP.title ("open the " <> name <> " settings")
+              , HE.onClick \_ -> act
+              ]
+              [ HH.div [ cls "q-fixedface" ] [] ]
+          , HH.div [ cls "q-curvefoot" ]
+              [ HH.span [ cls "q-curvelabel" ]
+                  [ HH.text (if moot then "not in use" else "in use") ]
+              , mini "open" ("change the " <> name) act
+              ]
+          ]
+      , HH.div [ cls "q-curveparam" ]
+          [ HH.div [ cls "q-swtop" ]
+              [ HH.span [ cls "q-swname is-static" ] [ HH.text name ] ]
+          , HH.div [ cls "q-swsays" ] [ HH.text says ]
+          ]
+      ]
+
   -- | **Which axis this parameter moves along**, on the FACE of the card.
   -- |
   -- | It was a dropdown inside the expanded routing row, which is two doors
@@ -488,19 +510,28 @@ part h which =
   -- | decay on layers and pitch on slices is therefore a different instrument
   -- | from the other way round, and the axis names are the only thing on the
   -- | page that says so. `picked` carries the rest, on hover.
-  axisBar i q
-    | Array.length axs < 2 = HH.text ""
-    | otherwise =
-        HH.span [ cls "q-swaxisbar" ]
-          (Array.mapWithIndex
-            (\a ax -> HH.button
-               [ cls ("q-swaxisbtn" <> if a == q.axis then " is-on" else "")
-               , HP.title (ax.name <> " — along this axis the choice is made by "
-                             <> ax.picked)
-               , HE.onClick \_ -> h.msg (SetAxis i a)
-               ]
-               [ HH.text ax.name ])
-            axs)
+  -- | **Shown even when there is only one axis**, where it is a single chip
+  -- | that cannot be turned off. Hidden, its absence was read as a missing
+  -- | feature rather than as "this destination is a line" — which is the one
+  -- | thing the control exists to say. One chip says it in the place the
+  -- | second chip will appear the moment the encoding gains an axis.
+  axisBar i q =
+    HH.span [ cls ("q-swaxisbar" <> if Array.length axs < 2 then " is-lone" else "") ]
+      (Array.mapWithIndex
+        (\a ax -> HH.button
+           [ cls ("q-swaxisbtn" <> if a == q.axis then " is-on" else "")
+           , HP.disabled (Array.length axs < 2)
+           , HP.title
+               (if Array.length axs < 2
+                  then Encoding.label p.encoding
+                         <> " has one axis, so every parameter moves along it. \
+                            \Choose a grid encoding above for a matrix."
+                  else ax.name <> " — along this axis the choice is made by "
+                         <> ax.picked)
+           , HE.onClick \_ -> h.msg (SetAxis i a)
+           ]
+           [ HH.text ax.name ])
+        axs)
 
   -- | **The desk.** Full width, one slider per position on this parameter's
   -- | axis, and touching any of them turns the curve into a drawing.
@@ -574,7 +605,14 @@ part h which =
           , tiny "at 1" 3 (show q.ccHi) (SetCcHi i) "controller value at 1"
           , tiny "ch" 2 (show q.channel) (SetChannel i) "MIDI channel"
           ]
-      , pitchPick i q
+      -- | **Only for a parameter that already IS a pitch.**
+      -- |
+      -- | Choosing an instrument used to be offered inside every curve's
+      -- | drawer, which made "turn this knob into the pitch axis" a thing you
+      -- | could do in eight places. Pitch has its own card now, and that card
+      -- | is the one way in; what survives here is changing the table of a
+      -- | parameter that is already one, or taking the pitch off it.
+      , if isJust q.pitch then pitchPick i q else HH.text ""
       ]
 
   -- | **Pitch, when this parameter is one.**
