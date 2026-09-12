@@ -23,6 +23,10 @@ module Quadrat.Rig
   ( Sent
   , openMidi
   , ports
+  , listenMidi
+  , inPorts
+  , heardNotes
+  , forgetHeard
   , sendCc
   , sendNote
   , setCv
@@ -56,6 +60,30 @@ foreign import openMidi :: Effect (Promise (Array String))
 -- | is open, so the list fills the moment permission is granted rather than
 -- | staying empty until the modal is closed and opened again.
 foreign import ports :: Effect (Array String)
+
+-- | **What was played, for a take nobody swept.**
+-- |
+-- | A swept run knows its pitches because it asked for them. A hand-played take
+-- | knows nothing — the chord that made the audio is not in the audio — so the
+-- | page listens to MIDI IN across the take and the division hands each region
+-- | the notes struck inside it.
+-- |
+-- | Absolute note numbers in register, note-ons only. The voicing is the
+-- | material for the chord sets this exists to record; a pitch-class set would
+-- | throw the voicing away, and a note-off would only restate a decay the audio
+-- | already carries.
+foreign import listenMidi :: Effect Unit
+
+-- | The MIDI inputs the browser can see. Beside `ports`, which is the outputs:
+-- | where instructions go out, and where a performance comes back.
+foreign import inPorts :: Effect (Array String)
+
+-- | Everything heard since the last `forgetHeard`, stamped in the same clock
+-- | as `nowMs`.
+foreign import heardNotes :: Effect (Array { note :: Int, at :: Number })
+
+-- | Dropped when a capture opens, so a soundcheck cannot end up in a take.
+foreign import forgetHeard :: Effect Unit
 
 -- | `port` is matched as a SUBSTRING of an output's name, the way the rest of
 -- | the rig matches ports, so "IAC" finds "IAC Driver Tidal".

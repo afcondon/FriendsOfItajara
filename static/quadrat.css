@@ -740,6 +740,10 @@ body {
   font-variant-numeric: tabular-nums;
 }
 .q-note { margin: 0; font-size: 12px; line-height: 1.5; color: var(--muted); max-width: 46em; }
+/* Under the statement, where the soft clashes live. Quieter than those on
+   purpose: "12 notes heard" is a confirmation, and a confirmation that shouts
+   is indistinguishable from a warning. */
+.q-note.is-quiet { margin-top: 10px; font-variant-numeric: tabular-nums; }
 
 /* The input is chosen in the sentence; only the measurement stays by the
    Run button, because a meter moves and a name does not. */

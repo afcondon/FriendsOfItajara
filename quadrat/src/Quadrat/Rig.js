@@ -132,3 +132,57 @@ export const dumpMarks = () => {
 // measured so nothing was WRONG — but the number you typed was not the number
 // you got, and the estimate beside it was a 4% lie.
 export const nowMs = () => performance.now();
+
+// ─────────────────────────────────────────────────────────── what was played
+//
+// **The notes, for a take nobody swept.**
+//
+// A swept run knows the pitch it asked for, because it asked. A take played by
+// hand knows nothing: the audio arrives on an interface and the chord that
+// made it is not in it. So the page listens to MIDI IN for the length of the
+// take, and the division afterwards hands each region the notes struck inside
+// it — which for a chord set IS the material. Andrew, 2026-09-12: *"i don't
+// really care about the names of chords, it's the voicing / pitch-set that
+// matters to me because i'm usually looking for very evocative complex and
+// interesting chords for somewhat static purposes (pads, ambient)."*
+//
+// So absolute note numbers, in register, exactly as struck. A pitch-class set
+// would throw away the voicing, and the voicing is the thing.
+//
+// **Note-ons only, and no note-offs.** A pad let ring to silence is defined by
+// what was struck together; its length is the decay, which the audio already
+// carries and measures better than a key release would. Velocity is dropped
+// for the same reason — it is a fact about the performance, not about the
+// chord, and the sample records the performance directly.
+let heard = [];
+const wired = new Set();
+
+// Attached lazily and repeatedly: `access.inputs` is live, so a controller
+// switched on after the page loaded appears here on a later pass. Cheap enough
+// to call from the poll — it is a set lookup per port.
+export const listenMidi = () => {
+  if (!access) return;
+  for (const i of access.inputs.values()) {
+    if (wired.has(i.id)) continue;
+    wired.add(i.id);
+    i.onmidimessage = (e) => {
+      const d = e.data;
+      if (!d || d.length < 3) return;
+      // Note-on, and a note-on with velocity 0 is a note-off by convention.
+      if ((d[0] & 0xf0) !== 0x90 || d[2] === 0) return;
+      heard.push({ note: d[1], at: e.timeStamp });
+      // A ceiling, because this is held for the life of the page and a page
+      // left open all day should not grow without bound.
+      if (heard.length > 8192) heard.shift();
+    };
+  }
+};
+
+export const inPorts = () =>
+  access ? Array.from(access.inputs.values()).map((i) => i.name) : [];
+
+export const heardNotes = () => heard.slice();
+
+export const forgetHeard = () => {
+  heard = [];
+};

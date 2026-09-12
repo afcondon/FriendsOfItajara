@@ -153,6 +153,19 @@ type Meant =
   -- because deriving it needs the calibration table and a stored set has to be
   -- readable without one.
   , means :: Array { name :: String, at :: Number, level :: Number, cc :: Int, note :: Int }
+  -- | **The notes struck inside this region**, absolute and in register.
+  -- |
+  -- | Beside `means` rather than inside it because they answer different
+  -- | questions: `means` is what the run ASKED the instrument for, and this is
+  -- | what somebody PLAYED. A swept set has the first and not the second; a
+  -- | chord set played by hand has the second and not the first.
+  -- |
+  -- | In register, and note numbers rather than pitch classes, because the
+  -- | voicing is the point — these sets exist to keep complex chords found by
+  -- | hand, and a pitch-class set throws away the spacing that made one worth
+  -- | keeping. Naming them is a separate question with a separate answer
+  -- | (`Harmonia.Recognise`), and it is not this field's job.
+  , notes :: Array Int
   }
 
 -- | Cut the kept regions into a named set and put that set on a voice — and
@@ -268,7 +281,11 @@ type StoredSet =
   { ok :: Boolean, output :: String
   , take :: String
   , regions :: Array Region
-  , schedule :: Array Number }
+  , schedule :: Array Number
+  -- | The notes struck inside each region, one array per sample and in the
+  -- | same order. See `Meant.notes` — this is the way back in, so a chord set
+  -- | reopened next month still shows its voicings.
+  , notes :: Array (Array Int) }
 
 foreign import loadSet :: String -> Effect (Promise StoredSet)
 

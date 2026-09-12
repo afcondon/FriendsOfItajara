@@ -112,7 +112,7 @@ export const loadSet = (name) => () =>
   fetch("/api/sets/" + encodeURIComponent(name))
     .then(j)
     .then((d) => {
-      if (!d.ok || !d.set) return { ok: false, output: String(d.output ?? "no such set"), take: "", regions: [], schedule: [] };
+      if (!d.ok || !d.set) return { ok: false, output: String(d.output ?? "no such set"), take: "", regions: [], schedule: [], notes: [] };
       const s = d.set;
       const regions = (s.samples ?? []).map((x) => ({
         start: Number(x.start ?? 0), end: Number(x.end ?? 0),
@@ -125,6 +125,11 @@ export const loadSet = (name) => () =>
         take: String(s.take ?? name),
         regions,
         schedule: (s.schedule ?? []).map(Number),
+        // What was played into each region, for a set cut from a take somebody
+        // performed. Empty per sample on a swept set, and empty throughout on
+        // one cut before this was recorded — both of which are the same thing
+        // to draw, which is nothing.
+        notes: (s.samples ?? []).map((x) => (x.notes ?? []).map(Number)),
       };
     });
 

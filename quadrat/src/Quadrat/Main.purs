@@ -145,7 +145,13 @@ type State =
   -- | recordings. When something is open the page draws IT: its envelope came
   -- | off the file, its length is this, and the daemon's capture is nobody's
   -- | business. Cleared by anything that starts a new one.
-  , opened :: Maybe { set :: String, take :: String, secs :: Number }
+  , opened :: Maybe
+      { set :: String, take :: String, secs :: Number
+      -- | What was played into each of its regions, straight from `set.json`.
+      -- | A stored set's notes are a fact about it, not about this page's MIDI
+      -- | buffer, so an opened set reads them from disk and never from `heard`.
+      , notes :: Array (Array Int)
+      }
   -- | **Whether the take on the page came from a measuring run.**
   -- |
   -- | `dry` is true only WHILE one is going; this outlives it, because the
@@ -294,6 +300,20 @@ type State =
   -- | cable knows it. So the wire name stays the identity and this sits on
   -- | top, chosen once and read everywhere. Nothing routes on it.
   , srcNames :: Array Http.SourceName
+  -- | **What was played into this take**, for the takes nobody sweeps.
+  -- |
+  -- | A swept run knows its pitches because it asked for them; a hand-played
+  -- | one knows nothing, because the chord that made the audio is not in the
+  -- | audio. Held in the page rather than fetched at division time because it
+  -- | only exists while it is happening — record the chords first and wire this
+  -- | afterwards, and those particular sets can never have their notes.
+  -- |
+  -- | Stamped in `Rig.nowMs`'s clock and converted to take-relative seconds
+  -- | only at the end; see `notesFor`.
+  , heard :: Array { note :: Int, at :: Number }
+  -- | The MIDI inputs the browser can see, so the page can say that it is
+  -- | listening to nothing BEFORE a take rather than after one.
+  , midiIn :: Array String
   }
 
 -- | The two panels that became modals.
@@ -399,7 +419,8 @@ component = H.mkComponent
       , schedule: [], sets: [], tables: [], tablesErr: "", overran: false
       , page: Bench, fill: Swept, pivot: Nothing
       , levels: [], modal: Nothing, kept: false, confirmKeep: false
-      , picked: Set.empty, confirmDrop: false, srcNames: [] }
+      , picked: Set.empty, confirmDrop: false, srcNames: []
+      , heard: [], midiIn: [] }
   , render
   , eval: H.mkEval H.defaultEval { handleAction = handleAction, initialize = Just Init }
   }
@@ -624,6 +645,16 @@ handleAction = case _ of
       Right r
         | r.ok -> _ { tables = r.tables, tablesErr = "" }
         | otherwise -> _ { tables = [], tablesErr = "calibrations unavailable — is `deepstar serve` up on :3027?" }
+    -- **Ask for MIDI at load, and never wait for the answer.**
+    --
+    -- It used to be asked for when the Trigger modal opened, which is right for
+    -- the sending half — a sweep cannot afford to discover the prompt mid-run.
+    -- The listening half needs it earlier still: a hand-played take has to be
+    -- heard while it is played, and by the time anyone opens a modal the chords
+    -- are gone. `openMidi` is written never to block (the prompt lives in
+    -- browser chrome, above the window, and awaiting it stops the page dead),
+    -- so this costs nothing if the answer is slow or never comes.
+    void $ H.liftAff (attempt (toAffE Rig.openMidi))
     -- The labels, once. An empty list is the honest answer both when nothing
     -- has been named and when the server is not answering: neither is a fault
     -- here, because every source falls back to its wire name.
@@ -687,6 +718,19 @@ handleAction = case _ of
         H.modify_ (note ("the capture filled at " <> fmt c.capSecs
                      <> " s and stopped — raise --capture-secs on the daemon")
                      <<< _ { overran = true })
+    -- **Listening, whether or not anything is being recorded.**
+    --
+    -- `access.inputs` is live, so a controller switched on after the page
+    -- loaded only appears on a later pass; and the notes have to be arriving
+    -- before the take opens, because a take that has already been played
+    -- cannot be asked what was played into it. Cheap — a set lookup per port.
+    liftEffect Rig.listenMidi
+    do
+      hs <- liftEffect Rig.heardNotes
+      ins <- liftEffect Rig.inPorts
+      st4 <- H.get
+      when (Array.length hs /= Array.length st4.heard) $ H.modify_ _ { heard = hs }
+      when (ins /= st4.midiIn) $ H.modify_ _ { midiIn = ins }
     -- The MIDI ports, while the sweep is open. Read rather than asked for: the
     -- asking is a permission prompt that may sit unanswered for as long as it
     -- likes, and this is how its answer arrives without anything waiting on it.
@@ -810,7 +854,8 @@ handleAction = case _ of
                       , busy = false
                       , page = Bench
                       , pivot = Nothing
-                      , opened = Just { set: nm, take: v.take, secs: p.secs }
+                      , opened = Just { set: nm, take: v.take, secs: p.secs
+                                     , notes: v.notes }
                       , peaks = Just
                           { loop: 0, frames: p.frames, from: 0, to: p.frames
                           , buckets: p.buckets, winIn: 0, winOut: 0, rot: 0
@@ -939,6 +984,12 @@ handleAction = case _ of
                 , decay: maybe 0.0 _.decay (Array.index settles i)
                 , floor: maybe 0.0 _.floor (Array.index settles i)
                 , means: maybe [] _.means (Array.index runSteps i)
+                -- **What was played into it**, which for a hand-played chord
+                -- set is the material itself. Empty on a swept run, where the
+                -- pitch is in `means` because the run asked for it, and empty
+                -- when nothing was listening — which the page says out loud
+                -- before a take rather than after one.
+                , notes: maybe [] (\t0 -> notesIn st.heard t0 r) (takeZero st)
                 })
             st.regions)
     if Array.null keptRegions
@@ -1416,6 +1467,12 @@ captureOn trimHead src = do
   -- go through, and a stale "kept" badge on a fresh recording is exactly the
   -- confusion the flag exists to remove.
   H.modify_ _ { kept = false, confirmKeep = false }
+  -- **A soundcheck is not part of the take.** Notes struck before the capture
+  -- opened would be aligned against a take they are not in, and the alignment
+  -- is anchored on the FIRST note heard — so one stray note before recording
+  -- would shift every chord in the set onto the wrong sample.
+  liftEffect Rig.forgetHeard
+  H.modify_ _ { heard = [] }
   -- **A new capture invalidates the kept schedule.** Restored on reload, a
   -- schedule belonging to some earlier run would divide THIS take into bands
   -- that look deliberate and describe nothing. Cleared here and written again
@@ -1834,6 +1891,56 @@ occupantOf st =
     Array.find
       (\r -> r.bank == st.bank && r.kit == kitName && r.voice == st.voice)
       v.rows
+
+-- | **The notes struck inside each region**, in register and in order.
+-- |
+-- | ## Aligning two clocks without either one telling you where it started
+-- |
+-- | The notes are stamped in the page's clock; the regions are seconds into a
+-- | take file whose head has been **trimmed to the first sound**, so its zero
+-- | is not the moment the capture opened and the page cannot know how much was
+-- | cut. Estimating the capture's start from `secs` and the poll would work to
+-- | about a tenth of a second and would still be an estimate of the wrong
+-- | thing.
+-- |
+-- | So it anchors on the material instead: **the first note struck is the first
+-- | sound, and the first sound is where the file begins.** One subtraction, no
+-- | estimate, immune to the trim and to poll jitter — and the two clocks run at
+-- | the same rate afterwards, so every later region lands on its own notes.
+-- |
+-- | That is why `forgetHeard` runs when a capture opens. A soundcheck note
+-- | before the take would become the anchor and shift the whole set by however
+-- | long you waited.
+-- |
+-- | ## The window
+-- |
+-- | A region cut by `Gaps` begins in the silence *before* its attack, so a note
+-- | normally lands just inside. The tolerance is for the other order: MIDI
+-- | reaches the page immediately while its audio is still crossing the
+-- | interface, so a note can be stamped a few milliseconds before the sound it
+-- | caused. 120 ms is far larger than any interface latency and far smaller
+-- | than the silences these takes are divided on.
+notesIn
+  :: forall r
+   . Array { note :: Int, at :: Number }
+  -> Number
+  -> { start :: Number, end :: Number | r }
+  -> Array Int
+notesIn heard t0 r =
+  Array.sort
+    (map _.note
+      (Array.filter
+        (\h -> let t = (h.at - t0) / 1000.0
+               in t >= r.start - 0.120 && t < r.end)
+        heard))
+
+-- | The page-clock instant that the take's own zero corresponds to, or nothing
+-- | when there is not enough to anchor on. See `notesIn`.
+takeZero :: State -> Maybe Number
+takeZero st = do
+  first <- Array.head st.heard
+  r0 <- Array.head st.regions
+  pure (first.at - r0.start * 1000.0)
 
 -- | **The voices this material can actually start on.**
 -- |
@@ -2405,6 +2512,7 @@ render st =
               <> [ HH.text ", about ", HH.text runSecs, HH.text " to record." ] )
       , clashSays
       , collapseSays
+      , heardSays
       -- | **A remembered input that is not on this rig.** Silently falling
       -- | back to whatever is first is how the whole morning went to `board`;
       -- | the fallback is still the right behaviour, and saying so is the
@@ -2419,6 +2527,34 @@ render st =
                    \aggregate loses the reference rather than pointing it \
                    \somewhere wrong.") ]
       ]
+
+  -- | **Whether anything is listening, said before the take and not after it.**
+  -- |
+  -- | A hand-played take is the only kind whose pitches cannot be recovered
+  -- | afterwards: the chord that made the audio is not in the audio, and by the
+  -- | time the set is on disk the performance is over. So this is a pre-flight
+  -- | line, in the sentence, where it is read before pressing Record — the
+  -- | alternative is finding out from an empty `notes` field in `set.json`,
+  -- | which is exactly the shape of failure this page keeps being bitten by:
+  -- | something that was never firing, reported only by what is missing.
+  -- |
+  -- | Silent for a swept run, which asks for its own pitches and does not need
+  -- | to be told.
+  heardSays
+    | st.fill /= Played = HH.text ""
+    | Array.null st.midiIn =
+        HH.p [ HP.class_ (HH.ClassName "q-clash is-soft") ]
+          [ HH.text "no MIDI input is reaching the page, so nothing will be \
+                    \recorded about what you play. The audio is unaffected — \
+                    \but a chord set without its notes cannot be given them \
+                    \afterwards." ]
+    | otherwise =
+        HH.p [ HP.class_ (HH.ClassName "q-note is-quiet") ]
+          [ HH.text (case Array.length st.heard of
+                       0 -> "listening on " <> joinWith ", " st.midiIn
+                              <> " — nothing played yet."
+                       1 -> "1 note heard on " <> joinWith ", " st.midiIn
+                       n -> show n <> " notes heard on " <> joinWith ", " st.midiIn) ]
 
   -- | **Two things pointed at one jack, said in the sentence.**
   -- |
@@ -3409,6 +3545,19 @@ render st =
   ringingSays =
     " STILL SOUNDING at its own end, so this sample carries the front of the next one and a layer stitched from it will click at the join. Give the sweep more space, or keep it as a one-shot."
 
+  -- | The notes struck inside region `i`, or none. The same function the send
+  -- | uses, so what the grid shows and what `set.json` records cannot differ.
+  playedAt i = case st.opened of
+    -- A stored set's notes came off disk with it; the page's MIDI buffer holds
+    -- some other session's chords and has no business describing this one.
+    Just o -> fromMaybe [] (Array.index o.notes i)
+    Nothing -> case takeZero st, Array.index st.regions i of
+      Just t0, Just rg -> notesIn st.heard t0 rg
+      _, _ -> []
+
+  -- | A voicing as you would say it: low to high, in register.
+  saidAs ns = joinWith " " (map Pitch.noteName ns)
+
   segment i r left wide =
     let
       kept = Set.member i st.keep
@@ -3436,6 +3585,9 @@ render st =
                    <> (if kept then ";background:" <> w.tint else ""))
         , HP.title (w.label <> " — " <> fmt (r.end - r.start) <> " s at "
                       <> fmt r.start <> " s."
+                      <> (case playedAt i of
+                            [] -> ""
+                            ns -> " Played: " <> saidAs ns <> ".")
                       <> (if still then ringingSays else "")
                       <> " Click for every parameter here.")
         , HE.onMouseEnter \_ -> HoverPlay i
@@ -3564,13 +3716,25 @@ render st =
         pure m.note
       lo = 36
       hi = 96
+      -- **A played chord names itself by its bass.** The band is 1/12th of a
+      -- strip wide, so the whole voicing does not fit — and the bass plus the
+      -- count is what distinguishes one of these from its neighbours at a
+      -- glance, which is the question a row of them is asked. The full voicing
+      -- is one hover away.
+      played = playedAt i
     in
-      case noted of
-        Just n ->
+      case noted, Array.head played of
+        Just n, _ ->
           { label: Pitch.noteName n
           , tint: hsl (Int.toNumber (n - lo) / Int.toNumber (hi - lo))
           }
-        Nothing ->
+        Nothing, Just b ->
+          { label: Pitch.noteName b
+              <> (if Array.length played > 1
+                    then " \x00d7" <> show (Array.length played) else "")
+          , tint: hsl (Int.toNumber (clamp lo hi b - lo) / Int.toNumber (hi - lo))
+          }
+        Nothing, Nothing ->
           { label: show (i + 1)
           , tint: hsl (maybe 0.0 (\r -> min 1.0 r.rms * 2.0) (Array.index st.regions i))
           }
