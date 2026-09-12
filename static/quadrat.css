@@ -767,6 +767,13 @@ body {
 /* The height a thumbnail occupies, so the cards line up whether or not there
    is anything to draw in them yet. */
 .q-fixedface { height: 52px; }
+/* The trigger's own shape: when it fires. Two rows on one time axis — what
+   the flat spacing would do, faint, and what the measurement says this
+   instrument needs, dark. Both scaled to the longer of the two, so the
+   measured row stopping early IS the saving. */
+.q-trigface { display: block; width: 100%; height: 52px; }
+.q-trigface line { stroke: var(--ink); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.q-trigface .is-flat line { stroke: #b9ad93; }
 /* A name that is what it is: Trigger and Pitch cannot be called anything
    else, so they are set rather than typed — same size and baseline as the
    field beside them, without the box that invites an edit. */

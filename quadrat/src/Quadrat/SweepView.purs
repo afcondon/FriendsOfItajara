@@ -34,7 +34,7 @@ import Quadrat.Pitch as Pitch
 import Quadrat.Curve (isDrawn)
 import Quadrat.Curve as Curve
 import Quadrat.Encoding as Encoding
-import Quadrat.Sweep (Msg(..), Plan, valuesFor)
+import Quadrat.Sweep (Msg(..), Plan, pacedStale, valuesFor)
 
 type Handlers act =
   { ports :: Array String
@@ -308,14 +308,25 @@ part h which =
       -- | YET. A gate's own shape and the pitch run's notes both belong in
       -- | that space and will go there.
       , HH.div [ cls "q-curves" ]
-          ( [ fixedCard "Trigger" (triggerLine p)
-                ( p.trigger.gate == Nothing
-                    && p.trigger.es5 == Nothing
-                    && p.trigger.note == Nothing )
-                h.openTrigger
-            , fixedCard "Pitch" (pitchLine p)
-                (not (Array.any (\q -> isJust q.pitch) p.params))
-                h.openPitch
+          ( [ fixedCard
+                { name: "Trigger"
+                , says: triggerLine p
+                , foot: pacingFoot
+                , face: triggerFace
+                , moot: p.trigger.gate == Nothing
+                          && p.trigger.es5 == Nothing
+                          && p.trigger.note == Nothing
+                , act: h.openTrigger
+                }
+            , fixedCard
+                { name: "Pitch"
+                , says: pitchLine p
+                , foot: if Array.any (\q -> isJust q.pitch) p.params
+                          then "in use" else "not in use"
+                , face: HH.div [ cls "q-fixedface" ] []
+                , moot: not (Array.any (\q -> isJust q.pitch) p.params)
+                , act: h.openPitch
+                }
             ] <> rowsWhere false )
       , HH.div [ cls "q-swadd" ]
           [ HH.button
@@ -474,27 +485,79 @@ part h which =
   -- | things differ, and both are real: the name is a label rather than a
   -- | field, because Trigger and Pitch are what they are; and there is no
   -- | axis bar, because neither has a value per cell to place on an axis.
-  fixedCard name says moot act =
-    HH.div [ cls ("q-pcard is-fixed" <> if moot then " is-moot" else "") ]
+  fixedCard c =
+    HH.div [ cls ("q-pcard is-fixed" <> if c.moot then " is-moot" else "") ]
       [ HH.div [ cls "q-curvecard" ]
           [ HH.button
               [ cls "q-curveface"
-              , HP.title ("open the " <> name <> " settings")
-              , HE.onClick \_ -> act
+              , HP.title ("open the " <> c.name <> " settings")
+              , HE.onClick \_ -> c.act
               ]
-              [ HH.div [ cls "q-fixedface" ] [] ]
+              [ c.face ]
           , HH.div [ cls "q-curvefoot" ]
-              [ HH.span [ cls "q-curvelabel" ]
-                  [ HH.text (if moot then "not in use" else "in use") ]
-              , mini "open" ("change the " <> name) act
+              [ HH.span [ cls "q-curvelabel" ] [ HH.text c.foot ]
+              , mini "open" ("change the " <> c.name) c.act
               ]
           ]
       , HH.div [ cls "q-curveparam" ]
           [ HH.div [ cls "q-swtop" ]
-              [ HH.span [ cls "q-swname is-static" ] [ HH.text name ] ]
-          , HH.div [ cls "q-swsays" ] [ HH.text says ]
+              [ HH.span [ cls "q-swname is-static" ] [ HH.text c.name ] ]
+          , HH.div [ cls "q-swsays" ] [ HH.text c.says ]
           ]
       ]
+
+  -- | **Which of the two rows is live**, said in words under the picture,
+  -- | because the difference between a faint row and a dark one is a
+  -- | convention nobody was told.
+  pacingFoot
+    | Array.null p.paced = show p.spacingMs <> " ms flat"
+    | pacedStale p = "measured \x2014 stale"
+    | p.usePaced = "measured"
+    | otherwise = show p.spacingMs <> " ms flat \x2014 measured, unused"
+
+  -- | **The schedule, drawn.**
+  -- |
+  -- | A parameter's face carries its curve; the trigger's carries the only
+  -- | shape it has — when it fires. Two rows of ticks on one time axis: what
+  -- | the flat spacing would do, and what the measurement says this
+  -- | instrument actually needs. Both normalised to the LONGER of the two
+  -- | totals, so the measured row ending early is the picture of the saving
+  -- | rather than a difference in scale.
+  -- |
+  -- | It also reads a grid at a glance. A pitch \xd7 decay matrix paced by its
+  -- | own decays comes out as bands — even ticks inside a band, a jump
+  -- | between them — and bands are the proof that the two axes were
+  -- | understood as two. A single even run when you asked for a matrix is
+  -- | both parameters on one axis, which is legal, silent, and wrong.
+  triggerFace =
+    let
+      n = Encoding.total p.extent
+      fresh = not (Array.null p.paced) && not (pacedStale p)
+      flatEvery = Int.toNumber (max 1 p.spacingMs)
+      flatTot = Int.toNumber n * flatEvery
+      -- `scanl` gives the running total AFTER each cell, so the last of them
+      -- is the length of the run and all but the last, with a zero in front,
+      -- are the moments the triggers fire.
+      measEnds = Array.scanl (+) 0.0 (map Int.toNumber p.paced)
+      measTot = fromMaybe 0.0 (Array.last measEnds)
+      measStarts = Array.cons 0.0 (fromMaybe [] (Array.init measEnds))
+      tmax = max 1.0 (max flatTot (if fresh then measTot else 0.0))
+      flatStarts = map (\i -> Int.toNumber i * flatEvery) (Array.range 0 (n - 1))
+      tick y0 y1 t =
+        el "line"
+          [ attr "x1" (show (t / tmax)), attr "x2" (show (t / tmax))
+          , attr "y1" (show y0), attr "y2" (show y1) ] []
+    in
+      el "svg"
+        [ attr "viewBox" "0 0 1 1", attr "preserveAspectRatio" "none"
+        , attr "class" "q-trigface" ]
+        ( (if fresh
+             then map (tick 0.08 0.44) measStarts
+             else [])
+          <> [ el "g" [ attr "class" (if fresh then "is-flat" else "") ]
+                 (map (tick (if fresh then 0.56 else 0.28)
+                            (if fresh then 0.92 else 0.72)) flatStarts) ]
+        )
 
   -- | **Which axis this parameter moves along**, on the FACE of the card.
   -- |

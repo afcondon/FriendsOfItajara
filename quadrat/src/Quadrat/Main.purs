@@ -1688,10 +1688,53 @@ render st =
           [ HH.text "\x25a0" ]
       ]
 
+  -- | **What Measure knows about itself**, read from the plan rather than
+  -- | from a flag here: `pacedStale` compares the fingerprint the numbers
+  -- | were taken under against the sweep as it stands now, so a parameter
+  -- | moved an hour ago is as stale as one moved a second ago.
+  measHave = not (Array.null st.sweep.paced)
+  measStale = Sweep.pacedStale st.sweep
+  measureWants = not measHave || measStale
+  canMeasure = st.sweepFork == Nothing && not st.busy && st.fill == Swept
+  measureSays
+    | st.dry = "measuring\x2026"
+    | not measHave = show st.sweep.spacingMs <> " ms flat \x2014 not measured"
+    | measStale = "stale \x2014 a parameter has changed"
+    | otherwise =
+        fmt (Int.toNumber (Sweep.startsAt st.sweep
+               (Encoding.total st.sweep.extent)) / 1000.0)
+          <> " s measured, per cell"
+
   -- | **Peers of Record.** They are all things you do to this take, and a
   -- | separate row for four of them implied a separation that is not there.
   doors =
     HH.div [ HP.class_ (HH.ClassName "q-doors") ]
+      -- | **Measure, beside the other acts.**
+      -- |
+      -- | It was a button inside the Trigger door, on the argument that a dry
+      -- | run is a setting you arrive at rather than an act you reach for.
+      -- | That was wrong about how it gets used: the numbers go stale every
+      -- | time a parameter moves, so measuring is something you do again and
+      -- | again in a session — and burying a repeated act two clicks deep is
+      -- | the definition of the wrong place for it. What stays behind the
+      -- | door is the *choice* between flat and measured, and the numbers.
+      -- |
+      -- | The tint is the same one Divide wears: this is a verb that is
+      -- | asking to be done. It lights when nothing has been measured, and
+      -- | again the moment a measurement stops describing the sweep.
+      [ HH.button
+          [ HP.class_ (HH.ClassName ("q-door"
+              <> (if measureWants then " is-verb" else "")
+              <> (if canMeasure then "" else " is-moot")))
+          , HP.disabled (not canMeasure)
+          , HP.title "run the sweep once at the flat spacing and keep only how \
+                     \long each cell took to go quiet — then every later run is \
+                     \paced by what this instrument actually does"
+          , HE.onClick \_ -> DryRun st.source
+          ]
+          [ HH.span [ HP.class_ (HH.ClassName "q-doorname") ] [ HH.text "Measure" ]
+          , HH.span [ HP.class_ (HH.ClassName "q-doorsays") ] [ HH.text measureSays ]
+          ]
       -- | **The verb until it has happened, then the noun.**
       -- |
       -- | "Divide it" sat alone under the waveform while a card two feet away
@@ -1699,7 +1742,7 @@ render st =
       -- | could act on was the orphan. One slot now: it divides, and afterwards
       -- | it is the door onto what it produced. Dividing again lives inside,
       -- | because a different divider or gap is a thing you reach for second.
-      [ if Array.null st.regions
+      , if Array.null st.regions
           then HH.button
                  [ HP.class_ (HH.ClassName ("q-door is-verb"
                      <> (if hasTake && not st.busy then "" else " is-moot")))
@@ -1788,20 +1831,18 @@ render st =
                          then " measured per cell — " <> fmt total <> " s in total"
                          else " measured per cell — nothing measured yet")
             ]
+        -- **The choice lives here; the act does not.** Measure is in the
+        -- action bar with Record and Divide, because it is done repeatedly
+        -- and a repeated act two clicks deep is in the wrong place.
         , HH.div [ HP.class_ (HH.ClassName "q-pace-act") ]
-            [ HH.button
-                [ HP.class_ (HH.ClassName ("q-plain" <> if stale || not have then " is-go" else ""))
-                , HP.disabled (st.sweepFork /= Nothing || st.busy)
-                , HE.onClick \_ -> DryRun st.source
-                ]
-                [ HH.text "Dry run" ]
-            , HH.span [ HP.class_ (HH.ClassName "q-muted") ]
+            [ HH.span [ HP.class_ (HH.ClassName "q-muted") ]
                 [ HH.text (if not have
-                             then "runs the sweep once at the flat spacing and keeps \
-                                  \only how long each cell took to go quiet"
+                             then "Measure, in the action bar, runs the sweep once at \
+                                  \the flat spacing and keeps only how long each cell \
+                                  \took to go quiet"
                            else if stale
                              then "a parameter has changed since these were measured, \
-                                  \so they no longer describe this sweep"
+                                  \so they no longer describe this sweep \x2014 Measure again"
                            else "these describe the sweep as it stands")
                 ]
             ]
