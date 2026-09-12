@@ -698,7 +698,12 @@ handleAction = case _ of
         unless (Array.null ps) $ H.modify_
           (note (show (Array.length ps) <> " MIDI ports"))
   PickKind k -> do
-    H.modify_ _ { kind = k, divider = Divider.defaultFor k }
+    -- **The voice comes with the kind.** Stereo material takes a pair, so the
+    -- four offers become two; a voice chosen while the kind was mono can be
+    -- one the new kind cannot use, and a select showing nothing selected still
+    -- holds the old number underneath.
+    H.modify_ \s -> s { kind = k, divider = Divider.defaultFor k
+                      , voice = onlyVoices k s.voice }
     st <- H.get
     -- The name says what the take holds, so changing what you are about to
     -- record renames it — unless you have typed one of your own, which the
@@ -882,7 +887,8 @@ handleAction = case _ of
   SetBank v -> H.modify_ _ { bank = v }
   SetLetter v -> H.modify_ _ { letter = v }
   SetKit v -> H.modify_ _ { kit = v, kitMine = v /= "" }
-  SetVoice v -> H.modify_ \s -> s { voice = clamp 1 4 (fromMaybe s.voice (Int.fromString v)) }
+  SetVoice v -> H.modify_ \s ->
+    s { voice = onlyVoices s.kind (clamp 1 4 (fromMaybe s.voice (Int.fromString v))) }
   WriteCard dest -> do
     H.modify_ _ { cardBusy = true }
     r <- H.liftAff (attempt (toAffE (Http.writeToCard dest)))
@@ -1829,6 +1835,26 @@ occupantOf st =
       (\r -> r.bank == st.bank && r.kit == kitName && r.voice == st.voice)
       v.rows
 
+-- | **The voices this material can actually start on.**
+-- |
+-- | A stereo sample plays left on SPn and right on SP(n+1), so it consumes the
+-- | voice after it: a kit is four mono voices, or two stereo ones, or a mix.
+-- | Which leaves a stereo take exactly two places to begin. 4 is not one of
+-- | them — there is no voice 5 — and 2 is not either, because it would leave
+-- | voice 1 empty and a kit with no playable voice 1 is one **the module
+-- | refuses to open at all**.
+-- |
+-- | Shared by the dropdown and by `freeVoice` so the offer and the suggestion
+-- | cannot disagree.
+voicesFor :: Kind -> Array Int
+voicesFor k = if Kind.foldsTo k == ToMono then [ 1, 2, 3, 4 ] else [ 1, 3 ]
+
+-- | The nearest voice this kind can use, at or below the one asked for.
+onlyVoices :: Kind -> Int -> Int
+onlyVoices k v =
+  if Array.elem v (voicesFor k) then v
+  else fromMaybe 1 (Array.last (Array.filter (_ <= v) (voicesFor k)))
+
 -- | **The lowest voice this take could go on without displacing anything.**
 -- |
 -- | A stereo sample occupies the voice after it too, so it needs a pair — and
@@ -1845,7 +1871,7 @@ freeVoice st =
                    && (r.voice == v || (r.stereo && r.voice + 1 == v)))
           cv.rows
       fits v = not (taken v) && (not wide || not (taken (v + 1)))
-  in Array.find fits (if wide then [ 1, 3 ] else [ 1, 2, 3, 4 ])
+  in Array.find fits (voicesFor st.kind)
 
 -- | Uniform slots, which is the case the start point was made for.
 isEqual :: Divider -> Boolean
@@ -3681,6 +3707,9 @@ render st =
               [ HH.text "scratch — the next run replaces this take" ]
       ]
 
+  -- | Whether this material goes to the card as stereo, and so takes a pair.
+  wideKit = Kind.foldsTo st.kind /= ToMono
+
   placeBlock =
     HH.div [ HP.class_ (HH.ClassName "q-place") ]
       [ HH.span [ HP.class_ (HH.ClassName "q-acthead") ] [ HH.text "Export for card" ]
@@ -3695,15 +3724,28 @@ render st =
       , small "letter" st.letter SetLetter
       , small "bank name" st.bank SetBank
       , small "kit" (if st.kit == "" then setName else st.kit) SetKit
+      -- | **A stereo take has two voices to offer, not four.**
+      -- |
+      -- | A stereo sample plays its left channel on SPn and its right on
+      -- | SP(n+1), so it *consumes* the voice after it: a kit is four mono
+      -- | voices or two stereo ones or a mix. Which makes three of the four
+      -- | offers wrong for stereo, and the list was offering all four —
+      -- | "4 + 5" names a voice the module does not have, and 2 + 3 leaves
+      -- | voice 1 empty, which is the one fault that stops the module opening
+      -- | the kit at all.
+      -- |
+      -- | The same pair `freeVoice` picks from, so the suggestion and the
+      -- | choice cannot disagree. Deliberately the *offers* rather than a
+      -- | validation after the fact: this is a closed set of two, and a
+      -- | dropdown that only contains right answers needs no error message.
       , HH.label [ HP.class_ (HH.ClassName "q-field is-tight") ]
-          [ HH.span_ [ HH.text "voice" ]
+          [ HH.span_ [ HH.text (if wideKit then "voice pair" else "voice") ]
           , HH.select [ HE.onValueChange SetVoice ]
               (map (\n -> HH.option
                       [ HP.value (show n), HP.selected (n == st.voice) ]
                       [ HH.text (show n
-                          <> (if Kind.foldsTo st.kind /= ToMono
-                                then " + " <> show (n + 1) else "")) ])
-                  [ 1, 2, 3, 4 ])
+                          <> (if wideKit then " + " <> show (n + 1) else "")) ])
+                  (voicesFor st.kind))
           ]
       -- **Two verbs where there was one.**
       --
