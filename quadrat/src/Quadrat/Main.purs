@@ -1558,9 +1558,18 @@ analyse write = do
           -- hand, which is when the detector is the only thing that could
           -- know. See `Quadrat.Schedule` for the lead, which is the one
           -- number the schedule cannot supply itself.
+          -- The last region has no next trigger to end it, so the plan says
+          -- how long it runs: its own spacing, which with measured pacing is
+          -- the longest in the run exactly when the middle gap is least like
+          -- it. Zero for a take played by hand, where `slots` falls back.
+          lastGap =
+            if Array.null st.schedule then 0.0
+            else Int.toNumber
+                   (Sweep.spacingAt st.sweep (Array.length st.schedule - 1)) / 1000.0
           declared = Schedule.slots
                        (Int.toNumber st.sweep.leadMs / 1000.0)
                        (Int.toNumber st.sweep.guardMs / 1000.0)
+                       lastGap
                        st.schedule
       r <- H.liftAff (attempt (toAffE (Http.divisions
             { take: takeName

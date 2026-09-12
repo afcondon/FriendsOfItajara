@@ -92,8 +92,18 @@ at = do
 -- | It costs the last few tens of milliseconds of decay, and on the module
 -- | that provoked this the tail is within 3 dB of the noise floor by 2.8 s of
 -- | a 3.0 s cell — so the guard is taking silence.
-slots :: Number -> Number -> Array Number -> Array { start :: Number, end :: Number }
-slots lead guard marks
+-- | `lastGap` is how long the FINAL region should run for, in seconds, since
+-- | nothing after it says where it ends. Zero means "you tell me", and the
+-- | middle gap of the others is used instead.
+-- |
+-- | The caller knows this and the marks do not. With measured pacing the
+-- | intervals differ by a factor of four across one run, so the middle gap —
+-- | a fine answer while every cell got the same spacing — gave the last cell
+-- | of a 4 x 12 about a second when its own decay wanted two, and the longest
+-- | sample in the set came back cut. Measured 2026-09-12.
+slots :: Number -> Number -> Number -> Array Number
+     -> Array { start :: Number, end :: Number }
+slots lead guard lastGap marks
   | Array.length marks < 2 = []
   | otherwise =
       let
@@ -105,10 +115,11 @@ slots lead guard marks
         middle = case Array.index (Array.sort gaps) (Array.length gaps / 2) of
           Just g | g > 0.0 -> g
           _ -> 1.0
+        tail = if lastGap > 0.0 then lastGap else middle
         ends = Array.snoc (Array.drop 1 edges)
                  (case Array.last edges of
-                    Just e -> e + middle
-                    Nothing -> middle)
+                    Just e -> e + tail
+                    Nothing -> tail)
       in
         Array.zipWith
           (\s e -> { start: max 0.0 s, end: max (s + 0.01) (e - guard) })
