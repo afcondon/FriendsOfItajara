@@ -62,6 +62,7 @@ import Effect.Aff (Milliseconds(..), attempt, delay)
 import Effect.Aff as Aff
 import Effect.Aff.Class (class MonadAff)
 import Effect.Class (liftEffect)
+import Effect.Ref as Ref
 import Foreign.LooperSocket (Capture, LooperState)
 import Foreign.LooperSocket as Socket
 import Halogen as H
@@ -136,6 +137,14 @@ type State =
   -- | itself flat, divides itself, and hands its per-cell decay times to the
   -- | plan. See `DryRun`.
   , dry :: Boolean
+  -- | **Whether the take on the page came from a measuring run.**
+  -- |
+  -- | `dry` is true only WHILE one is going; this outlives it, because the
+  -- | take does. A measuring pass records at the flat spacing by construction
+  -- | — that is what it is for — so its samples all carry the trailing
+  -- | silence the measurement exists to remove, and they look exactly like a
+  -- | real take on the page. On 2026-09-12 a set was saved from one.
+  , takeIsDry :: Boolean
   -- | Sweeping across the grid to hear it, rather than clicking each one.
   -- | Off by default: it is the right gesture for comparing forty hits and the
   -- | wrong one for a page you are only reading.
@@ -336,6 +345,7 @@ component = H.mkComponent
       { looper: Nothing, kind: Kind.DrumHits, bars: 1
       , armed: false, name: "", log: []
       , peaks: Nothing, regions: [], keep: Set.empty, busy: false, dry: false
+      , takeIsDry: false
       , hoverPlays: false, playing: Nothing, showing: "", waiting: false
       , minGap: 300.0, divider: Divider.Attacks, equalN: 16, mine: false, kitMine: false, layerMode: ""
       , cardView: Nothing, bank: "WORKSHOP", kit: "", voice: 1, cardBusy: false
@@ -952,7 +962,12 @@ handleAction = case _ of
     st <- H.get
     let setName = if st.name == "" then "set" else st.name
         loud = fromMaybe 0.0 (Array.last (Array.sort (map _.peak st.regions)))
-    if not (Array.null st.regions) && loud < 0.003
+    if st.takeIsDry
+      then H.modify_ (note "not saved — this take is the measuring pass, which \
+                           \runs at the flat spacing by construction, so every \
+                           \sample carries the silence the measurement exists \
+                           \to remove. Press Record for the real one.")
+    else if not (Array.null st.regions) && loud < 0.003
       then H.modify_ (note "not saved — the loudest sample in this take peaks at \
                            \silence. Check the input is the one the module is \
                            \patched to, and that a gate makes it move.")
@@ -1115,7 +1130,10 @@ handleAction = case _ of
             -- No head trim: see `captureOn`. The schedule declares when the
             -- first hit happens, so nothing needs to find it.
             captureOn false src
-            H.modify_ _ { swept = false, sweepAt = Nothing, schedule = [] }
+            -- `dry` is set by `DryRun` before it delegates here, so this is
+            -- the one place that knows which kind of run is starting.
+            H.modify_ _ { swept = false, sweepAt = Nothing, schedule = []
+                        , takeIsDry = st.dry }
             fid <- H.fork runSweep
             H.modify_ _ { sweepFork = Just fid }
   StopSweep -> do
@@ -1253,14 +1271,48 @@ runSweep :: forall o m. MonadAff m => H.HalogenM State Action () o m Unit
 runSweep = do
   st <- H.get
   let p = st.sweep
-  -- The recording is already open, so this is real silence at the head of the
-  -- take rather than a wait for something to start it — which is what `by
-  -- attack` wants in front of the first onset anyway.
+  -- | **Wait for the capture to be RUNNING, not for 400 ms.**
+  -- |
+  -- | `captureOn` asks; the daemon opens the stream and says so in a snapshot,
+  -- | and on 2026-09-12 that took about four seconds. The grid was anchored
+  -- | after a fixed 400 ms wait, so it was already four seconds behind before
+  -- | the first gate — and an absolute grid catches up by firing every slot it
+  -- | has missed, at once. Cells 1 and 2 came back ten milliseconds long, both
+  -- | runs, and the samples for C2 and C#2 were simply not there.
+  -- |
+  -- | The 400 ms stays afterwards, because that is the real silence at the
+  -- | head of the take that `by attack` wants in front of the first onset.
+  let awaitOpen n = do
+        stw <- H.get
+        unless (n <= 0 || maybe false _.on (cap stw)) do
+          H.liftAff (delay (Milliseconds 100.0))
+          awaitOpen (n - 1)
+  awaitOpen 100
   H.liftAff (delay (Milliseconds 400.0))
-  -- The grid every step is timed against, fixed before the first one.
-  t0 <- liftEffect Rig.nowMs
+  -- The grid every step is timed against, fixed before the first one — and
+  -- allowed to SLIP, never to be caught up. See `slipped`.
+  anchor <- liftEffect (Ref.new 0.0)
+  liftEffect (Rig.nowMs >>= flip Ref.write anchor)
   for_ (Sweep.steps p) \s -> do
     H.modify_ _ { sweepAt = Just s.index }
+    -- | **A slot already gone is not a slot to catch up on.**
+    -- |
+    -- | Absolute-grid pacing is right about drift: a step that stalls must not
+    -- | move the ones after it, and subtracting "what this step took" from the
+    -- | next delay walked the phase 130 ms a step for a whole morning. It is
+    -- | wrong about a stall LONGER than the spacing, where the slot is gone
+    -- | and firing into it immediately destroys that cell and every one the
+    -- | stall covered.
+    -- |
+    -- | So: absorb what can be absorbed — a late send just shortens `ahead` —
+    -- | and when the slot has passed outright, move the whole grid rather than
+    -- | the run. Timing slips by the length of the stall, once; nothing
+    -- | accumulates, because the anchor only ever moves to now.
+    tNow <- liftEffect Rig.nowMs
+    t0was <- liftEffect (Ref.read anchor)
+    let slot = t0was + Int.toNumber (Sweep.startsAt p s.index)
+    when (slot < tNow) $ liftEffect (Ref.write (t0was + (tNow - slot)) anchor)
+    t0 <- liftEffect (Ref.read anchor)
     -- **Where this gate belongs, stated before anything is sent.** Everything
     -- that follows is then free to be late without moving the sound.
     -- **A sum, not a multiple.** With measured pacing every cell has its own
@@ -2689,6 +2741,7 @@ render st =
                                then maybe "" (\c -> fmt c.secs <> " s recorded, not divided yet") (cap st)
                                else show (Set.size st.keep) <> " of "
                                     <> show (Array.length st.regions) <> " kept") ]
+              , dryTakeSays
               , spread
               , declaredVsFound
               , if Array.null st.regions && hasTake && not st.busy
@@ -3193,6 +3246,20 @@ render st =
   -- | safe: if BOTH are flat then nothing moved, and that is worth saying
   -- | loudly, because twelve identical tiles are what a run that never left
   -- | this page looks like.
+  -- | **Say it on the take, not only when you try to save it.**
+  -- |
+  -- | A measuring take is real audio, correctly divided, and indistinguishable
+  -- | from a capture — which is how one got saved. What it is NOT is paced:
+  -- | every cell got the flat spacing, so the short ones are mostly silence.
+  dryTakeSays
+    | not st.takeIsDry = HH.text ""
+    | Array.null st.regions && not hasTake = HH.text ""
+    | otherwise =
+        HH.span [ HP.class_ (HH.ClassName "q-warn") ]
+          [ HH.text "this is the measuring pass — flat spacing, so every sample \
+                    \carries the trailing silence the measurement is for. \
+                    \Press Record for the paced one." ]
+
   spread
     | Array.length st.regions < 3 = HH.text ""
     -- | **Silent is not flat, and the flat test cannot catch it.**

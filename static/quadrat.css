@@ -851,8 +851,12 @@ body {
 .q-keys { display: block; width: 100%; height: 52px; }
 .q-key { fill: #fff; stroke: #ded7c6; stroke-width: 0.6; vector-effect: non-scaling-stroke; }
 .q-key.is-black { fill: #55503f; stroke: #3b3830; }
-.q-key.is-on { fill: var(--hot); stroke: #a8442a; }
-.q-key.is-black.is-on { fill: #e0764f; stroke: #a8442a; }
+/* Green, not the hot red. Red on this page means Record — one irreversible
+   act, one colour — and a keyboard of lit red keys was competing with the
+   button for the same glance. The notes are a statement about the plan, not
+   a thing to press. */
+.q-key.is-on { fill: #2a7d4f; stroke: #1e5c39; }
+.q-key.is-black.is-on { fill: #4f9e72; stroke: #1e5c39; }
 
 /* The calibration, in the modal — the card carries the notes you check at a
    glance, this carries how faithfully the path renders them. */
