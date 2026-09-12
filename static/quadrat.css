@@ -329,7 +329,6 @@ body {
    up under each other and a wrong one is visible without reading it. */
 .q-swsays { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-.q-swaxis { font-family: inherit; }
 .q-swtop { display: flex; align-items: center; gap: 8px; }
 .q-swname { padding: 5px 8px; border: 1px solid var(--rule); border-radius: 3px;
   font: inherit; font-size: 13px; flex: 1; max-width: 260px; }
