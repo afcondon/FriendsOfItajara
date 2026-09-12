@@ -721,3 +721,50 @@ body {
    the last thing that was true, and hiding it would lose the only clue to how
    far off the flat spacing was. */
 .q-pace-cell.is-stale { text-decoration: line-through; opacity: .6; }
+
+/* Which axis a parameter moves along, on the face of its card.
+   Named by the destination's own word — layer/slice, outer/inner — because the
+   axis decides WHO picks along it at play time: a Rample chooses a layer
+   itself, by velocity or at random, where a slice is a position only you can
+   send it to. X and Y would say neither thing. */
+.q-swaxisbar { display: inline-flex; margin-left: 8px; vertical-align: middle; }
+.q-swaxisbtn {
+  font: inherit; font-size: 10px; letter-spacing: .04em; text-transform: uppercase;
+  padding: 2px 8px; border: 1px solid var(--rule); background: #fff;
+  color: var(--muted); cursor: pointer;
+}
+.q-swaxisbtn + .q-swaxisbtn { border-left: none; }
+.q-swaxisbtn:first-child { border-radius: 3px 0 0 3px; }
+.q-swaxisbtn:last-child  { border-radius: 0 3px 3px 0; }
+.q-swaxisbtn.is-on { background: #1f2d3d; border-color: #1f2d3d; color: #fff; }
+
+/* The trigger and the pitch, as cards beside the parameters they belong with
+   in meaning. Ruled apart from them, because the trigger is not a parameter:
+   every parameter answers "what value at this cell", the trigger answers "and
+   now hit it". Same size so the row reads evenly; tinted so there is no
+   mistaking them for something with a curve. */
+.q-fixedcards {
+  display: flex; gap: 10px; margin: 0 0 14px;
+  padding-bottom: 14px; border-bottom: 1px solid var(--rule);
+}
+.q-fixedcard {
+  flex: 1 1 0; min-width: 0; text-align: left; cursor: pointer;
+  font: inherit; padding: 9px 12px;
+  background: #f4f1ea; border: 1px solid #ded7c6; border-radius: 3px;
+}
+.q-fixedcard:hover { border-color: #b9ad93; }
+.q-fixedcard.is-moot { background: var(--bg); color: var(--muted); opacity: .6; }
+.q-fixedname { display: block; font-weight: 600; font-size: 13px; }
+.q-fixedsays {
+  display: block; margin-top: 2px; font-size: 11px; color: var(--muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* Divide, in the slot that becomes the Division door once it has run. */
+.q-door.is-verb { background: #fdf6ec; border-color: #e0c9a0; }
+.q-door.is-verb:hover:not(:disabled) { border-color: #c8a05a; }
+.q-door.is-verb .q-doorname { color: #8a5a12; }
+
+/* A grid's shape, editable in the sentence. */
+.q-slotgrid { display: inline-flex; align-items: baseline; gap: 4px; }
+.q-by { color: var(--muted); font-size: 12px; }

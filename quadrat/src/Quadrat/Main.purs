@@ -1692,16 +1692,30 @@ render st =
   -- | separate row for four of them implied a separation that is not there.
   doors =
     HH.div [ HP.class_ (HH.ClassName "q-doors") ]
-      [ door DivisionModal "Division"
-          (if Array.null st.regions then "nothing divided yet"
-           else show (Set.size st.keep) <> " of "
-                  <> show (Array.length st.regions) <> " kept")
-          (not (Array.null st.regions) || hasTake)
-      , door TriggerModal "Trigger"
-          (triggerSays
-            <> (if Sweep.pacedStale st.sweep then " · pacing is stale" else ""))
-          true
-      , door PitchModal "Pitch" pitchSays2 true
+      -- | **The verb until it has happened, then the noun.**
+      -- |
+      -- | "Divide it" sat alone under the waveform while a card two feet away
+      -- | read "nothing divided yet" — the same fact, twice, and the one you
+      -- | could act on was the orphan. One slot now: it divides, and afterwards
+      -- | it is the door onto what it produced. Dividing again lives inside,
+      -- | because a different divider or gap is a thing you reach for second.
+      [ if Array.null st.regions
+          then HH.button
+                 [ HP.class_ (HH.ClassName ("q-door is-verb"
+                     <> (if hasTake && not st.busy then "" else " is-moot")))
+                 , HP.disabled (not hasTake || st.busy)
+                 , HE.onClick \_ -> Analyse
+                 ]
+                 [ HH.span [ HP.class_ (HH.ClassName "q-doorname") ] [ HH.text "Divide" ]
+                 , HH.span [ HP.class_ (HH.ClassName "q-doorsays") ]
+                     [ HH.text (if st.busy then "dividing…"
+                                else if hasTake then "cut the take by its own schedule"
+                                else "nothing recorded yet") ]
+                 ]
+          else door DivisionModal "Division"
+                 (show (Set.size st.keep) <> " of "
+                    <> show (Array.length st.regions) <> " kept")
+                 true
       , door SaveModal "Save to disk"
           (if st.kept then "kept as " <> setName
            else "\x2192 samples/" <> setName)
@@ -1800,22 +1814,13 @@ render st =
                 pl.paced)
         ]
 
-  triggerSays = case triggerBy of
-    "hand" -> "you play it"
-    "es5" -> "ES-5 gate " <> maybe "?" show st.sweep.trigger.es5
-    "es9" -> "bus " <> maybe "?" show st.sweep.trigger.gate
-               <> maybe "" (\b -> " · ES-9 jack " <> show (b - 7)) st.sweep.trigger.gate
-    _ -> "note " <> maybe "?" show st.sweep.trigger.note
-           <> (if st.sweep.port == "" then " · no MIDI port" else " · " <> st.sweep.port)
 
-  pitchSays2 = case Array.findMap _.pitch st.sweep.params of
-    Nothing -> "unpitched"
-    Just ps -> ps.label <> " · " <> Pitch.noteName ps.noteLo
-                 <> "–" <> Pitch.noteName ps.noteHi
 
   sweepHandlers =
     { ports: st.midiPorts, open: st.sweepEdit, plan: st.sweep
     , msg: SweepMsg, openParam: OpenParam
+    , openTrigger: OpenModal (Just TriggerModal)
+    , openPitch: OpenModal (Just PitchModal)
     , tables: st.tables, tablesErr: st.tablesErr, pickPitch: PickPitch
     , rigFires: st.fill == Swept, addPitch: AddPitch
     }
@@ -1926,8 +1931,23 @@ render st =
         , HP.title "how many samples this run makes"
         , HE.onValueInput \v -> SweepMsg (Sweep.SetExtent 0 v)
         ]
-    ns -> HH.span [ HP.class_ (HH.ClassName "q-slot is-fixed") ]
-            [ HH.text (joinWith " × " (map show ns)) ]
+    -- **A grid's shape is editable too.** It printed "4 × 12" and could not be
+    -- touched, so the only way to reshape a matrix was through a door — which
+    -- is the opposite of what the sentence is for.
+    ns -> HH.span [ HP.class_ (HH.ClassName "q-slotgrid") ]
+            (Array.intercalate [ HH.span [ HP.class_ (HH.ClassName "q-by") ] [ HH.text "×" ] ]
+              (Array.mapWithIndex
+                (\a n ->
+                  [ HH.input
+                      [ HP.class_ (HH.ClassName "q-slot is-num"), HP.type_ HP.InputNumber
+                      , HP.value (show n), HP.min 1.0, HP.max 512.0
+                      , HP.title (maybe "" (\ax -> "how many " <> ax.name
+                                    <> "s — along this axis the choice is made by "
+                                    <> ax.picked) (Array.index (Encoding.axes st.sweep.encoding) a))
+                      , HE.onValueInput \v -> SweepMsg (Sweep.SetExtent a v)
+                      ]
+                  ])
+                ns))
 
   slotPitched =
     sel "q-slot" (if pitchOn then "pitched" else "unpitched") SetPitched
@@ -2002,10 +2022,28 @@ render st =
   -- | What is being moved, by name only. The shapes and the ranges are in the
   -- | panel; this says how many knobs are in play, which is the part you want
   -- | at a glance and the part a list of curves does not tell you.
+  -- | **What is moving, and along which axis.**
+  -- |
+  -- | Grouped by axis rather than listed flat, because on a grid that grouping
+  -- | IS the shape: two parameters that both sit on `layer` make a single long
+  -- | line wearing a matrix's file layout, and nothing else on the page would
+  -- | say so. An axis with nothing on it is called out as repeats — which is
+  -- | sometimes exactly what you want, and never something to discover later.
   sweptSays =
-    let ns = map _.name (Array.filter (\q -> Maybe.isNothing q.pitch) st.sweep.params)
-    in if Array.null ns then []
-       else [ HH.text (" · sweeping " <> joinWith ", " ns) ]
+    let
+      axs = Encoding.axes st.sweep.encoding
+      named a = map _.name (Array.filter (\q -> q.axis == a) st.sweep.params)
+      part a ax =
+        let ns = named a
+        in if Array.null ns
+             then ax.name <> ": nothing varies — "
+                    <> show (fromMaybe 1 (Array.index st.sweep.extent a)) <> " repeats"
+             else ax.name <> ": " <> joinWith ", " ns
+    in
+      if Array.null st.sweep.params then []
+      else if Array.length axs < 2
+        then [ HH.text (" · sweeping " <> joinWith ", " (map _.name st.sweep.params)) ]
+        else [ HH.text (" · " <> joinWith " · " (Array.mapWithIndex part axs)) ]
 
   -- | **What the run will actually take**, which with measured pacing is a sum
   -- | and not a multiple. Read off the same function the run paces itself by,
@@ -2472,16 +2510,9 @@ render st =
                       [ HH.text (maybe "" (\c -> fmt c.secs <> " s") (cap st)) ]
                   ]
               _ -> HH.text ""
-          , if Array.null st.regions && hasTake && not st.busy
-              then
-                HH.div [ HP.class_ (HH.ClassName "q-wholebar") ]
-                  [ HH.button
-                      [ HP.class_ (HH.ClassName "q-plain is-go"), HE.onClick \_ -> Analyse ]
-                      [ HH.text "Divide it" ]
-                  , HH.span [ HP.class_ (HH.ClassName "q-muted") ]
-                      [ HH.text (if st.busy then "dividing…" else "") ]
-                  ]
-              else HH.text ""
+          -- The orphan "Divide it" is gone: the verb is in the control row,
+          -- in the slot that becomes the Division door once it has run.
+          , HH.text ""
           ]
 
   -- | **How the take was divided** — the controls, where the numbers are not.

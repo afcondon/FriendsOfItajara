@@ -43,6 +43,11 @@ type Handlers act =
   , plan :: Plan
   , msg :: Msg -> act
   , openParam :: Maybe Int -> act
+  -- | **The trigger and the pitch are opened from their own cards now**, not
+  -- | from doors in the control row — so this module needs to be able to ask
+  -- | for them. It still owns no modal state; it only says which was clicked.
+  , openTrigger :: act
+  , openPitch :: act
   -- | The calibration tables the rig doctor knows about, for the pitch picker.
   -- | Empty means either none measured or `deepstar serve` is down — the page
   -- | says which, because in a dropdown they look identical.
@@ -152,6 +157,27 @@ triggerView h = part h 0
 
 pitchView :: forall w act. Handlers act -> HH.HTML w act
 pitchView h = part h 1
+
+-- | **What the trigger card says about itself.** The jack, never just the bus:
+-- | a parameter on "output 8" and a gate on "bus 15" read as two places for a
+-- | whole day, and are one hole in one module.
+triggerLine :: Plan -> String
+triggerLine p = case p.trigger.gate, p.trigger.es5, p.trigger.note of
+  Just b, _, _ -> "bus " <> show b <> " · ES-9 jack " <> show (b - 7)
+  _, Just b, _ -> "ES-5 gate " <> show (b + 1)
+  _, _, Just n -> "note " <> show n
+                    <> (if p.port == "" then " · no MIDI port" else " · " <> p.port)
+  _, _, _ -> "you play it by hand"
+
+-- | **What the pitch card says about itself**, or that there is no pitch axis.
+pitchLine :: Plan -> String
+pitchLine p = case Array.find (\q -> isJust q.pitch) p.params of
+  Nothing -> "unpitched — no parameter is a pitch"
+  Just q -> case q.pitch of
+    Nothing -> "unpitched"
+    Just ps -> (if ps.label == "" then "no table" else ps.label)
+                 <> " · " <> Pitch.noteName ps.noteLo
+                 <> "–" <> Pitch.noteName ps.noteHi
 
 curves :: forall w act. Handlers act -> HH.HTML w act
 curves h = part h 2
@@ -265,6 +291,38 @@ part h which =
     HH.div [ cls (if h.rigFires then "" else "is-moot") ]
       [ sectionHead "Parameter sweep"
           "optional — one curve for every knob you want moved across the take"
+      -- | **What strikes it, and what pitch it is struck at — as cards.**
+      -- |
+      -- | They were two doors in the control row, which put them a page away
+      -- | from the parameters they sit beside in meaning. Here they read in
+      -- | one sweep with everything else that is set per run.
+      -- |
+      -- | Ruled APART from the parameters rather than mixed in, because the
+      -- | trigger is not one: every parameter answers "what value at this
+      -- | cell", and the trigger answers "and now hit it". It has no curve, no
+      -- | value per cell and no axis — so it carries no axis control at all,
+      -- | rather than a disabled one. A greyed control invites you to wonder
+      -- | why; an absent one says this is not that kind of thing.
+      , HH.div [ cls "q-fixedcards" ]
+          [ HH.button
+              [ cls ("q-fixedcard" <> if p.trigger.gate == Nothing
+                                        && p.trigger.es5 == Nothing
+                                        && p.trigger.note == Nothing
+                                      then " is-moot" else "")
+              , HE.onClick \_ -> h.openTrigger
+              ]
+              [ HH.span [ cls "q-fixedname" ] [ HH.text "Trigger" ]
+              , HH.span [ cls "q-fixedsays" ] [ HH.text (triggerLine p) ]
+              ]
+          , HH.button
+              [ cls ("q-fixedcard" <> if Array.any (\q -> isJust q.pitch) p.params
+                                      then "" else " is-moot")
+              , HE.onClick \_ -> h.openPitch
+              ]
+              [ HH.span [ cls "q-fixedname" ] [ HH.text "Pitch" ]
+              , HH.span [ cls "q-fixedsays" ] [ HH.text (pitchLine p) ]
+              ]
+          ]
       , HH.div [ cls "q-curves" ] (rowsWhere false)
       , HH.div [ cls "q-swadd" ]
           [ HH.button
@@ -329,8 +387,7 @@ part h which =
         , if isJust q.pitch then HH.text "" else pitchPick i q
         , HH.div [ cls "q-swsays" ]
             [ HH.text (routing q)
-            , HH.span [ cls "q-swaxis" ]
-                [ HH.text (" · " <> maybe "" _.name (Array.index axs q.axis)) ]
+            , axisBar i q
             ]
         -- **Say when the notes are not evenly spaced.** The curve still shapes
         -- a pitch run — `noteAt` reads its value — so a shape left over from
@@ -410,28 +467,40 @@ part h which =
         -- | the sliders that are the other reason to open a parameter.
         , HH.div [ cls "q-swsays" ]
             [ HH.text (routing q)
-            , HH.span [ cls "q-swaxis" ]
-                [ HH.text (" · " <> maybe "" _.name (Array.index axs q.axis)) ]
+            , axisBar i q
             ]
         ]
         ]
     ]
       <> (if h.open == Just i then [ sliders i q ] else [])
 
-  -- | Which axis it moves along. Only a question when there is more than one —
-  -- | and when there is, it is the question that makes the grid legible.
-  axisPick i q
+  -- | **Which axis this parameter moves along**, on the FACE of the card.
+  -- |
+  -- | It was a dropdown inside the expanded routing row, which is two doors
+  -- | away from the question it answers — and that question is whether this is
+  -- | a grid at all. Two parameters landing on one axis is legal and silent,
+  -- | and produces a single 48-long line wearing a matrix's file layout.
+  -- |
+  -- | **Named by the destination's own word** — `layer` / `slice`, `outer` /
+  -- | `inner` — and never X and Y, because the axis decides WHO chooses along
+  -- | it when the set is played: a Rample picks a LAYER itself, by velocity or
+  -- | at random, while a SLICE is a position only you can send it to. Putting
+  -- | decay on layers and pitch on slices is therefore a different instrument
+  -- | from the other way round, and the axis names are the only thing on the
+  -- | page that says so. `picked` carries the rest, on hover.
+  axisBar i q
     | Array.length axs < 2 = HH.text ""
     | otherwise =
-        HH.label [ cls "q-swtiny", HP.title "which axis this parameter moves along" ]
-          [ HH.span_ [ HH.text "along" ]
-          , HH.select
-              [ HE.onValueChange (\v -> h.msg (SetAxis i (maybe 0 identity (Int.fromString v)))) ]
-              (Array.mapWithIndex
-                (\a ax -> HH.option
-                   [ HP.value (show a), HP.selected (a == q.axis) ] [ HH.text ax.name ])
-                axs)
-          ]
+        HH.span [ cls "q-swaxisbar" ]
+          (Array.mapWithIndex
+            (\a ax -> HH.button
+               [ cls ("q-swaxisbtn" <> if a == q.axis then " is-on" else "")
+               , HP.title (ax.name <> " — along this axis the choice is made by "
+                             <> ax.picked)
+               , HE.onClick \_ -> h.msg (SetAxis i a)
+               ]
+               [ HH.text ax.name ])
+            axs)
 
   -- | **The desk.** Full width, one slider per position on this parameter's
   -- | axis, and touching any of them turns the curve into a drawing.
@@ -506,7 +575,6 @@ part h which =
           , tiny "ch" 2 (show q.channel) (SetChannel i) "MIDI channel"
           ]
       , pitchPick i q
-      , axisPick i q
       ]
 
   -- | **Pitch, when this parameter is one.**
