@@ -23,6 +23,7 @@ module Quadrat.Http
   , TakePeaks
   , loadSpec
   , loadSet
+  , deleteSets
   , StoredSet
   , writeToCard
   ) where
@@ -253,6 +254,10 @@ type StoredSet =
   , schedule :: Array Number }
 
 foreign import loadSet :: String -> Effect (Promise StoredSet)
+
+-- | **Throw sets away.** Plural because the useful gesture is "these four",
+-- | and a loop of single deletes is four chances to stop halfway.
+foreign import deleteSets :: Array String -> Effect (Promise Wrote)
 
 foreign import placeSet
   :: { set :: String, bank :: String, letter :: String, kit :: String, voice :: Int

@@ -128,6 +128,10 @@ export const loadSet = (name) => () =>
       };
     });
 
+// Throw sets away. Plural because the useful gesture is "these four", and a
+// loop of single deletes is four chances to stop halfway.
+export const deleteSets = (names) => () => post("/api/sets/delete", { names });
+
 export const loadSpec = (name) => () =>
   fetch("/api/sets/" + encodeURIComponent(name))
     .then(j)

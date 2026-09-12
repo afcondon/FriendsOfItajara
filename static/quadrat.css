@@ -92,9 +92,14 @@ body {
 .q-sechead h2 { margin: 0; }
 .q-sechead .q-muted { font-size: 12px; font-variant-numeric: tabular-nums; }
 
-.q-set { display: grid; grid-template-columns: minmax(200px, 2fr) 100px minmax(240px, 3fr) auto;
+.q-set { display: grid; grid-template-columns: 22px minmax(200px, 2fr) 100px minmax(240px, 3fr) auto;
   gap: 20px; align-items: baseline;
   border-top: 1px solid var(--rule); padding: 12px 0; }
+/* Ticked by name, because the list is re-fetched after every write and a
+   position survives none of that. */
+.q-set-tick { display: flex; align-items: center; cursor: pointer; }
+.q-set-tick input { cursor: pointer; margin: 0; }
+.q-set.is-picked { background: #f2f6fb; }
 .q-set:last-child { border-bottom: 1px solid var(--rule); }
 .q-set-name { font-size: 15px; font-weight: 600; }
 .q-set-when { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; margin-top: 2px; }
@@ -108,9 +113,25 @@ body {
 .q-set-do { display: flex; gap: 8px; justify-content: flex-end; }
 
 @media (max-width: 900px) {
-  .q-set { grid-template-columns: 1fr auto; gap: 6px 16px; }
+  .q-set { grid-template-columns: 22px 1fr auto; gap: 6px 16px; }
   .q-set-what, .q-set-do { grid-column: 1 / -1; justify-content: flex-start; }
 }
+
+/* **What to do with the ticked ones, above the list.** It is what you reach
+   for once the ticking is done, and a library of forty sets puts its own
+   bottom off the screen. Silent until something is ticked: a row of buttons
+   that cannot act is a row to read past on every visit. */
+.q-pickbar {
+  display: flex; align-items: center; gap: 16px;
+  padding: 8px 0 10px; min-height: 34px;
+}
+.q-pickall {
+  display: flex; align-items: center; gap: 7px; cursor: pointer;
+  font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums;
+}
+.q-pickall input { cursor: pointer; margin: 0; }
+.q-pickbar.is-idle .q-pickall { opacity: .7; }
+.q-pickdo { display: flex; align-items: center; gap: 8px; }
 .q-muted { color: var(--muted); font-size: 13px; max-width: 62ch; }
 .q-log { font: 12px/1.7 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); }
 

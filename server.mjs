@@ -281,6 +281,37 @@ function takePeaks(name, buckets) {
   return { ok: true, secs: frames / rate, frames, buckets: n, lo, hi };
 }
 
+// **Throw sets away.** The one destructive thing this server does to work you
+// made, so it says exactly what it removed and refuses anything that is not a
+// set directory under `samples/`.
+//
+// The take is left alone. A set is a cut of a take and the take may have others
+// cut from it, or be worth cutting again — deleting the derived thing should
+// not reach back to the thing it was derived from.
+function dropSets(names) {
+  const gone = [], kept = [];
+  for (const raw of names ?? []) {
+    const name = safe(String(raw || ""));
+    const dir = path.join(SAMPLES, name);
+    if (!name || !fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) {
+      kept.push(`${raw}: no such set`);
+      continue;
+    }
+    try {
+      fs.rmSync(dir, { recursive: true, force: true });
+      gone.push(name);
+    } catch (e) {
+      kept.push(`${name}: ${e.message}`);
+    }
+  }
+  return {
+    ok: kept.length === 0,
+    output: (gone.length ? `deleted ${gone.length}: ${gone.join(", ")}` : "nothing deleted")
+      + (kept.length ? ` — ${kept.join("; ")}` : ""),
+    sets: sets(),
+  };
+}
+
 function cards() {
   const vols = "/Volumes";
   if (!fs.existsSync(vols)) return [];
@@ -1349,6 +1380,10 @@ const server = http.createServer(async (req, res) => {
     }
     // The stored sets: the list, and one whole. See `writeSet` — the object
     // is what makes a set re-runnable at a resolution nobody chose at the time.
+    if (url.pathname === "/api/sets/delete" && req.method === "POST") {
+      const body = await readBody(req);
+      return json(res, 200, dropSets(body?.names));
+    }
     if (url.pathname === "/api/card/place" && req.method === "POST") {
       const body = await readBody(req);
       return json(res, 200, placeStoredSet(body));

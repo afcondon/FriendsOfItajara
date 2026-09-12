@@ -279,6 +279,11 @@ type State =
   -- | is replaced wholesale (`msm cut --overwrite` deletes the directory
   -- | first), so the one destructive act on this page asks before it acts.
   , confirmKeep :: Boolean
+  -- | **Which stored sets are ticked**, by name rather than by index: the list
+  -- | is re-fetched after every write and a position means nothing across that.
+  , picked :: Set String
+  -- | Deleting is the one thing here that destroys work, so it is asked.
+  , confirmDrop :: Boolean
   }
 
 -- | The two panels that became modals.
@@ -355,6 +360,14 @@ data Action
   | PlaceSet String
   -- | Put a stored set back on the bench, drawn from its own take.
   | OpenSet String
+  -- | Tick or untick one stored set.
+  | PickSet String
+  -- | Tick all of them, or none.
+  | PickAllSets Boolean
+  | AskDrop Boolean
+  | DropPicked
+  -- | Every ticked set onto the card, each as its own kit.
+  | PlacePicked
 
 component :: forall q i o m. MonadAff m => H.Component q i o m
 component = H.mkComponent
@@ -371,7 +384,8 @@ component = H.mkComponent
       , sweepFork: Nothing, midiPorts: [], swept: false, sweepEdit: Nothing
       , schedule: [], sets: [], tables: [], tablesErr: "", overran: false
       , page: Bench, fill: Swept, pivot: Nothing
-      , levels: [], modal: Nothing, kept: false, confirmKeep: false }
+      , levels: [], modal: Nothing, kept: false, confirmKeep: false
+      , picked: Set.empty, confirmDrop: false }
   , render
   , eval: H.mkEval H.defaultEval { handleAction = handleAction, initialize = Just Init }
   }
@@ -783,6 +797,41 @@ handleAction = case _ of
                       }
                     H.modify_ (note (nm <> " — " <> show n <> " samples over "
                                  <> fmt p.secs <> " s of " <> v.take))
+
+  PickSet nm -> H.modify_ \s0 ->
+    s0 { picked = if Set.member nm s0.picked then Set.delete nm s0.picked
+                  else Set.insert nm s0.picked
+       , confirmDrop = false }
+  PickAllSets on -> H.modify_ \s0 ->
+    s0 { picked = if on then Set.fromFoldable (map _.name s0.sets) else Set.empty
+       , confirmDrop = false }
+  AskDrop on -> H.modify_ _ { confirmDrop = on }
+
+  -- | **Deleting is the one act here that destroys work you made**, so it is
+  -- | asked before it is done and the button says how many. The takes are left
+  -- | alone: a set is a cut of a take, the take may have others cut from it or
+  -- | be worth cutting again, and deleting the derived thing should not reach
+  -- | back to what it was derived from.
+  DropPicked -> do
+    st <- H.get
+    let names = Array.fromFoldable st.picked
+    if Array.null names then H.modify_ _ { confirmDrop = false } else do
+      H.modify_ _ { cardBusy = true }
+      r <- H.liftAff (attempt (toAffE (Http.deleteSets names)))
+      case r of
+        Left e -> H.modify_ (note (Aff.message e) <<< _ { cardBusy = false })
+        Right w -> H.modify_ (note (lastLine w.output) <<< _ { cardBusy = false })
+      H.modify_ _ { picked = Set.empty, confirmDrop = false }
+      handleAction RefreshSets
+
+  -- | Each ticked set as its OWN kit, which is what a set is: `PlaceSet` names
+  -- | the kit after the set, so doing it four times is four kits in one bank
+  -- | rather than four things fighting over one voice.
+  PlacePicked -> do
+    st <- H.get
+    let names = Array.fromFoldable st.picked
+    for_ names \nm -> handleAction (PlaceSet nm)
+    H.modify_ _ { picked = Set.empty }
 
   RunAgain nm -> do
     r <- H.liftAff (attempt (toAffE (Http.loadSpec nm)))
@@ -1933,7 +1982,7 @@ render st =
                 -- second door is a door too many.
                 Just PitchModal -> modalBox "Pitch" (SweepView.pitchView sweepHandlers)
                 Just SaveModal -> modalBox "Save to disk" keepBlock
-                Just ExportModal -> modalBox "Export to card" placeBlock
+                Just ExportModal -> modalBox "Export for card" placeBlock
                 Nothing -> HH.text ""
             ]
         Library ->
@@ -2065,7 +2114,7 @@ render st =
           (if st.kept then "kept as " <> setName
            else "\x2192 samples/" <> setName)
           (not (Set.isEmpty st.keep))
-      , door ExportModal "Export to card"
+      , door ExportModal "Export for card"
           (if placeable then "bank " <> st.bank <> " · voice " <> show st.voice
            else "SuperDirt — already a bank")
           (placeable && not (Set.isEmpty st.keep))
@@ -2707,9 +2756,63 @@ render st =
                         <> show (Array.length (Array.filter _.runnable st.sets))
                         <> " re-runnable") ]
                 ]
+            , pickedBar
             ]
               <> map setRow st.sets
           )
+
+  -- | **What to do with the ticked ones.**
+  -- |
+  -- | Above the list rather than below it, because it is the thing you are
+  -- | reaching for once the ticking is done and a list of forty sets puts the
+  -- | bottom of itself off the screen. Empty of verbs until something is
+  -- | ticked: a row of buttons that cannot act is a row of buttons to read
+  -- | past every time you come here.
+  pickedBar =
+    let n = Set.size st.picked
+    in
+      HH.div [ HP.class_ (HH.ClassName ("q-pickbar" <> if n == 0 then " is-idle" else "")) ]
+        [ HH.label [ HP.class_ (HH.ClassName "q-pickall") ]
+            [ HH.input
+                [ HP.type_ HP.InputCheckbox
+                , HP.checked (n > 0 && n == Array.length st.sets)
+                , HE.onChange \_ -> PickAllSets (n < Array.length st.sets)
+                ]
+            , HH.text (if n == 0 then " select" else " " <> show n <> " selected")
+            ]
+        , if n == 0 then HH.text "" else
+            HH.div [ HP.class_ (HH.ClassName "q-pickdo") ]
+              [ HH.button
+                  [ HP.class_ (HH.ClassName "q-plain")
+                  , HP.disabled st.cardBusy
+                  , HP.title "each one as its own kit, at the bank letter and \
+                             \voice chosen below"
+                  , HE.onClick \_ -> PlacePicked
+                  ]
+                  [ HH.text ("Onto the card") ]
+              , if st.confirmDrop
+                  then HH.span [ HP.class_ (HH.ClassName "q-twoverbs") ]
+                    [ HH.button
+                        [ HP.class_ (HH.ClassName "q-plain is-replacing")
+                        , HP.disabled st.cardBusy
+                        , HP.title "the sample files are removed. The takes they \
+                                   \were cut from are left alone."
+                        , HE.onClick \_ -> DropPicked
+                        ]
+                        [ HH.text ("delete " <> show n <> " for good") ]
+                    , HH.button
+                        [ HP.class_ (HH.ClassName "q-plain")
+                        , HE.onClick \_ -> AskDrop false ]
+                        [ HH.text "cancel" ]
+                    ]
+                  else HH.button
+                    [ HP.class_ (HH.ClassName "q-plain")
+                    , HP.disabled st.cardBusy
+                    , HE.onClick \_ -> AskDrop true
+                    ]
+                    [ HH.text "Delete\x2026" ]
+              ]
+        ]
 
   -- | How to play it in a pattern. `n` counts from zero and the files from
   -- | one, which is worth saying once here rather than being discovered.
@@ -2728,8 +2831,18 @@ render st =
   -- | columns of one width made every one of them cramped. A ruled entry with
   -- | its own internal alignment reads the way a notebook page does.
   setRow r =
-    HH.article [ HP.class_ (HH.ClassName "q-set") ]
-      [ HH.div [ HP.class_ (HH.ClassName "q-set-id") ]
+    HH.article [ HP.class_ (HH.ClassName ("q-set"
+        <> if Set.member r.name st.picked then " is-picked" else "")) ]
+      -- **Ticked by name, not by position.** The list is re-fetched after
+      -- every write and a position survives none of that.
+      [ HH.label [ HP.class_ (HH.ClassName "q-set-tick") ]
+          [ HH.input
+              [ HP.type_ HP.InputCheckbox
+              , HP.checked (Set.member r.name st.picked)
+              , HE.onChange \_ -> PickSet r.name
+              ]
+          ]
+      , HH.div [ HP.class_ (HH.ClassName "q-set-id") ]
           [ HH.div [ HP.class_ (HH.ClassName "q-set-name") ] [ HH.text r.name ]
           , HH.div [ HP.class_ (HH.ClassName "q-set-when") ]
               [ HH.text (String.take 10 r.made
@@ -3347,7 +3460,7 @@ render st =
 
   placeBlock =
     HH.div [ HP.class_ (HH.ClassName "q-place") ]
-      [ HH.span [ HP.class_ (HH.ClassName "q-acthead") ] [ HH.text "Export to card" ]
+      [ HH.span [ HP.class_ (HH.ClassName "q-acthead") ] [ HH.text "Export for card" ]
       -- **The letter first, because it is the destructive one.** A write
       -- deletes the slot it lands on, so the letter decides what is lost;
       -- the name beside it is only the legend on the bank.
@@ -3587,14 +3700,21 @@ render st =
                   [ HH.text "Nothing on it yet. Record something, keep the ones you \
                             \meant, and send them to a voice. It is kept on disk as \
                             \you build it; no card need be mounted until you write." ]
+            -- | **The act first, then what it will act on.**
+            -- |
+            -- | Andrew, 2026-09-12: the Write row sat under the table and the
+            -- | plan, so on a card with any content it was below the fold —
+            -- | and the one thing you came here to press was the one thing you
+            -- | had to scroll for. The list can grow as long as it likes now;
+            -- | it is underneath.
             | otherwise ->
                 HH.div_
-                  [ HH.table [ HP.class_ (HH.ClassName "q-table") ]
+                  [ writeRow v
+                  , HH.table [ HP.class_ (HH.ClassName "q-table") ]
                       [ HH.thead_ [ HH.tr_ (map (\h -> HH.th_ [ HH.text h ])
                           [ "bank", "kit", "voice", "holds" ]) ]
                       , HH.tbody_ (map row v.rows)
                       ]
-                  , writeRow v
                   , if v.plan == "" then HH.text ""
                     else HH.pre [ HP.class_ (HH.ClassName ("q-plan" <> if v.ok then "" else " is-bad")) ]
                            [ HH.text v.plan ]
