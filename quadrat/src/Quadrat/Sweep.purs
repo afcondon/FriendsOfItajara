@@ -106,6 +106,18 @@ type Param =
   -- | `cvLo`/`cvHi`. See `Quadrat.Pitch` for why that is not a refinement but a
   -- | different kind of answer.
   , pitch :: Maybe PitchSpec
+  -- | **Kept, but not sent.**
+  -- |
+  -- | Deleting a parameter to take it out of a run throws away the routing,
+  -- | the curve and — for a pitch — a whole measured table, which is a lot to
+  -- | lose for "let me hear it without this one". An off parameter claims no
+  -- | place, writes no CV, sends no CC, and does not appear in a cell's
+  -- | meanings: it is absent from the run in every way that a run can tell,
+  -- | and present on the page.
+  -- |
+  -- | It is in the fingerprint, so turning one off stales a measurement —
+  -- | which is right, because the sound changed.
+  , off :: Boolean
   }
 
 -- | A pitch parameter's range and the measurement that realises it.
@@ -170,6 +182,7 @@ fingerprint p =
       , maybe "-" show q.esx
       , maybe "-" show q.cc, show q.ccLo, show q.ccHi, show q.channel
       , maybe "-" (\ps -> ps.label <> ":" <> show ps.noteLo <> "-" <> show ps.noteHi) q.pitch
+      , if q.off then "off" else "on"
       , joinWith "," (map show (valuesFor p q))
       ]
 
@@ -240,11 +253,15 @@ claimsOf p =
     -- number mentions bus 4. Modelled as a claim so it collides by the same
     -- rule as everything else rather than by a special case.
     expander =
-      if Array.any (isJust <<< _.esx) p.params || isJust p.trigger.es5
+      if Array.any (isJust <<< _.esx) live || isJust p.trigger.es5
       then [ { key: "cv4", place: jackSaid 4, who: "the ES-5 / ESX expander lane" } ]
       else []
+    -- An off parameter is not sent, so it cannot collide with anything. Two
+    -- parameters may share a jack as long as only one of them is on, which is
+    -- exactly how you audition one against the other.
+    live = Array.filter (not <<< _.off) p.params
   in
-    Array.concatMap ofParam p.params <> ofTrigger <> expander
+    Array.concatMap ofParam live <> ofTrigger <> expander
 
 -- | **Two things pointed at one place.**
 -- |
@@ -349,6 +366,7 @@ param nm bus =
   , curve: Named Linear false
   , axis: 0
   , pitch: Nothing
+  , off: false
   }
 
 -- | How many points this parameter's curve is sampled at: the size of the axis
@@ -383,6 +401,9 @@ data Msg
   -- | measurement — inferring it from an emptied text field would discard a
   -- | table on a typo.
   | ClearPitch Int
+  -- | **Kept, but not sent.** A switch rather than a deletion, so auditioning
+  -- | a run without one parameter does not cost its routing and its table.
+  | SetOff Int Boolean
   -- | Click: the next named shape. Deliberately a no-op over a drawing.
   | NextShape Int
   | FlipCurve Int
@@ -468,6 +489,7 @@ applyMsg = case _ of
   SetPitchLo i v -> onParam i \q -> q { pitch = map (\ps -> ps { noteLo = clamp 0 127 (intOr ps.noteLo v) }) q.pitch }
   SetPitchHi i v -> onParam i \q -> q { pitch = map (\ps -> ps { noteHi = clamp 0 127 (intOr ps.noteHi v) }) q.pitch }
   ClearPitch i -> onParam i _ { pitch = Nothing }
+  SetOff i b -> onParam i _ { off = b }
   SetAxis i a -> \p ->
     onParam i (\q -> q { axis = clamp 0 (Array.length (Encoding.axes p.encoding) - 1) a }) p
   NextShape i -> onParam i \q -> q { curve = Curve.nextShape q.curve }
@@ -546,17 +568,21 @@ type Step =
 steps :: Plan -> Array Step
 steps p = Array.mapWithIndex one (Encoding.cells p.encoding p.extent)
   where
+  -- **One list for every quarter.** An off parameter is absent from the CV,
+  -- from the CC, AND from the meanings — so the record of a cell says what
+  -- was done to it rather than what was configured.
+  live = Array.filter (not <<< _.off) p.params
   one i cell =
     { index: i
     , cell
-    , cv: Array.mapMaybe (\q -> map (\b -> { bus: b, level: levelOf q cell }) q.cv) p.params
-    , esx: Array.mapMaybe (\q -> map (\k -> { slot: k, level: levelOf q cell }) q.esx) p.params
+    , cv: Array.mapMaybe (\q -> map (\b -> { bus: b, level: levelOf q cell }) q.cv) live
+    , esx: Array.mapMaybe (\q -> map (\k -> { slot: k, level: levelOf q cell }) q.esx) live
     , cc: Array.mapMaybe
             (\q -> map
               (\c -> { channel: q.channel, cc: c
                      , value: Int.round (lerp (Int.toNumber q.ccLo) (Int.toNumber q.ccHi) (v q cell)) })
               q.cc)
-            p.params
+            live
     , means: map
         (\q ->
           { name: q.name
@@ -569,7 +595,7 @@ steps p = Array.mapWithIndex one (Encoding.cells p.encoding p.extent)
               Nothing -> -1
           , note: noteOf q cell
           })
-        p.params
+        live
     }
   -- Each parameter reads the cell's position on ITS axis. That is the whole of
   -- what makes a grid legible: a column shares one axis's value, a row the
@@ -634,6 +660,7 @@ type PlainParam =
   , noteLo :: Int
   , noteHi :: Int
   , pitchTable :: Array { volts :: Number, hz :: Number }
+  , off :: Boolean
   }
 
 type Plain =
@@ -728,6 +755,7 @@ flatten p =
     , noteLo: maybe 0 _.noteLo q.pitch
     , noteHi: maybe 0 _.noteHi q.pitch
     , pitchTable: maybe [] _.table q.pitch
+    , off: q.off
     -- **Three constructors, three names.** A held curve written as "named"
     -- would come back as a Linear ramp — a parameter that was deliberately
     -- NOT moving would start moving on the next reload, silently.
@@ -796,6 +824,7 @@ unflatten p =
           , noteHi: clamp 0 127 q.noteHi
           , table: q.pitchTable
           }
+    , off: q.off
     , curve:
         if q.kind == "drawn" then Drawn (map (clamp 0.0 1.0) q.values)
         -- A held curve's one value is the first of the samples it wrote, so an

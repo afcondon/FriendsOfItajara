@@ -25,6 +25,7 @@ import Prelude
 import Data.Array as Array
 import Data.Int as Int
 import Data.Maybe (Maybe(..), fromMaybe, isJust, isNothing, maybe)
+import Data.Number as Number
 import Halogen (AttrName(..), ElemName(..), Namespace(..))
 import Halogen.HTML as HH
 import Halogen.HTML.Events as HE
@@ -313,6 +314,10 @@ part h which =
                 , says: triggerLine p
                 , foot: pacingFoot
                 , face: triggerFace
+                -- The trigger has no switch: turning it off is the same act
+                -- as saying you will strike the instrument yourself, which is
+                -- asked once in the statement and would be a second answer.
+                , switch: Nothing
                 , moot: p.trigger.gate == Nothing
                           && p.trigger.es5 == Nothing
                           && p.trigger.note == Nothing
@@ -321,10 +326,17 @@ part h which =
             , fixedCard
                 { name: "Pitch"
                 , says: pitchLine p
-                , foot: if Array.any (\q -> isJust q.pitch) p.params
-                          then "in use" else "not in use"
-                , face: HH.div [ cls "q-fixedface" ] []
-                , moot: not (Array.any (\q -> isJust q.pitch) p.params)
+                -- | **The calibration names itself on the card.** "the
+                -- | measurement this is tuned by" is the one fact about a
+                -- | pitch axis that cannot be inferred from anything else on
+                -- | the page, and a label names a SIGNAL PATH: re-patch the
+                -- | module to another jack and the same label is the wrong
+                -- | answer. So it is on the face of the card, not behind it.
+                , foot: maybe "not in use" (_.spec >>> _.label) thePitch
+                , face: maybe (HH.div [ cls "q-fixedface" ] [])
+                          (_.spec >>> pitchFace) thePitch
+                , switch: map (\x -> { i: x.i, q: x.q }) thePitch
+                , moot: maybe true (_.q >>> _.off) thePitch
                 , act: h.openPitch
                 }
             ] <> rowsWhere false )
@@ -383,6 +395,7 @@ part h which =
             , mini (if h.open == Just i then "close" else "open")
                 "place every note by hand"
                 (h.openParam (if h.open == Just i then Nothing else Just i))
+            , onOff i q
             , HH.button
                 [ cls "q-swmini is-drop", HP.title "remove this parameter"
                 , HE.onClick \_ -> h.msg (DropParam i) ]
@@ -423,7 +436,7 @@ part h which =
   -- | object of its own width, and eight of them are a line you read across —
   -- | which is what a transect's parameters are.
   plainRow i q =
-    [ HH.div [ cls "q-pcard" ]
+    [ HH.div [ cls ("q-pcard" <> if q.off then " is-off" else "") ]
         [ HH.div [ cls "q-curvecard" ]
         [ HH.button
             [ cls "q-curveface"
@@ -443,6 +456,9 @@ part h which =
                 then mini "curve" "back to a named shape — this discards the values"
                        (h.msg (ToCurve i))
                 else HH.text ""
+            -- Same switch as the fixed cards carry, for the same reason: a
+            -- run without one parameter should not cost that parameter.
+            , onOff i q
             ]
         ]
     , HH.div [ cls "q-curveparam" ]
@@ -496,6 +512,9 @@ part h which =
               [ c.face ]
           , HH.div [ cls "q-curvefoot" ]
               [ HH.span [ cls "q-curvelabel" ] [ HH.text c.foot ]
+              , case c.switch of
+                  Just x -> onOff x.i x.q
+                  Nothing -> HH.text ""
               , mini "open" ("change the " <> c.name) c.act
               ]
           ]
@@ -505,6 +524,78 @@ part h which =
           , HH.div [ cls "q-swsays" ] [ HH.text c.says ]
           ]
       ]
+
+  -- | **The pitch parameter, if there is one** — its index, the parameter
+  -- | itself and its spec, found once. Every one of the three is needed by the
+  -- | card (the index to address a message, the parameter to know whether it
+  -- | is switched off, the spec to draw and to name) and finding it three
+  -- | times is three chances to find a different one.
+  thePitch =
+    Array.head
+      (Array.catMaybes
+        (Array.mapWithIndex
+          (\i q -> map (\ps -> { i, q, spec: ps }) q.pitch)
+          p.params))
+
+  -- | **Kept, but not sent.**
+  -- |
+  -- | Andrew, 2026-09-12: *"we need an affordance on the card to turn the
+  -- | pitch parameter off and on, shouldn't need to open it to do that"*. The
+  -- | only way to take a parameter out of a run was to delete it, which for a
+  -- | pitch axis throws away a measured table to answer "let me hear it
+  -- | without this". A switch instead: it claims no jack, writes no CV and
+  -- | appears in no cell's meanings, and everything about it is still here.
+  onOff i q =
+    HH.button
+      [ cls ("q-swtoggle" <> if q.off then "" else " is-on")
+      , HP.title (if q.off
+                    then "kept, but not sent — click to put it back in the run"
+                    else "take it out of the run without losing its routing")
+      , HE.onClick \_ -> h.msg (SetOff i (not q.off))
+      ]
+      [ HH.text (if q.off then "off" else "on") ]
+
+  -- | **The calibration, drawn.**
+  -- |
+  -- | Volts across, pitch up — a log axis, so a module that tracks V/oct is a
+  -- | straight diagonal and anything else is visibly not one. That is the
+  -- | whole reason a table exists, and until now the page carried it around
+  -- | in `set.json` without ever showing it.
+  -- |
+  -- | The two rules are the notes this run actually asks for. Seeing them
+  -- | land inside the measured span is the check that matters: outside it the
+  -- | realiser clamps, and a transect comes back on one pitch.
+  pitchFace ps =
+    let
+      lg hz = Number.log (max 1.0 hz) / Number.log 2.0
+      vs = map _.volts ps.table
+      ls = map (\pt -> lg pt.hz) ps.table
+      vlo = fromMaybe 0.0 (Array.head (Array.sort vs))
+      vhi = fromMaybe 1.0 (Array.last (Array.sort vs))
+      llo = fromMaybe 0.0 (Array.head (Array.sort ls))
+      lhi = fromMaybe 1.0 (Array.last (Array.sort ls))
+      spanV = max 0.001 (vhi - vlo)
+      spanL = max 0.001 (lhi - llo)
+      x v = (v - vlo) / spanV
+      y l = 1.0 - (l - llo) / spanL
+      pts = Array.intercalate " "
+        (map (\pt -> show (x pt.volts) <> "," <> show (y (lg pt.hz))) ps.table)
+      -- `levelForNote` is the daemon's -1..1 level, which is volts / 10.
+      voltsAt n = (Pitch.levelForNote { label: ps.label, points: ps.table } n).volts * 10.0
+      rule n =
+        el "line"
+          [ attr "x1" (show (x (voltsAt n))), attr "x2" (show (x (voltsAt n)))
+          , attr "y1" "0.04", attr "y2" "0.96", attr "class" "q-pitchrule" ] []
+    in
+      if Array.null ps.table then HH.div [ cls "q-fixedface" ] []
+      else
+        el "svg"
+          [ attr "viewBox" "0 0 1 1", attr "preserveAspectRatio" "none"
+          , attr "class" "q-pitchface" ]
+          [ rule ps.noteLo
+          , rule ps.noteHi
+          , el "polyline" [ attr "points" pts, attr "class" "q-pitchline" ] []
+          ]
 
   -- | **Which of the two rows is live**, said in words under the picture,
   -- | because the difference between a faint row and a dark one is a

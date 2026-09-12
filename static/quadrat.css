@@ -671,7 +671,15 @@ body {
 .q-actbar .q-go {
   margin: 0; padding: 0; border-top: 0; flex: 0 0 auto; align-items: stretch;
 }
-.q-actbar .q-go .q-state { display: flex; align-items: center; flex: 0 1 auto; }
+/* **A fixed lane for a number that changes.** Tabular figures keep the digits
+   the same width; the fixed lane keeps the count of them from mattering. A
+   control row that steps sideways while you are reaching for it is worse than
+   one number short. */
+.q-actbar .q-go .q-state {
+  display: flex; align-items: center;
+  flex: 0 0 15ch; width: 15ch; overflow: hidden; white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
 /* Vertical padding would fight the stretch; the words centre themselves. */
 .q-actbar .q-big { padding: 0 26px; display: inline-flex; align-items: center; }
 .q-doors { display: flex; flex-wrap: wrap; gap: 10px; flex: 0 1 auto; }
@@ -774,6 +782,27 @@ body {
 .q-trigface { display: block; width: 100%; height: 52px; }
 .q-trigface line { stroke: var(--ink); stroke-width: 1; vector-effect: non-scaling-stroke; }
 .q-trigface .is-flat line { stroke: #b9ad93; }
+/* The calibration itself: volts across, pitch up on a log axis, so a module
+   that tracks V/oct is a straight diagonal and anything else visibly is not.
+   The two rules are the notes this run asks for — outside the measured span
+   the realiser clamps and the transect comes back on one pitch. */
+.q-pitchface { display: block; width: 100%; height: 52px; }
+.q-pitchline { fill: none; stroke: var(--ink); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.q-pitchrule { stroke: #c8722f; stroke-width: 1; vector-effect: non-scaling-stroke; }
+
+/* Kept, but not sent. A switch rather than a deletion, so auditioning a run
+   without one parameter does not cost its routing or its measured table. */
+.q-swtoggle {
+  font: inherit; font-size: 10px; letter-spacing: .04em; text-transform: uppercase;
+  padding: 1px 7px; border: 1px solid var(--rule); border-radius: 3px;
+  background: #fff; color: var(--muted); cursor: pointer;
+}
+.q-swtoggle.is-on { background: #1f2d3d; border-color: #1f2d3d; color: #fff; }
+/* An off card is still legible — you have to be able to read what you turned
+   off in order to want it back — but it is plainly not in the run. */
+.q-pcard.is-off .q-curvecard,
+.q-pcard.is-fixed.is-moot .q-curvecard { opacity: .45; }
+.q-pcard.is-off .q-swsays, .q-pcard.is-off .q-swname { color: var(--muted); }
 /* A name that is what it is: Trigger and Pitch cannot be called anything
    else, so they are set rather than typed — same size and baseline as the
    field beside them, without the box that invites an edit. */

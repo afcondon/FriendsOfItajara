@@ -1662,7 +1662,15 @@ render st =
   -- How long this take has been running, from the daemon's own frame count
   -- rather than from a clock here: a page that keeps its own time drifts from
   -- the recording it is describing.
-  elapsed = maybe "0" (\c -> fmt c.secs) cp
+  -- | **Whole seconds while it is running.**
+  -- |
+  -- | Two decimals updating ten times a second is four characters of churn
+  -- | inside a flex row, and every door to the right of it stepped sideways
+  -- | on each poll. What the number is FOR while recording is "is it still
+  -- | going, and roughly how far in" — a question whole seconds answer, and
+  -- | hundredths answer no better while making the row unusable. The exact
+  -- | length is on the take, under the waveform, where it is read afterwards.
+  elapsed = maybe "0" (\c -> show (Int.floor c.secs)) cp
 
   -- | **The transport, as a transport.**
   -- |
