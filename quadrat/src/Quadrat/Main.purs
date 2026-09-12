@@ -3345,6 +3345,36 @@ render st =
   -- | What already sits at the address the Library is pointing at. Named by
   -- | the letter, because that is what the module shows and what a write
   -- | deletes; the bank *name* is only the legend.
+  -- | **Which slot this will actually become** — `L1`, in the module's own
+  -- | names.
+  -- |
+  -- | There is no control for the number, and there cannot be one: `kit build`
+  -- | names each kit `{letter}{index}` where the index is its POSITION in the
+  -- | bank's kit list. So the number is not a thing you set, it is a thing you
+  -- | are TOLD — and it was being told to nobody, which left the page talking
+  -- | about letters and names while the module talks about L0 and L1.
+  -- |
+  -- | An existing kit of the same name keeps its index; anything else lands
+  -- | after the kits already in that bank. Blank ticks make a kit per set, so
+  -- | they take consecutive slots and it says so as a range.
+  landsAt =
+    let
+      inBank = Array.filter (\r -> r.letter == st.letter) (maybe [] _.rows st.cardView)
+      here = Array.nub (map (\r -> { ix: r.kitIx, kit: r.kit }) inBank)
+      named = if st.kit == "" then Nothing
+              else map _.ix (Array.find (\k -> k.kit == st.kit) here)
+      next = Array.length here
+      n = max 1 (Set.size st.picked)
+    in
+      case named of
+        Just i -> st.letter <> show i
+        Nothing
+          | st.kit /= "" -> st.letter <> show next
+          -- One kit per ticked set, so a run of them.
+          | n <= 1 -> st.letter <> show next
+          | otherwise -> st.letter <> show next <> "\x2013"
+                           <> st.letter <> show (next + n - 1)
+
   -- | Whether anything ticked is stereo, and so wants a voice pair.
   pickedWide =
     Array.any (\r -> Set.member r.name st.picked && r.stereo) st.sets
@@ -3373,7 +3403,13 @@ render st =
                 , HP.checked (n > 0 && n == Array.length st.sets)
                 , HE.onChange \_ -> PickAllSets (n < Array.length st.sets)
                 ]
-            , HH.text (if n == 0 then " select" else " " <> show n <> " selected")
+            -- **Say that the controls are behind the tick.** The whole
+            -- destination row appears only once something is selected, which
+            -- is right — settings for a set you have not chosen are noise —
+            -- and left "where do I choose the bank?" with no answer on the
+            -- page where the banks are. One word of it costs nothing.
+            , HH.text (if n == 0 then " select \x2014 then say where it goes"
+                       else " " <> show n <> " selected")
             ]
         , if n == 0 then HH.text "" else
             HH.div [ HP.class_ (HH.ClassName "q-pickdo") ]
@@ -3444,6 +3480,11 @@ render st =
                               [ HH.text m ])
                           [ "manual", "velocity", "random", "cyclic" ])
                   ]
+              -- The module's own name for where this is going. Not a
+              -- control: see `landsAt`.
+              , HH.span [ HP.class_ (HH.ClassName "q-dest") ]
+                  [ HH.text (if st.letter == "" then "\x2192 name a bank letter"
+                             else "\x2192 " <> landsAt) ]
               , HH.button
                   [ HP.class_ (HH.ClassName "q-plain")
                   , HP.disabled (st.cardBusy || st.letter == "")
