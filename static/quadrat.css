@@ -714,9 +714,14 @@ body {
    control: it is a one-time exercise, it sits inside a sentence, and anything
    with a button's weight there would compete with the choices around it. */
 .q-rename {
-  border: 0; background: none; padding: 0 0 0 5px; margin: 0;
-  font: inherit; font-size: 11px; color: var(--muted);
+  border: 0; background: none; padding: 0 0 0 6px; margin: 0;
+  font: inherit; color: var(--muted);
   cursor: pointer; vertical-align: baseline;
+  /* Relative to the sentence, not absolute. A flat 11px against the
+     statement's 23 is less than half its height and reads as a rendering
+     fault rather than as a marginal note; 0.62em is subordinate and still
+     legible, and stays so if the statement's size is ever changed. */
+  font-size: 0.62em; font-weight: 400;
 }
 .q-rename:hover { color: var(--ink); text-decoration: underline; }
 
