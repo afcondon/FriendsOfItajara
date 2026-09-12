@@ -1449,6 +1449,19 @@ const server = http.createServer(async (req, res) => {
       if (!wav) return json(res, 404, { error: "no audio in that take" });
       return sendAudio(req, res, wav);
     }
+    // **One sample of a stored set, to hear.** Named by set and index rather
+    // than by path, because the caller knows a set and a position and has no
+    // business assembling filenames — and because a route that takes a path is
+    // a route to get the path rule wrong in a second place.
+    if (url.pathname === "/api/set-audio" && req.method === "GET") {
+      const set = safe(url.searchParams.get("set") || "");
+      const dir = path.join(SAMPLES, set);
+      if (!set || !fs.existsSync(dir)) return json(res, 404, { error: "no such set" });
+      const wavs = fs.readdirSync(dir).filter((f) => f.toLowerCase().endsWith(".wav")).sort(natural);
+      const i = Math.max(0, Math.min(wavs.length - 1, Number(url.searchParams.get("i")) || 0));
+      if (!wavs.length) return json(res, 404, { error: "that set holds no audio" });
+      return sendAudio(req, res, path.join(dir, wavs[i]));
+    }
     if (url.pathname === "/api/audio" && req.method === "GET") {
       const file = resolveIn(url.searchParams.get("lib"), url.searchParams.get("path"));
       if (!file || !fs.existsSync(file) || fs.statSync(file).isDirectory()) return json(res, 404, { error: "no such file" });

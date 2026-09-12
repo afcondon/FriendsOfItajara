@@ -361,6 +361,8 @@ data Action
   -- | Put a stored set back on the bench, drawn from its own take.
   | OpenSet String
   -- | Tick or untick one stored set.
+  -- | Hear a set before doing anything irreversible to it.
+  | HearSet String Int
   | PickSet String
   -- | Tick all of them, or none.
   | PickAllSets Boolean
@@ -797,6 +799,20 @@ handleAction = case _ of
                       }
                     H.modify_ (note (nm <> " — " <> show n <> " samples over "
                                  <> fmt p.secs <> " s of " <> v.take))
+
+  -- | **Three samples, a second each.**
+  -- |
+  -- | The names are timestamps, so `drum-hits-0912-121546` and
+  -- | `drum-hits-0912-120901` differ by one glance — and one of the things you
+  -- | can do to them from here cannot be undone. First, middle and last,
+  -- | because the files are in cell order and on a grid that spans the outer
+  -- | axis: on a decay sweep you hear short, middle and long, which is the set
+  -- | describing itself in the time it takes to read its name.
+  HearSet nm n -> liftEffect $
+    Audio.playEach
+      (map (\i -> "/api/set-audio?set=" <> nm <> "&i=" <> show i)
+         (Array.nub [ 0, n / 2, max 0 (n - 1) ]))
+      1.0
 
   PickSet nm -> H.modify_ \s0 ->
     s0 { picked = if Set.member nm s0.picked then Set.delete nm s0.picked
@@ -2812,6 +2828,27 @@ render st =
                     ]
                     [ HH.text "Delete\x2026" ]
               ]
+        -- | **Say which ones, and let each be heard.**
+        -- |
+        -- | Andrew, 2026-09-12: *"should we add some audio preview in the
+        -- | delete process to avoid disappointing accidents?"* — and the
+        -- | accident is specifically likely here, because every name is a
+        -- | timestamp and two runs of the same morning differ by four
+        -- | characters in the middle. A count is not a check; the names are,
+        -- | and the sound is the only check that cannot be misread.
+        , if not st.confirmDrop then HH.text "" else
+            HH.div [ HP.class_ (HH.ClassName "q-doomed") ]
+              ( [ HH.span [ HP.class_ (HH.ClassName "q-warn") ]
+                    [ HH.text "about to delete, for good — hear them first:" ] ]
+                  <> map
+                      (\r -> HH.button
+                         [ HP.class_ (HH.ClassName "q-plain is-hear")
+                         , HP.title ("hear " <> r.name)
+                         , HE.onClick \_ -> HearSet r.name r.count
+                         ]
+                         [ HH.text ("\x266a " <> r.name) ])
+                      (Array.filter (\r -> Set.member r.name st.picked) st.sets)
+              )
         ]
 
   -- | How to play it in a pattern. `n` counts from zero and the files from
@@ -2875,7 +2912,20 @@ render st =
           -- for every set with regions, because it is the only one of these
           -- that costs nothing and answers "which one was this?" — which is
           -- the question a library of forty sets is mostly asked.
-          [ if r.described && r.count > 0
+          -- **Hear it first.** Offered on every set with audio, and first,
+          -- because it is the only one of these that cannot go wrong and it
+          -- answers the question a list of timestamps mostly raises.
+          [ if r.count > 0
+              then HH.button
+                     [ HP.class_ (HH.ClassName "q-plain is-hear")
+                     , HP.title "three of its samples, a second each — first, \
+                                \middle and last, which on a grid spans the \
+                                \outer axis"
+                     , HE.onClick \_ -> HearSet r.name r.count
+                     ]
+                     [ HH.text "\x266a" ]
+              else HH.text ""
+          , if r.described && r.count > 0
               then HH.button
                      [ HP.class_ (HH.ClassName "q-plain")
                      , HP.disabled st.busy
