@@ -11882,7 +11882,7 @@
       };
     }
     ;
-    throw new Error("Failed pattern match at Quadrat.Sweep (line 884, column 3 - line 889, column 23): " + [v.constructor.name]);
+    throw new Error("Failed pattern match at Quadrat.Sweep (line 902, column 3 - line 907, column 23): " + [v.constructor.name]);
   };
   var sizeOfAxis = function(p2) {
     return function(a2) {
@@ -11917,7 +11917,7 @@
           return -1 | 0;
         }
         ;
-        throw new Error("Failed pattern match at Quadrat.Sweep (line 704, column 19 - line 706, column 18): " + [q2.pitch.constructor.name]);
+        throw new Error("Failed pattern match at Quadrat.Sweep (line 705, column 19 - line 707, column 18): " + [q2.pitch.constructor.name]);
       };
     };
     var live = filter2(function($186) {
@@ -11945,7 +11945,7 @@
           return lerp(q2.cvLo)(q2.cvHi)(v(q2)(cell));
         }
         ;
-        throw new Error("Failed pattern match at Quadrat.Sweep (line 698, column 20 - line 700, column 45): " + [q2.pitch.constructor.name]);
+        throw new Error("Failed pattern match at Quadrat.Sweep (line 699, column 20 - line 701, column 45): " + [q2.pitch.constructor.name]);
       };
     };
     var one2 = function(i2) {
@@ -11998,7 +11998,7 @@
                   return -1 | 0;
                 }
                 ;
-                throw new Error("Failed pattern match at Quadrat.Sweep (line 681, column 17 - line 683, column 28): " + [q2.cc.constructor.name]);
+                throw new Error("Failed pattern match at Quadrat.Sweep (line 682, column 17 - line 684, column 28): " + [q2.cc.constructor.name]);
               })(),
               note: noteOf(q2)(cell)
             };
@@ -12010,6 +12010,11 @@
   };
   var sayConflict = function(c) {
     return c.place + (" is claimed by " + joinWith(" and ")(c.who));
+  };
+  var pitched = function(p2) {
+    return any2(function(q2) {
+      return isJust(q2.pitch) && !q2.off;
+    })(p2.params);
   };
   var param2 = function(nm) {
     return function(bus) {
@@ -12039,7 +12044,7 @@
       return "CV bus " + show8(b2);
     }
     ;
-    throw new Error("Failed pattern match at Quadrat.Sweep (line 241, column 1 - line 241, column 26): " + [b2.constructor.name]);
+    throw new Error("Failed pattern match at Quadrat.Sweep (line 242, column 1 - line 242, column 26): " + [b2.constructor.name]);
   };
   var flatten = function(p2) {
     var one2 = function(q2) {
@@ -12080,7 +12085,7 @@
             return "named";
           }
           ;
-          throw new Error("Failed pattern match at Quadrat.Sweep (line 853, column 13 - line 856, column 29): " + [q2.curve.constructor.name]);
+          throw new Error("Failed pattern match at Quadrat.Sweep (line 854, column 13 - line 857, column 29): " + [q2.curve.constructor.name]);
         })(),
         shape: (function() {
           if (q2.curve instanceof Named) {
@@ -12211,7 +12216,7 @@
         })(0)(range2(0)(i2 - 1 | 0));
       }
       ;
-      throw new Error("Failed pattern match at Quadrat.Sweep (line 225, column 1 - line 225, column 31): " + [p2.constructor.name, i2.constructor.name]);
+      throw new Error("Failed pattern match at Quadrat.Sweep (line 226, column 1 - line 226, column 31): " + [p2.constructor.name, i2.constructor.name]);
     };
   };
   var emptyPlan = /* @__PURE__ */ (function() {
@@ -12491,7 +12496,7 @@
             };
           }
           ;
-          throw new Error("Failed pattern match at Quadrat.Sweep (line 534, column 5 - line 543, column 12): " + [v2.constructor.name]);
+          throw new Error("Failed pattern match at Quadrat.Sweep (line 535, column 5 - line 544, column 12): " + [v2.constructor.name]);
         };
       }
       ;
@@ -13158,7 +13163,7 @@
         };
       }
       ;
-      throw new Error("Failed pattern match at Quadrat.Sweep (line 532, column 12 - line 606, column 73): " + [v.constructor.name]);
+      throw new Error("Failed pattern match at Quadrat.Sweep (line 533, column 12 - line 607, column 73): " + [v.constructor.name]);
     };
   })();
   var update = function(m) {
@@ -15968,12 +15973,12 @@
         var others = filter2(function(m) {
           return m.note < 0;
         })(means);
-        var pitched = find2(function(m) {
+        var pitched2 = find2(function(m) {
           return m.note >= 0;
         })(means);
         return catMaybes2([new Just(span3([class_("q-seg-n")])([text5(maybe(show14(i2 + 1 | 0))(function(m) {
           return noteName(m.note);
-        })(pitched))])), (function() {
+        })(pitched2))])), (function() {
           var $888 = $$null2(others);
           if ($888) {
             return Nothing.value;
@@ -15986,9 +15991,7 @@
       };
     };
     var placeable = notEq3(st.fill)(Swept.value) || onCard(st.sweep.encoding);
-    var pitchOn = any2(function(q2) {
-      return isJust(q2.pitch);
-    })(st.sweep.params);
+    var pitchOn = pitched(st.sweep);
     var slotPitched = sel("q-slot")((function() {
       if (pitchOn) {
         return "pitched";
@@ -16848,9 +16851,7 @@
       return p([class_("q-clash")])([text5(joinWith(" \xB7 ")(map30(sayConflict)(v)) + " \u2014 one of them has to go somewhere else, or off. Nothing on the page can tell you which was meant, and the rig will happily sum them into one voltage.")]);
     })();
     var statement = section([class_("q-say")])([listening, p([class_("q-sayline")])(append6([text5("Making "), slotExtent, text5(" "), slotPitched, text5(" samples from "), slotSource, slotSourceName, text5(", triggered by "), slotTrigger, text5(", kept as "), slotName, text5(" for "), slotEncoding])(append6((function() {
-      var $977 = any2(function(q2) {
-        return isJust(q2.pitch);
-      })(st.sweep.params);
+      var $977 = pitched(st.sweep);
       if ($977) {
         return [text5(", tuned by "), slotCalib];
       }

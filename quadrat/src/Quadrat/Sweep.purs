@@ -44,6 +44,7 @@ module Quadrat.Sweep
   , conflicts
   , sayConflict
   , collapsed
+  , pitched
   , fixPitch
   , sizeOfAxis
   , fingerprint
@@ -879,6 +880,23 @@ flatten p =
 -- | sole effect is to ramp raw voltage into a V/oct input. A second real pitch
 -- | axis, or an ordinary parameter you named `pitch` yourself with no pitch
 -- | run beside it, is left alone.
+-- | **Is this run pitched?**
+-- |
+-- | Not the same question as "does a parameter carry a pitch spec". Switching
+-- | the sentence to *unpitched* sets `off` on the pitch parameter — keeping
+-- | its spec, its calibration and its notes, so that switching back restores
+-- | what you had rather than a fresh C2-E3-G4-B5 — and an `off` parameter is
+-- | on no axis, claims no jack and appears in no step.
+-- |
+-- | Which means the two facts are genuinely different, and reading the wrong
+-- | one is exactly what happened: the sentence asked `isJust q.pitch`, which
+-- | stays true through the off switch, so it printed "pitched" in both
+-- | positions. One function, because the sentence asks this twice — once for
+-- | the word and once for whether to say "tuned by" at all — and two readers
+-- | of one fact is how a control stops reflecting what it just did.
+pitched :: Plan -> Boolean
+pitched p = Array.any (\q -> isJust q.pitch && not q.off) p.params
+
 tidyPitches :: Plan -> Plan
 tidyPitches p =
   case Array.find (\q -> isJust q.pitch) p.params of

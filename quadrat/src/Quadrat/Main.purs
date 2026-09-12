@@ -2400,7 +2400,7 @@ render st =
               -- Named only when there IS one to name: "tuned by nothing" is a
               -- clause about an absence, and an unpitched run is not missing
               -- anything.
-              <> (if Array.any (\q -> Maybe.isJust q.pitch) st.sweep.params
+              <> (if Sweep.pitched st.sweep
                     then [ HH.text ", tuned by ", slotCalib ] else [])
               <> [ HH.text ", about ", HH.text runSecs, HH.text " to record." ] )
       , clashSays
@@ -2529,7 +2529,7 @@ render st =
     sel "q-slot" (if pitchOn then "pitched" else "unpitched") SetPitched
       [ { v: "unpitched", t: "unpitched" }, { v: "pitched", t: "pitched" } ]
 
-  pitchOn = Array.any (\q -> Maybe.isJust q.pitch) st.sweep.params
+  pitchOn = Sweep.pitched st.sweep
 
   slotSource = case st.looper of
     Nothing -> HH.span [ HP.class_ (HH.ClassName "q-slot is-fixed") ] [ HH.text "…" ]
