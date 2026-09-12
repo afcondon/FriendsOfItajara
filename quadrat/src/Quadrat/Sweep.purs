@@ -236,14 +236,19 @@ jackSaid b
 claimsOf :: Plan -> Array { key :: String, place :: String, who :: String }
 claimsOf p =
   let
-    ofParam q = Array.catMaybes
-      [ map (\b -> { key: "cv" <> show b, place: jackSaid b, who: q.name }) q.cv
-      , map (\x -> { key: "esx" <> show x
-                  , place: "ESX-8CV channel " <> show (x + 1), who: q.name }) q.esx
-      , map (\c -> { key: "cc" <> show q.channel <> "/" <> show c
-                  , place: "MIDI CC " <> show c <> " on channel " <> show q.channel
-                  , who: q.name }) q.cc
-      ]
+    -- | **Named AND numbered.** "claimed by pitch and pitch" is a true
+    -- | sentence about two different parameters that cannot be told apart by
+    -- | reading it, and the one thing the reader has to do is find them.
+    ofParam i q =
+      let me = q.name <> " (parameter " <> show (i + 1) <> ")"
+      in Array.catMaybes
+        [ map (\b -> { key: "cv" <> show b, place: jackSaid b, who: me }) q.cv
+        , map (\x -> { key: "esx" <> show x
+                    , place: "ESX-8CV channel " <> show (x + 1), who: me }) q.esx
+        , map (\c -> { key: "cc" <> show q.channel <> "/" <> show c
+                    , place: "MIDI CC " <> show c <> " on channel " <> show q.channel
+                    , who: me }) q.cc
+        ]
     ofTrigger = Array.catMaybes
       [ map (\b -> { key: "cv" <> show b, place: jackSaid b
                   , who: "the trigger's gate" }) p.trigger.gate
@@ -264,7 +269,11 @@ claimsOf p =
     -- exactly how you audition one against the other.
     live = Array.filter (not <<< _.off) p.params
   in
-    Array.concatMap ofParam live <> ofTrigger <> expander
+    -- Numbered by position in the WHOLE list, so the number names the card
+    -- you can see rather than a position in a filtered copy of it.
+    Array.concat (Array.mapWithIndex
+                   (\i q -> if q.off then [] else ofParam i q) p.params)
+      <> ofTrigger <> expander
 
 -- | **Two things pointed at one place.**
 -- |
@@ -822,12 +831,37 @@ flatten p =
     , values: Curve.valuesOf 32 q.curve
     }
 
+-- | **Parameters left behind by an older unpitched toggle.**
+-- |
+-- | Until 2026-09-12, going unpitched stripped the pitch spec and left the
+-- | parameter — still named `pitch`, still routed to ES-9 jack 1. Coming back
+-- | made a second one on the same jack, so a plan could accumulate one stray
+-- | per toggle and report *"ES-9 jack 1 is claimed by pitch and pitch"* for
+-- | ever after. The toggle is a switch now and makes no more of them; this
+-- | clears the ones already stored, because a plan in that state cannot be
+-- | repaired by using the thing that broke it.
+-- |
+-- | Deliberately narrow. It removes only a parameter that has NO pitch spec,
+-- | is named `pitch`, and sits on the same bus as a parameter that HAS one —
+-- | which is to say, a thing that can only have come from that bug, and whose
+-- | sole effect is to ramp raw voltage into a V/oct input. A second real pitch
+-- | axis, or an ordinary parameter you named `pitch` yourself with no pitch
+-- | run beside it, is left alone.
+tidyPitches :: Plan -> Plan
+tidyPitches p =
+  case Array.find (\q -> isJust q.pitch) p.params of
+    Nothing -> p
+    Just real ->
+      p { params = Array.filter
+            (\q -> isJust q.pitch || not (q.name == "pitch" && q.cv == real.cv))
+            p.params }
+
 -- | **`fixPitch` on the way back in**, so a plan stored before the rule was
 -- | right comes back right. A pitch range is not a stored fact — it is the
 -- | base plus the size of the axis — so restoring one verbatim would carry an
 -- | old mistake across a reload and make it look deliberate.
 unflatten :: Plain -> Plan
-unflatten = fixPitch <<< unflatten'
+unflatten = fixPitch <<< tidyPitches <<< unflatten'
 
 unflatten' :: Plain -> Plan
 unflatten' p =

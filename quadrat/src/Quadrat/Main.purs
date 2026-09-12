@@ -1675,11 +1675,24 @@ render st =
         -- | things you adjust and then stop looking at. Side-by-side pages put
         -- | the specification and the result in competition for the same
         -- | glance, and neither won.
+        -- | **Acts, then the instrument, then what came back.**
+        -- |
+        -- | The parameters sat below the take, on the argument that they are
+        -- | the things you adjust and then stop looking at. The keyboard
+        -- | ended that: once a card can show you the notes it will play and
+        -- | the schedule it will fire on, the cards are what you READ before
+        -- | pressing anything, and they were a scroll below the button. So
+        -- | they move up against the acts — Andrew, 2026-09-12 — and the
+        -- | grid keeps the bottom of the page, where it is the answer rather
+        -- | than the question.
         Bench ->
           HH.div_
             [ HH.section [ HP.class_ (HH.ClassName "q-hero") ]
-                [ HH.div [ HP.class_ (HH.ClassName "q-actbar") ] [ goRow, transport, doors ]
-                , if not (Array.null st.regions) || st.busy || hasTake
+                [ HH.div [ HP.class_ (HH.ClassName "q-actbar") ] [ goRow, transport, doors ] ]
+            , HH.section [ HP.class_ (HH.ClassName "q-curverow is-first") ]
+                [ SweepView.curves sweepHandlers ]
+            , HH.section [ HP.class_ (HH.ClassName "q-hero is-take") ]
+                [ if not (Array.null st.regions) || st.busy || hasTake
                     then caught
                     else case st.fill of
                       Swept -> expected
@@ -1693,8 +1706,6 @@ render st =
             -- | Each was a panel competing with the waveform for the page.
             -- | Behind a door they cost one line, and the line says what is
             -- | inside it rather than showing you.
-            , HH.section [ HP.class_ (HH.ClassName "q-curverow") ]
-                [ SweepView.curves sweepHandlers ]
             -- **One hit, every parameter — as a modal.**
             --
             -- It opened at the BOTTOM of the page, below the curves, when the
@@ -2028,7 +2039,10 @@ render st =
   clashSays = case Sweep.conflicts st.sweep of
     [] -> HH.text ""
     cs -> HH.p [ HP.class_ (HH.ClassName "q-clash") ]
-            [ HH.text (joinWith " · " (map Sweep.sayConflict cs)) ]
+            [ HH.text (joinWith " · " (map Sweep.sayConflict cs)
+                <> " — one of them has to go somewhere else, or off. \
+                   \Nothing on the page can tell you which was meant, and the \
+                   \rig will happily sum them into one voltage.") ]
 
   -- | **A grid that is really a line**, said beside the conflicts because it
   -- | is the same kind of mistake: a fact about the plan that is legal,

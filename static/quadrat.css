@@ -632,6 +632,12 @@ body {
    neither won; stacked, each gets the whole width when it is the thing
    being read. */
 .q-hero { margin-bottom: 22px; }
+/* The parameters moved up against the acts: once a card shows the notes it
+   will play and the schedule it will fire on, the cards are what you read
+   BEFORE pressing anything, and they were a scroll below the button. The rule
+   that divided them belongs above the take now, not above the cards. */
+.q-curverow.is-first { margin-top: 0; padding-top: 0; border-top: 0; }
+.q-hero.is-take { margin-top: 26px; padding-top: 20px; border-top: 1px solid var(--rule); }
 .q-hero .q-whole { margin-bottom: 10px; }
 .q-curverow { margin-top: 26px; padding-top: 20px; border-top: 1px solid var(--rule); }
 
