@@ -713,17 +713,21 @@ body {
 /* The way in to naming the inputs, set as a marginal note rather than as a
    control: it is a one-time exercise, it sits inside a sentence, and anything
    with a button's weight there would compete with the choices around it. */
+/* **A footnote marker, not a word in the sentence.**
+   It was set as small prose and sat in the flow between the input's name and
+   the comma after it, so it read as a broken word rather than as a control —
+   "samples from ES9 channel 1 name…, triggered by". Raised, letter-spaced and
+   bracketed, it is a mark ATTACHED to the word it renames, which is a
+   typographic device the eye already knows how to skip.
+   Sized in em so it stays in proportion if the statement's size changes. */
 .q-rename {
-  border: 0; background: none; padding: 0 0 0 6px; margin: 0;
-  font: inherit; color: var(--muted);
-  cursor: pointer; vertical-align: baseline;
-  /* Relative to the sentence, not absolute. A flat 11px against the
-     statement's 23 is less than half its height and reads as a rendering
-     fault rather than as a marginal note; 0.62em is subordinate and still
-     legible, and stays so if the statement's size is ever changed. */
-  font-size: 0.62em; font-weight: 400;
+  border: 0; background: none; margin: 0; padding: 0 0 0 4px;
+  font: inherit; font-size: 0.5em; font-weight: 500;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--muted); cursor: pointer;
+  vertical-align: 0.75em; line-height: 1;
 }
-.q-rename:hover { color: var(--ink); text-decoration: underline; }
+.q-rename:hover { color: var(--ink); }
 
 /* One row per input: the name you gave it, and the wire name beside it. The
    wire name is not hidden by the label — the label is what you read, and the

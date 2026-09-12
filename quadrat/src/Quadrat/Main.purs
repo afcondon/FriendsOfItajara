@@ -2521,6 +2521,13 @@ render st =
   -- | it says. Not a door in the action row: those are things you do on every
   -- | run, and a sixth of them for a thing done once would be the row's worst
   -- | entry.
+  -- |
+  -- | **Set as a footnote marker rather than as small prose.** As a word at the
+  -- | sentence's own weight it landed in the flow between the input's name and
+  -- | the comma after it — "samples from ES9 channel 1 name…, triggered by" —
+  -- | which reads as a broken word, not as a control. Raised and lettered, it
+  -- | is a mark attached to the thing it renames, and the eye skips it until
+  -- | it is wanted.
   slotSourceName = case st.looper of
     Nothing -> HH.text ""
     Just _ ->
@@ -2529,7 +2536,7 @@ render st =
         , HP.title "name the inputs after what is plugged into them"
         , HE.onClick \_ -> OpenModal (Just InputsModal)
         ]
-        [ HH.text "name\x2026" ]
+        [ HH.text "rename" ]
 
   -- | **Name each input after the thing on the other end of the cable.**
   -- |
