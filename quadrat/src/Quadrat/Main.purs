@@ -821,22 +821,34 @@ handleAction = case _ of
   -- | so keeping under a name that is taken is not a merge. The question is
   -- | asked from `sets`, which is already fetched — no round trip, and no
   -- | dialog: the button becomes the question and cancel is beside it.
-  -- Empty means "not a pitch run", so it clears rather than doing nothing:
-  -- the statement's calibration slot uses the same action for both, and a
-  -- dropdown you cannot get back out of is a trap.
+  -- | **Empty means "no pitch axis", and that is a SWITCH, not a deletion.**
+  -- |
+  -- | It used to `ClearPitch`, which strips the spec and leaves the parameter
+  -- | behind — still named `pitch`, still routed to ES-9 jack 1, and no longer
+  -- | a pitch. Toggling the statement back to pitched then found no pitch
+  -- | parameter, made a second one, named it `pitch` and routed it to jack 1
+  -- | as well: *"ES-9 jack 1 is claimed by pitch and pitch"*. The guard
+  -- | caught it, which is the guard working, and the pile-up should not have
+  -- | been reachable in the first place.
+  -- |
+  -- | `off` is exactly this question and costs nothing — the table, the
+  -- | routing and the range all survive, and the card says "none". The
+  -- | statement and the card's third button are now the same act.
   AddPitch label
     | label == "" -> do
         st <- H.get
-        case Array.findIndex (\q -> Maybe.isJust q.pitch) st.sweep.params of
-          Just i -> handleAction (SweepMsg (Sweep.ClearPitch i))
+        case thePitchIx st of
+          Just i -> handleAction (SweepMsg (Sweep.SetOff i true))
           Nothing -> pure unit
     | otherwise -> do
         st <- H.get
-        case Array.findIndex (\q -> Maybe.isJust q.pitch) st.sweep.params of
+        case thePitchIx st of
           -- Retarget the pitch there already is, rather than growing a second
           -- one: two pitch axes on one transect is a thing to mean deliberately
           -- and never a thing to arrive at by using a dropdown.
-          Just i -> handleAction (PickPitch i label)
+          Just i -> do
+            handleAction (SweepMsg (Sweep.SetOff i false))
+            handleAction (PickPitch i label)
           Nothing -> do
             handleAction (SweepMsg Sweep.AddParam)
             st2 <- H.get
@@ -872,7 +884,7 @@ handleAction = case _ of
   -- | than an absent one.
   OpenModal m -> do
     st <- H.get
-    let ix = Array.findIndex (\q -> Maybe.isJust q.pitch) st.sweep.params
+    let ix = thePitchIx st
     H.modify_ _
       { modal = m
       , sweepEdit = case m of
@@ -880,10 +892,14 @@ handleAction = case _ of
           _ -> st.sweepEdit
       }
 
+  -- The statement's coarse toggle, saying the same thing as the card's third
+  -- button and by the same means. "Pitched" on a pitch that is merely switched
+  -- off puts it back rather than fetching its table again.
   SetPitched v -> do
     st <- H.get
-    case v, Array.findIndex (\q -> Maybe.isJust q.pitch) st.sweep.params of
-      "unpitched", Just i -> handleAction (SweepMsg (Sweep.ClearPitch i))
+    case v, thePitchIx st of
+      "unpitched", Just i -> handleAction (SweepMsg (Sweep.SetOff i true))
+      "pitched", Just i -> handleAction (SweepMsg (Sweep.SetOff i false))
       "pitched", Nothing ->
         case Array.head st.tables of
           Just t -> handleAction (AddPitch t.label)
@@ -1593,6 +1609,19 @@ lastLine s = fromMaybe s (Array.last (Array.filter (_ /= "") (String.split (Stri
 -- | the Int uses on this page.
 clampN :: Number -> Number -> Number -> Number
 clampN lo hi v = max lo (min hi v)
+
+-- | **Which parameter is the pitch**, asked in one place.
+-- |
+-- | A parameter carrying a spec, or failing that one that was meant to be a
+-- | pitch and lost its spec to an older version of the unpitched toggle. The
+-- | second clause is repair: it adopts the stray rather than adding a second
+-- | parameter beside it on the same jack, which is how a plan ends up claiming
+-- | ES-9 jack 1 twice.
+thePitchIx :: State -> Maybe Int
+thePitchIx st =
+  case Array.findIndex (\q -> Maybe.isJust q.pitch) st.sweep.params of
+    Just i -> Just i
+    Nothing -> Array.findIndex (\q -> q.name == "pitch") st.sweep.params
 
 fmt :: Number -> String
 fmt n = show (Int.round (n * 100.0) # \k -> Int.toNumber k / 100.0)

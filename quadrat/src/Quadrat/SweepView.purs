@@ -628,8 +628,17 @@ part h which =
   keyboardFace x =
     let
       ps = x.spec
-      lo = min ps.noteLo ps.noteHi
-      hi = max ps.noteLo ps.noteHi
+      -- | **Whole octaves, C to B**, whatever the run asks for.
+      -- |
+      -- | Drawn to the run's own range, a four-note pitch axis came out as two
+      -- | enormous white keys and two black ones — a correct picture of C2-D#2
+      -- | and unrecognisable as a keyboard, which is the entire point of
+      -- | drawing one. Padded out, four lit keys sit at the left of an octave
+      -- | you can read, and "this is a short run" becomes something you can
+      -- | see rather than something you have to already know.
+      want = { lo: min ps.noteLo ps.noteHi, hi: max ps.noteLo ps.noteHi }
+      lo = want.lo - mod want.lo 12
+      hi = want.hi + (11 - mod want.hi 12)
       ns = Array.range lo hi
       white n = Array.elem (mod n 12) [ 0, 2, 4, 5, 7, 9, 11 ]
       whites = Array.filter white ns
