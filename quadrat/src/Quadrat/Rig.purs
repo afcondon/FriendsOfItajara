@@ -25,6 +25,7 @@ module Quadrat.Rig
   , ports
   , listenMidi
   , inPorts
+  , midiAvailable
   , heardNotes
   , forgetHeard
   , sendCc
@@ -77,6 +78,13 @@ foreign import listenMidi :: Effect Unit
 -- | The MIDI inputs the browser can see. Beside `ports`, which is the outputs:
 -- | where instructions go out, and where a performance comes back.
 foreign import inPorts :: Effect (Array String)
+
+-- | **Whether Web MIDI exists here**, which is not whether anything is plugged
+-- | in. `requestMIDIAccess` is defined only on a secure origin — `https`, or
+-- | `localhost`/`127.0.0.1` — and this server also answers on the machine's
+-- | tailnet name over plain http, where the API is absent and every list comes
+-- | back empty with no prompt and no error.
+foreign import midiAvailable :: Effect Boolean
 
 -- | Everything heard since the last `forgetHeard`, stamped in the same clock
 -- | as `nowMs`.

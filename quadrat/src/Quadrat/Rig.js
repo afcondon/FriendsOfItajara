@@ -193,3 +193,14 @@ export const heardNotes = () => heard.slice();
 export const forgetHeard = () => {
   heard = [];
 };
+
+// **Whether this browser offers Web MIDI here at all**, which is not the same
+// question as whether any port is connected.
+//
+// `requestMIDIAccess` is only defined on a **secure origin**: `https://`, or
+// `localhost` / `127.0.0.1`. The Friends server also answers on the machine's
+// tailnet name over plain http, and opened that way the whole API is simply
+// absent — every port list comes back empty, no prompt appears, and nothing
+// anywhere says why. Distinguishing the two is the difference between "plug
+// something in" and "open this page by a different name".
+export const midiAvailable = () => !!navigator.requestMIDIAccess;

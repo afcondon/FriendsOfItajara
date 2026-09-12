@@ -314,6 +314,10 @@ type State =
   -- | The MIDI inputs the browser can see, so the page can say that it is
   -- | listening to nothing BEFORE a take rather than after one.
   , midiIn :: Array String
+  -- | Whether Web MIDI exists on this origin at all. See `Rig.midiAvailable` —
+  -- | "no ports" and "no API" look identical from the page and want opposite
+  -- | remedies.
+  , midiOk :: Boolean
   }
 
 -- | The two panels that became modals.
@@ -425,7 +429,7 @@ component = H.mkComponent
       , page: Bench, fill: Swept, pivot: Nothing
       , levels: [], modal: Nothing, kept: false, confirmKeep: false
       , picked: Set.empty, confirmDrop: false, srcNames: []
-      , heard: [], midiIn: [] }
+      , heard: [], midiIn: [], midiOk: true }
   , render
   , eval: H.mkEval H.defaultEval { handleAction = handleAction, initialize = Just Init }
   }
@@ -733,7 +737,9 @@ handleAction = case _ of
     do
       hs <- liftEffect Rig.heardNotes
       ins <- liftEffect Rig.inPorts
+      ok <- liftEffect Rig.midiAvailable
       st4 <- H.get
+      when (ok /= st4.midiOk) $ H.modify_ _ { midiOk = ok }
       when (Array.length hs /= Array.length st4.heard) $ H.modify_ _ { heard = hs }
       when (ins /= st4.midiIn) $ H.modify_ _ { midiIn = ins }
     -- The MIDI ports, while the sweep is open. Read rather than asked for: the
@@ -1954,12 +1960,21 @@ notesIn
   -> { start :: Number, end :: Number | r }
   -> Array Int
 notesIn heard t0 r =
-  Array.sort
-    (map _.note
-      (Array.filter
-        (\h -> let t = (h.at - t0) / 1000.0
-               in t >= r.start - 0.120 && t < r.end)
-        heard))
+  -- **Distinct pitches, because the answer is a SET.** Progressions resends a
+  -- chord that is held past a bar, so most chords arrive twice and a few three
+  -- times; the same pitch struck again is the same pitch, and a voicing that
+  -- says D3 twice is not a fourteen-note chord. `nub` also absorbs a port that
+  -- is carrying the same performance twice, which is the other way one note
+  -- becomes two. What it deliberately loses is re-articulation — irrelevant
+  -- here, where the sample already records how the chord was played and this
+  -- field exists to say which notes were in it.
+  Array.nub
+    (Array.sort
+      (map _.note
+        (Array.filter
+          (\h -> let t = (h.at - t0) / 1000.0
+                 in t >= r.start - 0.120 && t < r.end)
+          heard)))
 
 -- | The page-clock instant that the take's own zero corresponds to, or nothing
 -- | when there is not enough to anchor on. See `notesIn`.
@@ -2618,6 +2633,12 @@ render st =
 
   heardSays
     | st.fill /= Played = HH.text ""
+    | not st.midiOk =
+        HH.p [ HP.class_ (HH.ClassName "q-clash is-soft") ]
+          [ HH.text "this page has no Web MIDI, so nothing can be recorded \
+                    \about what you play. The browser only offers it on a \
+                    \secure origin — open the page as http://localhost:3029 \
+                    \rather than by the machine's name, and the ports appear." ]
     | Array.null st.midiIn =
         HH.p [ HP.class_ (HH.ClassName "q-clash is-soft") ]
           [ HH.text "no MIDI input is reaching the page, so nothing will be \
@@ -4023,6 +4044,10 @@ render st =
   notesMissing
     | st.fill /= Played = Nothing
     | Maybe.isJust st.opened = Nothing
+    | not st.midiOk =
+        Just "this page has no Web MIDI (it needs a secure origin — try \
+             \http://localhost:3029), so this set will say nothing about \
+             \what was played. That cannot be added later."
     | Array.null st.midiIn =
         Just "no MIDI reached the page, so this set will say nothing about \
              \what was played. That cannot be added later."
