@@ -970,19 +970,12 @@ handleAction = case _ of
   AskKeep -> do
     st <- H.get
     let setName = if st.name == "" then "set" else st.name
-        loud = fromMaybe 0.0 (Array.last (Array.sort (map _.peak st.regions)))
-    if st.takeIsDry
-      then H.modify_ (note "not saved — this take is the measuring pass, which \
-                           \runs at the flat spacing by construction, so every \
-                           \sample carries the silence the measurement exists \
-                           \to remove. Press Record for the real one.")
-    else if not (Array.null st.regions) && loud < 0.003
-      then H.modify_ (note "not saved — the loudest sample in this take peaks at \
-                           \silence. Check the input is the one the module is \
-                           \patched to, and that a gate makes it move.")
-      else if Array.any (\r -> r.name == setName) st.sets
-        then H.modify_ _ { confirmKeep = true }
-        else handleAction (SendToCard { place: false, append: false })
+    case wontKeepOf st of
+      Just why -> H.modify_ (note ("not saved — " <> why))
+      Nothing ->
+        if Array.any (\r -> r.name == setName) st.sets
+          then H.modify_ _ { confirmKeep = true }
+          else handleAction (SendToCard { place: false, append: false })
 
   CancelKeep -> H.modify_ _ { confirmKeep = false }
 
@@ -1706,6 +1699,25 @@ thePitchIx st =
     Just i -> Just i
     Nothing -> Array.findIndex (\q -> q.name == "pitch") st.sweep.params
 
+-- | **Why this take cannot be kept**, or nothing. One statement of the rule,
+-- | read by the panel that greys the button and by the action that refuses —
+-- | two copies of a precondition is two chances for the button to be live over
+-- | a refusal.
+wontKeepOf :: State -> Maybe String
+wontKeepOf st =
+  let loud = fromMaybe 0.0 (Array.last (Array.sort (map _.peak st.regions)))
+  in
+    if st.takeIsDry
+      then Just "this take is the measuring pass, which runs at the flat \
+                 \spacing by construction — so every sample carries the \
+                 \silence the measurement exists to remove. Press Record for \
+                 \the real one."
+    else if not (Array.null st.regions) && loud < 0.003
+      then Just "the loudest sample in this take peaks at silence. Check the \
+                 \input is the one the module is patched to, and that a gate \
+                 \makes it move."
+    else Nothing
+
 fmt :: Number -> String
 fmt n = show (Int.round (n * 100.0) # \k -> Int.toNumber k / 100.0)
 
@@ -1823,6 +1835,7 @@ render st =
     ]
   where
   cp = cap st
+  wontKeep = wontKeepOf st
   -- What the daemon says the capture is doing, never a second copy of it.
   --
   -- Four booleans where the loop needed `layers`, `armed`, `isWriting` and
@@ -3178,12 +3191,23 @@ render st =
           else
             HH.button
               [ HP.class_ (HH.ClassName "q-plain is-go")
-              , HP.disabled (st.cardBusy || Set.isEmpty st.keep)
+              , HP.disabled (st.cardBusy || Set.isEmpty st.keep || Maybe.isJust wontKeep)
               , HP.title "cut the kept pieces into a set, measure them, and write \
                          \the description beside them"
               , HE.onClick \_ -> AskKeep
               ]
               [ HH.text ("Keep " <> show (Set.size st.keep) <> " samples") ]
+      -- | **A refusal belongs where the act is, not in the log.**
+      -- |
+      -- | Both guards answered by writing a line to the log at the foot of the
+      -- | page and doing nothing else, so pressing Keep looked exactly like
+      -- | keeping: the panel did not change, and the next thing to check was
+      -- | forty lines below the button. On 2026-09-12 a take was believed
+      -- | saved that the guard had correctly refused. Said here, ahead of the
+      -- | press, with the button dead — a precondition rather than a verdict.
+      , case wontKeep of
+          Nothing -> HH.text ""
+          Just why -> HH.span [ HP.class_ (HH.ClassName "q-warn") ] [ HH.text why ]
       -- **Say where it lands, at the moment of landing it.** The one place a
       -- path is shown, so the name in `The take` and the directory on disk
       -- cannot drift apart again.
