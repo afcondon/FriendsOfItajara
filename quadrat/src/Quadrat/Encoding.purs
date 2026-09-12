@@ -27,6 +27,7 @@ module Quadrat.Encoding
   , blurb
   , Axis
   , axes
+  , joined
   , slicerDivisions
   , defaultExtent
   , total
@@ -170,6 +171,24 @@ sliceAxis =
 nAxis :: String -> String -> Axis
 nAxis nm how =
   { name: nm, picked: how, sizes: Array.range 1 512, free: true, yours: true }
+
+-- | **Does this destination want ONE file with boundaries, or many files?**
+-- |
+-- | A property of the destination, not of the material: the same twelve chords
+-- | are twelve layers on one voice or one sliced file on one voice, and which
+-- | they are is the whole content of the choice between `RampleLayers` and
+-- | `RampleSlices`. It was being taken from the *kind* instead, so choosing
+-- | "Rample · slices" in the sentence changed the axis, the label and the
+-- | arithmetic, and then wrote twelve separate files anyway.
+-- |
+-- | `RampleGrid` is false here and is not an exception: a grid's layers are
+-- | each a concat, but that is assembled per layer by `gridLayers` on the
+-- | server, which knows which files belong to which row. One flag for the
+-- | whole set cannot say that.
+joined :: Encoding -> Boolean
+joined = case _ of
+  RampleSlices -> true
+  _ -> false
 
 axes :: Encoding -> Array Axis
 axes = case _ of

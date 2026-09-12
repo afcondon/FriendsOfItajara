@@ -1031,7 +1031,15 @@ handleAction = case _ of
               -- works inside one file. Without this a four-minute drone cut
               -- into 32 would have tried to be 32 layers, and the module
               -- plays twelve.
-              , join: Kind.joins st.kind || isEqual st.divider
+              -- **The destination decides whether it is one file.** The
+              -- kind says what the material is; the encoding says how it is
+              -- laid out where it is going, and "one voice holding one joined
+              -- file" is the entire content of `Rample · slices`. Taken from
+              -- the kind alone, choosing slices moved the axis, the label and
+              -- the arithmetic and then wrote separate files regardless.
+              , join: Encoding.joined st.sweep.encoding
+                        || Kind.joins st.kind
+                        || isEqual st.divider
               , append
               , place
               , layerMode: st.layerMode
@@ -1897,7 +1905,9 @@ couldLayer st = case occupantOf st of
   Just r ->
     r.kind == Kind.name st.kind
       && r.stereo == (Kind.foldsTo st.kind /= ToMono)
-      && (r.slicer > 0) == (Kind.joins st.kind || isEqual st.divider)
+      && (r.slicer > 0) == (Encoding.joined st.sweep.encoding
+                              || Kind.joins st.kind
+                              || isEqual st.divider)
       && Array.length r.sets < 12
 
 -- | What sits on the voice this send is aimed at, whatever it is.

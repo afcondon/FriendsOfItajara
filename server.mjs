@@ -488,7 +488,10 @@ function storedSet(name) {
 // which it enforces silently on its own.
 function placeOnCard({ set, bank: bankIn, letter: letterIn, kit: kitIn, voice: voiceIn,
                        append, layerMode, kind, shape, grid }) {
-  const { sliced, slots, slotSecs } = shape;
+  // `slots` is reassignable: a set smaller than the bank's division adopts it
+  // rather than being refused over silence. See the check below.
+  const { sliced, slotSecs } = shape;
+  let { slots } = shape;
   const card = readCard();
   const bankName = String(bankIn || "WORKSHOP").toUpperCase().replace(/[^A-Z0-9 ]/g, "").trim() || "WORKSHOP";
   const kitName = String(kitIn || set);
@@ -514,6 +517,24 @@ function placeOnCard({ set, bank: bankIn, letter: letterIn, kit: kitIn, voice: v
   const at = String(voice);
   const there = asStack(kit.voices[at]);
   // `shape` came in; `there` is what is already on the voice.
+
+  // **A smaller set adopts the bank's division rather than being refused.**
+  //
+  // The divisions are a fixed ladder — 8, 12, 16, 24, 32, 48, 64, 128 — and a
+  // set takes the smallest rung that holds it. Seven chords want 8 and twelve
+  // want 12, which is a clash over nothing: the slots past the last piece are
+  // silent by construction, so seven pieces sit perfectly well in twelve slots
+  // and the bank keeps one division. Only a set that genuinely does not FIT
+  // the bank's division is refused, and then it is refused for a real reason.
+  if (slots && bank.slicer && bank.slicer > slots) {
+    slots = bank.slicer;
+    if (shape) shape.slots = slots;
+  }
+  if (slots && bank.slicer && bank.slicer !== slots) {
+    return { ok: false, output:
+      `bank ${bankName} is cut into ${bank.slicer} and this is ${slots}. SLICER is one ` +
+      `global setting, so they cannot share a bank — put this in another one.` };
+  }
 
   if (append && there) {
     // **A layer has to be the same shape as the ones beside it.**
@@ -584,15 +605,13 @@ function placeOnCard({ set, bank: bankIn, letter: letterIn, kit: kitIn, voice: v
   // file fine, and only their neighbours making them wrong. Refused here
   // rather than left for the compiler, because by then the samples are cut and
   // the card row written.
-  if (slots && bank.slicer && bank.slicer !== slots) {
-    return { ok: false, output:
-      `bank ${bankName} is cut into ${bank.slicer} and this is ${slots}. SLICER is one ` +
-      `global setting, so they cannot share a bank — put this in another one.` };
-  }
   if (slots) bank.slicer = slots;
   writeCard(card);
 
-  return { ok: true };
+  // The division it SETTLED on, which is not always the one it was asked for:
+  // a set smaller than the bank's adopts the bank's. Returned so the caller
+  // reports what was written rather than what it proposed.
+  return { ok: true, slots };
 }
 
 // **A two-axis set, as the module has to hold it.**
@@ -716,6 +735,24 @@ function placeStoredSet(body) {
   const files = fs.readdirSync(dir).filter((f) => f.toLowerCase().endsWith(".wav"));
   if (!files.length) return { ok: false, output: `${set} holds no audio` };
 
+  // **Sliced or stacked is a PLACEMENT decision, not a property of the cut.**
+  //
+  // The audio on disk is the same either way — twelve files — and what changes
+  // is whether the manifest concatenates them into one file the start point
+  // addresses, or lists them as twelve layers the layer CV addresses. So a set
+  // can be tried both ways without going back to its take, which is the whole
+  // reason to ask: twelve stereo layers occupy a voice pair and a whole bank's
+  // worth of a kit, and one sliced file occupies the same pair with eleven
+  // more kits left over.
+  //
+  // `set.json`'s own `sliced` stays the default, so nothing that worked before
+  // changes; naming it here overrides for this placement only.
+  const askSliced = body.sliced == null ? null : !!body.sliced;
+  const SLICES = [8, 12, 16, 24, 32, 48, 64, 128];
+  const spans = (d.samples || []).map((x) => Number(x.end) - Number(x.start)).filter((n) => n > 0);
+  const ownSlots = SLICES.find((n) => n >= (spans.length || files.length)) || 0;
+  const ownSlotSecs = spans.length ? Math.max(...spans) : 0;
+
   // A grid holds its own shape: layers from the outer axis, slices from the
   // inner. `set.json` says so and nothing else has to be told.
   const grid = gridLayers(set, d, dir);
@@ -726,12 +763,19 @@ function placeStoredSet(body) {
     shape: grid
       ? { kind: d.kind || "", stereo: !!d.stereo, sliced: true,
           slots: grid.slots, slotSecs: Math.max(...grid.layers.map((l) => l.slotSecs)) }
-      : { kind: d.kind || "",
-          stereo: !!d.stereo,
-          sliced: !!d.sliced,
-          slots: d.slots || 0,
-          slotSecs: d.slotSecs || 0,
-        },
+      : askSliced === null
+        ? { kind: d.kind || "",
+            stereo: !!d.stereo,
+            sliced: !!d.sliced,
+            slots: d.slots || 0,
+            slotSecs: d.slotSecs || 0,
+          }
+        : { kind: d.kind || "",
+            stereo: !!d.stereo,
+            sliced: askSliced,
+            slots: askSliced ? ownSlots : 0,
+            slotSecs: askSliced ? ownSlotSecs : 0,
+          },
   });
   if (!placed.ok) return placed;
   return {
@@ -739,7 +783,11 @@ function placeStoredSet(body) {
     output: grid
       ? `${set} on voice ${Math.min(4, Math.max(1, Number(body.voice) || 1))} — `
           + `${grid.layers.length} layers of ${grid.slots} slices`
-      : `${set} (${files.length} samples) on voice ${Math.min(4, Math.max(1, Number(body.voice) || 1))}`,
+      : askSliced
+        ? `${set} on voice ${Math.min(4, Math.max(1, Number(body.voice) || 1))} — `
+            + `one file of ${placed.slots || ownSlots} slices, `
+            + `${ownSlotSecs.toFixed(2)}s each. SLICER ${placed.slots || ownSlots}.`
+        : `${set} (${files.length} samples) on voice ${Math.min(4, Math.max(1, Number(body.voice) || 1))}`,
     card: readCard(),
     sets: sets(),
   };
