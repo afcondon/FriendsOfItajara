@@ -19,7 +19,11 @@ module Quadrat.Http
   , calibrations
   , calibration
   , placeSet
+  , takePeaks
+  , TakePeaks
   , loadSpec
+  , loadSet
+  , StoredSet
   , writeToCard
   ) where
 
@@ -225,6 +229,31 @@ foreign import calibration
 -- | than on the take, or "the same set reaches both destinations" would only
 -- | mean "the same take was cut twice". Everything the card needs about the
 -- | shape is in `set.json`, which is what it is for.
+-- | **A take's envelope, from the file.**
+-- |
+-- | The Bench draws bands over whatever the daemon is holding, so a set could
+-- | be recorded, saved, and then never looked at again — and any stray capture
+-- | left the bands describing one recording and the picture another. Shaped
+-- | like `Socket.Peaks` so the drawing code does not learn a second source.
+type TakePeaks =
+  { ok :: Boolean, output :: String
+  , secs :: Number, frames :: Int, buckets :: Int
+  , lo :: Array Int, hi :: Array Int }
+
+foreign import takePeaks :: String -> Int -> Effect (Promise TakePeaks)
+
+-- | **A stored set, whole.** Which take it came from, where its pieces are in
+-- | that take, and when the run fired — enough to put it back on the bench.
+-- | `loadSpec` beside it answers a different question, which is what to RUN
+-- | again rather than what was run.
+type StoredSet =
+  { ok :: Boolean, output :: String
+  , take :: String
+  , regions :: Array Region
+  , schedule :: Array Number }
+
+foreign import loadSet :: String -> Effect (Promise StoredSet)
+
 foreign import placeSet
   :: { set :: String, bank :: String, letter :: String, kit :: String, voice :: Int
      , append :: Boolean, layerMode :: String }

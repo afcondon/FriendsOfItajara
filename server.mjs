@@ -223,6 +223,64 @@ function cardToml(card) {
 
 // Mounted Rample cards: the firmware, or at least one kit folder. Same rule
 // `msm` uses, so the page and the compiler agree about what a card is.
+// **A take's envelope, drawn from the file rather than from the daemon.**
+//
+// The Bench draws bands over the capture the daemon is holding, which means a
+// set can be recorded, measured, saved — and then never looked at again, and
+// any stray capture leaves the bands describing one recording and the picture
+// another. Reading the envelope off disk makes a stored set re-openable, which
+// is the whole of what `set.json` was for.
+//
+// Min and max per bucket, not rms: a waveform is an outline and the thing you
+// are looking for in it is the attack, which an rms would smooth away. The
+// shape matches `Socket.Peaks` so the page draws it with the same code.
+function takePeaks(name, buckets) {
+  const dir = path.join(TAKES, safe(name));
+  if (!name || !fs.existsSync(dir)) return { ok: false, output: `no take called ${name || "(none)"}` };
+  const wav = firstWav(dir);
+  if (!wav) return { ok: false, output: `${name} holds no audio` };
+
+  const buf = fs.readFileSync(wav);
+  let off = 12, rate = 0, ch = 0, bits = 0, tag = 0, dOff = 0, dLen = 0;
+  while (off + 8 <= buf.length) {
+    const id = buf.slice(off, off + 4).toString();
+    const size = buf.readUInt32LE(off + 4);
+    if (id === "fmt ") {
+      tag = buf.readUInt16LE(off + 8); ch = buf.readUInt16LE(off + 10);
+      rate = buf.readUInt32LE(off + 12); bits = buf.readUInt16LE(off + 22);
+    } else if (id === "data") { dOff = off + 8; dLen = size; break; }
+    off += 8 + size + (size & 1);
+  }
+  if (!rate || !ch || !dLen) return { ok: false, output: `${name}: unreadable header` };
+  const wide = bits / 8;
+  const frames = Math.floor(dLen / (ch * wide));
+  const n = Math.max(1, Math.min(8000, buckets | 0 || 2000));
+  const per = Math.max(1, Math.floor(frames / n));
+  // The daemon's own peaks are 16-bit ints and the page scales by 32768, so
+  // match that rather than teaching the drawing code a second unit.
+  const read = (i) => {
+    const at = dOff + i * ch * wide;
+    if (tag === 3 && bits === 32) return buf.readFloatLE(at);
+    if (tag === 1 && bits === 16) return buf.readInt16LE(at) / 32768;
+    if (tag === 1 && bits === 24) return ((buf[at] | (buf[at+1] << 8) | (buf[at+2] << 16) << 8 >> 8)) / 8388608;
+    if (tag === 1 && bits === 32) return buf.readInt32LE(at) / 2147483648;
+    return 0;
+  };
+  const lo = [], hi = [];
+  for (let b = 0; b < n; b++) {
+    let mn = 0, mx = 0;
+    const from = b * per, to = Math.min(frames, from + per);
+    for (let i = from; i < to; i++) {
+      const v = read(i);
+      if (v < mn) mn = v;
+      if (v > mx) mx = v;
+    }
+    lo.push(Math.round(mn * 32768));
+    hi.push(Math.round(mx * 32768));
+  }
+  return { ok: true, secs: frames / rate, frames, buckets: n, lo, hi };
+}
+
 function cards() {
   const vols = "/Volumes";
   if (!fs.existsSync(vols)) return [];
@@ -1344,6 +1402,10 @@ const server = http.createServer(async (req, res) => {
     // Previewing a sub-sample is a range of ONE file rather than a file each:
     // cutting them on the server would mean writing dozens of wavs to answer a
     // hover, and the browser can already start and stop inside a file.
+    if (url.pathname === "/api/take-peaks" && req.method === "GET") {
+      return json(res, 200, takePeaks(url.searchParams.get("take") || "",
+                                      Number(url.searchParams.get("buckets")) || 2000));
+    }
     if (url.pathname === "/api/take-audio" && req.method === "GET") {
       const take = safe(url.searchParams.get("take") || "");
       const dir = path.join(TAKES, take);

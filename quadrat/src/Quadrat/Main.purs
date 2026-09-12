@@ -137,6 +137,15 @@ type State =
   -- | itself flat, divides itself, and hands its per-cell decay times to the
   -- | plan. See `DryRun`.
   , dry :: Boolean
+  -- | **A stored set, opened on the bench.**
+  -- |
+  -- | The bands live here and the audio lives in the daemon, so until this
+  -- | existed a set could be recorded, measured, saved — and then never looked
+  -- | at again, while any stray capture left the two describing different
+  -- | recordings. When something is open the page draws IT: its envelope came
+  -- | off the file, its length is this, and the daemon's capture is nobody's
+  -- | business. Cleared by anything that starts a new one.
+  , opened :: Maybe { set :: String, take :: String, secs :: Number }
   -- | **Whether the take on the page came from a measuring run.**
   -- |
   -- | `dry` is true only WHILE one is going; this outlives it, because the
@@ -344,6 +353,8 @@ data Action
   | StopAudio
   | RunAgain String
   | PlaceSet String
+  -- | Put a stored set back on the bench, drawn from its own take.
+  | OpenSet String
 
 component :: forall q i o m. MonadAff m => H.Component q i o m
 component = H.mkComponent
@@ -351,6 +362,7 @@ component = H.mkComponent
       { looper: Nothing, kind: Kind.DrumHits, bars: 1
       , armed: false, name: "", log: []
       , peaks: Nothing, regions: [], keep: Set.empty, busy: false, dry: false
+      , opened: Nothing
       , takeIsDry: false
       , hoverPlays: false, playing: Nothing, showing: "", waiting: false
       , minGap: 300.0, divider: Divider.Attacks, equalN: 16, mine: false, kitMine: false, layerMode: ""
@@ -714,6 +726,64 @@ handleAction = case _ of
   -- | pressing Run records the same transect at a resolution nobody chose at
   -- | the time. Nothing here remembers how the set was made — it is read off
   -- | the disk, which is the test.
+  -- | **A stored set, back on the bench.**
+  -- |
+  -- | Andrew, 2026-09-12: a set could be recorded, measured, saved, and then
+  -- | never looked at again — the bands live on the page and the audio lives
+  -- | in the daemon, so leaving the page or starting any other capture left
+  -- | nothing to return to. `set.json` has always held everything needed; what
+  -- | was missing was an envelope, and that can be read off the take.
+  -- |
+  -- | It is also the thing stacking will be built on: two sets open at once is
+  -- | a small step from one, and impossible from none.
+  OpenSet nm -> do
+    H.modify_ _ { busy = true }
+    r <- H.liftAff (attempt (toAffE (Http.loadSet nm)))
+    case r of
+      Left e -> H.modify_ (note ("could not open " <> nm <> ": " <> Aff.message e)
+                             <<< _ { busy = false })
+      Right v
+        | not v.ok -> H.modify_ (note v.output <<< _ { busy = false })
+        | otherwise -> do
+            pk <- H.liftAff (attempt (toAffE (Http.takePeaks v.take buckets)))
+            case pk of
+              Left e -> H.modify_ (note ("could not draw " <> v.take <> ": "
+                                     <> Aff.message e) <<< _ { busy = false })
+              Right p
+                | not p.ok -> H.modify_ (note
+                    (p.output <> " — the samples are on disk, but the take they \
+                     \were cut from is not, so there is nothing to draw them on")
+                      <<< _ { busy = false })
+                | otherwise -> do
+                    -- The spec too, so a position opens with what it meant
+                    -- rather than with a row of numbers from the last run.
+                    sp <- H.liftAff (attempt (toAffE (Http.loadSpec nm)))
+                    let n = Array.length v.regions
+                    H.modify_ \st -> st
+                      { regions = v.regions
+                      , keep = if n <= 0 then Set.empty
+                               else Set.fromFoldable (Array.range 0 (n - 1))
+                      , schedule = v.schedule
+                      , showing = v.take
+                      , name = nm
+                      , mine = true
+                      , kept = true
+                      , swept = not (Array.null v.schedule)
+                      , busy = false
+                      , page = Bench
+                      , pivot = Nothing
+                      , opened = Just { set: nm, take: v.take, secs: p.secs }
+                      , peaks = Just
+                          { loop: 0, frames: p.frames, from: 0, to: p.frames
+                          , buckets: p.buckets, winIn: 0, winOut: 0, rot: 0
+                          , lo: p.lo, hi: p.hi }
+                      , sweep = case sp of
+                          Right q | q.ok -> Sweep.adopt Sweep.emptyPlan q.spec
+                          _ -> st.sweep
+                      }
+                    H.modify_ (note (nm <> " — " <> show n <> " samples over "
+                                 <> fmt p.secs <> " s of " <> v.take))
+
   RunAgain nm -> do
     r <- H.liftAff (attempt (toAffE (Http.loadSpec nm)))
     case r of
@@ -765,7 +835,7 @@ handleAction = case _ of
         runSteps = if Array.null st.schedule then [] else Sweep.steps st.sweep
         settles = case st.peaks of
           Nothing -> []
-          Just pk -> settledFor pk (max 0.001 (maybe 1.0 _.secs (cap st)))
+          Just pk -> settledFor pk (max 0.001 (heldSecs st))
                        (map (\r -> { start: r.start, end: r.end }) st.regions)
         kept = Array.catMaybes
           (Array.mapWithIndex
@@ -1034,7 +1104,7 @@ handleAction = case _ of
     st <- H.get
     when (st.showing /= "") $ liftEffect
       (Audio.playRange ("/api/take-audio?take=" <> st.showing) 0.0
-        (maybe 1.0e6 _.secs (cap st)))
+        (let n = heldSecs st in if n > 0.0 then n else 1.0e6))
     H.modify_ _ { playing = Nothing }
   OpenPivot j -> do
     H.modify_ _ { pivot = j }
@@ -1447,7 +1517,7 @@ runSweep = do
       Nothing -> H.modify_ (note "dry run: no waveform came back to measure"
                               <<< _ { dry = false })
       Just pk -> do
-        let total = max 0.001 (maybe 1.0 _.secs (cap st2))
+        let total = max 0.001 (heldSecs st2)
             bounds = map (\r -> { start: r.start, end: r.end }) st2.regions
             ds = settledFor pk total bounds
             -- **Silence after the decay, not just up to it.** A cell that ends
@@ -1745,6 +1815,17 @@ wontKeepOf st =
                  \makes it move."
     else Nothing
 
+-- | **How long the take on the bench is.**
+-- |
+-- | The daemon's capture, unless a stored set is open — in which case it is
+-- | that set's take, whose length came off the file. One function, because the
+-- | alternative is six sites that each decide for themselves and five of them
+-- | being right.
+heldSecs :: State -> Number
+heldSecs st = case st.opened of
+  Just o -> o.secs
+  Nothing -> maybe 0.0 _.secs (cap st)
+
 fmt :: Number -> String
 fmt n = show (Int.round (n * 100.0) # \k -> Int.toNumber k / 100.0)
 
@@ -1870,7 +1951,7 @@ render st =
   -- said which of six states a loop was in.
   srcName = maybe "?" _.name
     (st.looper >>= \top -> Array.index top.sources (srcNow - 1))
-  hasTake = maybe false _.holds cp
+  hasTake = Maybe.isJust st.opened || maybe false _.holds cp
   writing = maybe false _.on cp
   -- How long this take has been running, from the daemon's own frame count
   -- rather than from a clock here: a page that keeps its own time drifts from
@@ -2677,7 +2758,21 @@ render st =
           , HH.code [ HP.class_ (HH.ClassName "q-set-dirt") ] [ HH.text (dirt r) ]
           ]
       , HH.div [ HP.class_ (HH.ClassName "q-set-do") ]
-          [ if r.runnable
+          -- **Look at it, before doing anything with it.** Offered first and
+          -- for every set with regions, because it is the only one of these
+          -- that costs nothing and answers "which one was this?" — which is
+          -- the question a library of forty sets is mostly asked.
+          [ if r.described && r.count > 0
+              then HH.button
+                     [ HP.class_ (HH.ClassName "q-plain")
+                     , HP.disabled st.busy
+                     , HP.title "put it back on the bench, drawn on the take it \
+                                \was cut from — nothing is re-cut or re-measured"
+                     , HE.onClick \_ -> OpenSet r.name
+                     ]
+                     [ HH.text "Open" ]
+              else HH.text ""
+          , if r.runnable
               then HH.button
                      [ HP.class_ (HH.ClassName "q-plain")
                      , HP.title "load the spec that made this set, so it can be \
@@ -2950,7 +3045,7 @@ render st =
   -- | a panel.
   strip pk rng =
     let
-      total = max 0.001 (maybe 1.0 _.secs (cap st))
+      total = max 0.001 (heldSecs st)
       rs = Array.slice rng.lo rng.hi st.regions
       t0 = maybe 0.0 _.start (Array.head rs)
       t1 = maybe total _.end (Array.last rs)
@@ -2996,7 +3091,7 @@ render st =
         Just pk ->
           maybe false (\x -> overlapping x { start: r.start, end: r.end })
             (Array.index
-              (settledFor pk (max 0.001 (maybe 1.0 _.secs (cap st)))
+              (settledFor pk (max 0.001 (heldSecs st))
                  (map (\q -> { start: q.start, end: q.end }) st.regions)) i)
     in
       HH.div
@@ -3435,9 +3530,10 @@ render st =
   -- | take was being looked at.
   strayRegions =
     let lastEnd = fromMaybe 0.0 (map _.end (Array.last st.regions))
-        held = maybe 0.0 _.secs (cap st)
+        held = heldSecs st
     in
-      if Array.null st.regions || held <= 0.0 || lastEnd <= held + 0.5
+      if Maybe.isJust st.opened || Array.null st.regions || held <= 0.0
+           || lastEnd <= held + 0.5
         then HH.text ""
         else
           HH.span [ HP.class_ (HH.ClassName "q-warn") ]

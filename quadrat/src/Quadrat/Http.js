@@ -69,6 +69,21 @@ export const addToCard = (req) => () => post("/api/card/add", req);
 export const writeToCard = (dest) => () => post("/api/card/write", { dest });
 export const placeSet = (req) => () => post("/api/card/place", req);
 
+// A take's envelope, read off the file. Shaped like the daemon's own peaks so
+// the page draws a reopened set with exactly the code it draws a live one with.
+export const takePeaks = (take) => (buckets) => () =>
+  fetch(`/api/take-peaks?take=${encodeURIComponent(take)}&buckets=${buckets}`)
+    .then(j)
+    .then((d) => ({
+      ok: !!d.ok,
+      output: String(d.output ?? ""),
+      secs: Number(d.secs ?? 0),
+      frames: Number(d.frames ?? 0),
+      buckets: Number(d.buckets ?? 0),
+      lo: (d.lo ?? []).map(Number),
+      hi: (d.hi ?? []).map(Number),
+    }));
+
 // The stored sets. See `writeSet` in server.mjs for what one holds and why it
 // lives in the sample directory rather than beside it.
 export const storedSets = () =>
@@ -91,6 +106,28 @@ export const storedSets = () =>
 // `Quadrat.Sweep`, which owns the shape — and an FFI module cannot import
 // another module's FFI, because spago writes each one to its own directory in
 // `output/`. So this fetches and `Sweep.adopt` merges.
+// **A stored set, whole**: which take it came from, where its pieces are in
+// that take, and when the run fired. Enough to put it back on the bench.
+export const loadSet = (name) => () =>
+  fetch("/api/sets/" + encodeURIComponent(name))
+    .then(j)
+    .then((d) => {
+      if (!d.ok || !d.set) return { ok: false, output: String(d.output ?? "no such set"), take: "", regions: [], schedule: [] };
+      const s = d.set;
+      const regions = (s.samples ?? []).map((x) => ({
+        start: Number(x.start ?? 0), end: Number(x.end ?? 0),
+        peak: Number(x.peak ?? 0), rms: Number(x.rms ?? 0),
+        zcr: Number(x.zcr ?? 0), tilt: Number(x.tilt ?? 0),
+      }));
+      return {
+        ok: regions.length > 0,
+        output: regions.length ? "" : `${name} records no regions`,
+        take: String(s.take ?? name),
+        regions,
+        schedule: (s.schedule ?? []).map(Number),
+      };
+    });
+
 export const loadSpec = (name) => () =>
   fetch("/api/sets/" + encodeURIComponent(name))
     .then(j)
