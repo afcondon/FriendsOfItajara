@@ -330,10 +330,13 @@ part h which =
                 , says: triggerLine p
                 , foot: pacingFoot
                 , face: triggerFace
-                -- The trigger has no switch: turning it off is the same act
-                -- as saying you will strike the instrument yourself, which is
-                -- asked once in the statement and would be a second answer.
-                , switch: Nothing
+                -- The trigger carries no axis bar: every parameter answers
+                -- "what value at this cell" and the trigger answers "and now
+                -- hit it", which is not a thing an axis can vary. Turning it
+                -- off is the same act as saying you will strike the
+                -- instrument yourself, and that is asked once, in the
+                -- statement, where it belongs.
+                , bar: HH.text ""
                 , moot: p.trigger.gate == Nothing
                           && p.trigger.es5 == Nothing
                           && p.trigger.note == Nothing
@@ -351,7 +354,7 @@ part h which =
                 , foot: maybe "not in use" (_.spec >>> _.label) thePitch
                 , face: maybe (HH.div [ cls "q-fixedface" ] [])
                           keyboardFace thePitch
-                , switch: map (\x -> { i: x.i, q: x.q }) thePitch
+                , bar: maybe (HH.text "") pitchBar thePitch
                 , moot: maybe true (_.q >>> _.off) thePitch
                 , act: h.openPitch
                 }
@@ -528,16 +531,13 @@ part h which =
               [ c.face ]
           , HH.div [ cls "q-curvefoot" ]
               [ HH.span [ cls "q-curvelabel" ] [ HH.text c.foot ]
-              , case c.switch of
-                  Just x -> onOff x.i x.q
-                  Nothing -> HH.text ""
               , mini "open" ("change the " <> c.name) c.act
               ]
           ]
       , HH.div [ cls "q-curveparam" ]
           [ HH.div [ cls "q-swtop" ]
               [ HH.span [ cls "q-swname is-static" ] [ HH.text c.name ] ]
-          , HH.div [ cls "q-swsays" ] [ HH.text c.says ]
+          , HH.div [ cls "q-swsays" ] [ HH.text c.says, c.bar ]
           ]
       ]
 
@@ -570,6 +570,40 @@ part h which =
       , HE.onClick \_ -> h.msg (SetOff i (not q.off))
       ]
       [ HH.text (if q.off then "off" else "on") ]
+
+  -- | **Layer, slice, or neither — one control.**
+  -- |
+  -- | Andrew, 2026-09-12: *"the special case for pitches would be that it's a
+  -- | three-way choice"*. It is the right shape because for a pitch the three
+  -- | are genuinely one question. On a Rample, pitch on LAYERS is an
+  -- | instrument whose note the module picks for you, by velocity or at
+  -- | random; pitch on SLICES is an octave you address and play; and no pitch
+  -- | at all is the third real answer, which every other parameter reaches
+  -- | through a separate switch only because it has no such natural third.
+  -- |
+  -- | Off rather than deleted, so choosing "none" and changing your mind does
+  -- | not cost the measured table.
+  pitchBar x =
+    HH.span [ cls "q-swaxisbar" ]
+      ( Array.mapWithIndex
+          (\a ax -> HH.button
+             [ cls ("q-swaxisbtn"
+                      <> if not x.q.off && a == x.q.axis then " is-on" else "")
+             , HP.title (ax.name <> " — along this axis the choice is made by "
+                           <> ax.picked)
+             , HE.onClick \_ -> h.msg (SetAxis x.i a)
+             ]
+             [ HH.text ax.name ])
+          axs
+        <> [ HH.button
+               [ cls ("q-swaxisbtn is-none" <> if x.q.off then " is-on" else "")
+               , HP.title "no pitch axis — the instrument is struck at whatever \
+                          \pitch it is set to. Kept, not deleted, so the \
+                          \measured table survives changing your mind."
+               , HE.onClick \_ -> h.msg (SetOff x.i (not x.q.off))
+               ]
+               [ HH.text "none" ] ]
+      )
 
   -- | **The notes, on a keyboard.**
   -- |

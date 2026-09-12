@@ -131,6 +131,16 @@ type Axis =
   -- | pretending to be a set of choices. `objections` needs no change — the
   -- | ends of `sizes` still bound it.
   , free :: Boolean
+  -- | **Whether YOU choose along this axis when the set is played.**
+  -- |
+  -- | `picked` says the same thing in prose, for a tooltip. This says it so
+  -- | the page can act on it — and the thing it decides is where a PITCH
+  -- | belongs. On a Rample the module picks the layer, by velocity or at
+  -- | random, so pitch on layers means the module chooses your note; a slice
+  -- | is a position you address, so pitch on slices is an instrument you can
+  -- | play. On SuperDirt both halves of `n` are yours and the question does
+  -- | not arise.
+  , yours :: Boolean
   }
 
 layerAxis :: Axis
@@ -139,6 +149,7 @@ layerAxis =
   , picked: "the module: velocity, random or cyclic"
   , sizes: Array.range 2 12
   , free: false
+  , yours: false
   }
 
 sliceAxis :: Axis
@@ -147,6 +158,7 @@ sliceAxis =
   , picked: "you: the start point, sent ahead of the note"
   , sizes: slicerDivisions
   , free: false
+  , yours: true
   }
 
 -- | **The axis with nothing wrong with it.**
@@ -156,7 +168,8 @@ sliceAxis =
 -- | because a run has to fit in one take, not because anything downstream
 -- | objects — see the long-run note in `objections`.
 nAxis :: String -> String -> Axis
-nAxis nm how = { name: nm, picked: how, sizes: Array.range 1 512, free: true }
+nAxis nm how =
+  { name: nm, picked: how, sizes: Array.range 1 512, free: true, yours: true }
 
 axes :: Encoding -> Array Axis
 axes = case _ of
@@ -173,15 +186,22 @@ axes = case _ of
     ]
 
 -- | Somewhere sensible to start, per encoding. Twelve layers because that is
--- | the ceiling and a stack wants to use it; eight slices because it is the
--- | smallest division there is and a grid gets long fast.
+-- | the ceiling and a stack wants to use it; eight slices on its own because
+-- | it is the smallest division there is and a run gets long fast.
+-- |
+-- | **A grid starts at four by twelve, and the twelve is an octave.** The
+-- | slice axis is the one you address, so it is where a pitch run goes (see
+-- | `Axis.yours`), and a pitch run of twelve semitones is the thing you
+-- | nearly always want off a Rample. Four layers for the axis the module
+-- | picks between — four velocities, or four decays — which is a stack you
+-- | can hear the difference across without forty-eight hits of it.
 defaultExtent :: Encoding -> Array Int
 defaultExtent = case _ of
   RampleLayers -> [ 12 ]
   RampleSlices -> [ 16 ]
-  RampleGrid -> [ 4, 8 ]
+  RampleGrid -> [ 4, 12 ]
   DirtBank -> [ 16 ]
-  DirtGrid -> [ 4, 8 ]
+  DirtGrid -> [ 4, 12 ]
 
 -- | How many samples the run will produce — which is how many hits it will
 -- | play, and therefore how long it will take. Worth stating before Run and

@@ -469,12 +469,22 @@ data Msg
 -- | What this gives up: twelve samples spread thinly over five octaves, which
 -- | was reachable by setting a wide range and is now not. If that comes back
 -- | it should come back as a STEP, which says what it means.
+-- | **The top of a pitch run follows from the size of ITS OWN axis**, not from
+-- | the size of the grid.
+-- |
+-- | It read `Encoding.total`, which on a one-dimensional run is the same number
+-- | and on a grid is the product. Measured 2026-09-12: a 12 x 4 with the pitch
+-- | on the 12-long axis was given `noteLo + 47`, so twelve samples were spread
+-- | over four octaves at a shade over four semitones a step — and the notes
+-- | drawn on the keyboard are what made it visible. What you nearly always
+-- | want on a Rample is an octave, which is what one semitone per cell gives.
 fixPitch :: Plan -> Plan
 fixPitch p =
-  let n = max 1 (Encoding.total p.extent)
-  in p { params = map
-           (\q -> q { pitch = map (\ps -> ps { noteHi = min 127 (ps.noteLo + n - 1) }) q.pitch })
-           p.params }
+  p { params = map
+        (\q -> q { pitch = map
+                    (\ps -> ps { noteHi = min 127 (ps.noteLo + sizeOfAxis p q.axis - 1) })
+                    q.pitch })
+        p.params }
 
 update :: Msg -> Plan -> Plan
 update m = fixPitch <<< applyMsg m
@@ -521,8 +531,15 @@ applyMsg = case _ of
   SetPitchHi i v -> onParam i \q -> q { pitch = map (\ps -> ps { noteHi = clamp 0 127 (intOr ps.noteHi v) }) q.pitch }
   ClearPitch i -> onParam i _ { pitch = Nothing }
   SetOff i b -> onParam i _ { off = b }
+  -- **Choosing where it goes puts it back in the run.** A parameter that is
+  -- off is on no axis at all, so naming one is the same act as wanting it —
+  -- and it is what makes the pitch card's layer|slice|none a single control
+  -- rather than two that have to be operated in the right order.
   SetAxis i a -> \p ->
-    onParam i (\q -> q { axis = clamp 0 (Array.length (Encoding.axes p.encoding) - 1) a }) p
+    onParam i
+      (\q -> q { axis = clamp 0 (Array.length (Encoding.axes p.encoding) - 1) a
+               , off = false })
+      p
   NextShape i -> onParam i \q -> q { curve = Curve.nextShape q.curve }
   FlipCurve i -> \p -> onParam i (\q -> q { curve = Curve.flipped (sizeOfAxis p q.axis) q.curve }) p
   ToCurve i -> onParam i \q -> q { curve = Named Linear false }
@@ -803,8 +820,15 @@ flatten p =
     , values: Curve.valuesOf 32 q.curve
     }
 
+-- | **`fixPitch` on the way back in**, so a plan stored before the rule was
+-- | right comes back right. A pitch range is not a stored fact — it is the
+-- | base plus the size of the axis — so restoring one verbatim would carry an
+-- | old mistake across a reload and make it look deliberate.
 unflatten :: Plain -> Plan
-unflatten p =
+unflatten = fixPitch <<< unflatten'
+
+unflatten' :: Plain -> Plan
+unflatten' p =
   let
     enc = fromMaybe RampleLayers (Array.find (\e -> Encoding.name e == p.encoding) Encoding.all)
     nAxes = Array.length (Encoding.axes enc)

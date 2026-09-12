@@ -823,6 +823,19 @@ handleAction = case _ of
             -- and an unrouted pitch axis looks identical to a working one
             -- until the take comes back silent.
             handleAction (SweepMsg (Sweep.SetCv i "8"))
+            -- | **On the axis you address, not the one the module picks.**
+            -- |
+            -- | A Rample chooses between LAYERS itself — by velocity, at
+            -- | random or in turn — so a pitch run on layers is an instrument
+            -- | whose note the module decides. A SLICE is a position you send
+            -- | it to, so the same twelve samples on slices are an octave you
+            -- | can play. `Axis.yours` is that distinction, per encoding;
+            -- | where nothing is yours (or everything is) the first axis is
+            -- | as good an answer as any.
+            let axs = Encoding.axes st2.sweep.encoding
+            case Array.findIndex _.yours axs of
+              Just a -> handleAction (SweepMsg (Sweep.SetAxis i a))
+              Nothing -> pure unit
             handleAction (PickPitch i label)
 
   -- | **Opening the pitch door expands its parameter as STATE**, not as an

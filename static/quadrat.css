@@ -803,6 +803,12 @@ body {
 .q-swaxisbtn:first-child { border-radius: 3px 0 0 3px; }
 .q-swaxisbtn:last-child  { border-radius: 0 3px 3px 0; }
 .q-swaxisbtn.is-on { background: #1f2d3d; border-color: #1f2d3d; color: #fff; }
+/* The third answer, for pitch only: layer | slice | none. For a pitch the
+   three are genuinely one question — the module picks the note, you pick the
+   note, or there is no pitch axis — so they are one control rather than an
+   axis bar plus a switch that have to be operated in the right order. */
+.q-swaxisbtn.is-none { font-style: italic; }
+.q-swaxisbtn.is-none.is-on { background: var(--muted); border-color: var(--muted); }
 
 /* The trigger and the pitch, as parameter cards in the same line as the
    parameters — because in a modular output sense they are identical: a hole
