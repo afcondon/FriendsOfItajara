@@ -327,6 +327,23 @@ function cards() {
     });
 }
 
+// **Which letters a mounted card already holds is NOT read here.** Measured
+// 2026-09-12, and it cost an hour: a `fs.readdirSync` of `/Volumes/FACTORY`
+// **blocks forever** in this process when Bosun spawns it, while the identical
+// code answers in 10 ms from a hand-started one — same Node, same PATH, same
+// cwd, even with `env -i`. The whole event loop stops, so every later request
+// on the socket gets no bytes at all and the page simply dies.
+//
+// `cards()` above never hit it because it short-circuits on `rample.bin` with
+// `existsSync` and so never enumerates the card. Listing the free letters was
+// the first thing here ever to read a removable volume's contents, and it
+// wedged the server on the first call.
+//
+// The letters are still worth showing — the letter is the blast radius — but
+// they have to come from somewhere that is allowed to look. `msm` reads the
+// card happily from a terminal, so a subprocess is the likely route; that is a
+// thing to establish before writing it again, not to assume twice.
+
 // What each sample set holds, so the page can say "11 samples" without
 // guessing from the name.
 function sets() {

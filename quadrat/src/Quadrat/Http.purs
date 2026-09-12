@@ -309,9 +309,16 @@ foreign import loadSet :: String -> Effect (Promise StoredSet)
 -- | and a loop of single deletes is four chances to stop halfway.
 foreign import deleteSets :: Array String -> Effect (Promise Wrote)
 
+-- | Put a set already on disk onto a voice. No take, no cut, no measuring —
+-- | the shape the card needs is in the set's own description.
+-- |
+-- | `sliced` is the one thing the description does NOT settle, because it is
+-- | not a fact about the audio: the same files are a stack of layers or one
+-- | concatenated file with boundaries, and which of those you want depends on
+-- | what else is going on the voice.
 foreign import placeSet
   :: { set :: String, bank :: String, letter :: String, kit :: String, voice :: Int
-     , append :: Boolean, layerMode :: String }
+     , append :: Boolean, sliced :: Boolean, layerMode :: String }
   -> Effect (Promise Wrote)
 
 -- | One stored set's spec, raw. Polymorphic for the same reason `addToCard`

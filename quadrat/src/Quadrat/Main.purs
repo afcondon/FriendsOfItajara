@@ -300,6 +300,15 @@ type State =
   -- | the most destructive thing this page can do, so it is asked, and the
   -- | asking names the slots it would delete.
   , confirmWrite :: Maybe String
+  -- | **Stacked or sliced**, for a set placed from the Library.
+  -- |
+  -- | A placement decision, not a property of the cut: the audio is the same
+  -- | twelve files either way and what changes is whether the manifest lists
+  -- | them as layers the layer CV picks between, or concatenates them into one
+  -- | file the start point indexes. Which is worth having as a control because
+  -- | the answers differ in what they cost — twelve layers fill a voice, one
+  -- | sliced file uses one of its twelve and leaves eleven.
+  , placeSliced :: Boolean
   -- | **What the owner calls each input**, against the wire name the daemon
   -- | uses. A source is identified by `--source board=AUDIO4c:1,2` and has to
   -- | be, because a name that cannot be resolved to jacks is a session
@@ -390,6 +399,8 @@ data Action
   | WriteCard String Boolean
   -- | Hold the replace question open, or drop it.
   | AskWrite (Maybe String)
+  -- | Lay a placed set out as one sliced file, or as a stack of layers.
+  | SetPlaceSliced Boolean
   | Play Int
   | HoverPlay Int
   | SetHoverPlays Boolean
@@ -444,7 +455,8 @@ component = H.mkComponent
       , schedule: [], sets: [], tables: [], tablesErr: "", overran: false
       , page: Bench, fill: Swept, pivot: Nothing
       , levels: [], modal: Nothing, kept: false, confirmKeep: false
-      , picked: Set.empty, confirmDrop: false, confirmWrite: Nothing, srcNames: []
+      , picked: Set.empty, confirmDrop: false, confirmWrite: Nothing
+      , placeSliced: false, srcNames: []
       , heard: [], midiIn: [], midiOk: true }
   , render
   , eval: H.mkEval H.defaultEval { handleAction = handleAction, initialize = Just Init }
@@ -830,6 +842,7 @@ handleAction = case _ of
           , kit: nm
           , voice: st.voice
           , append: false
+          , sliced: st.placeSliced
           , layerMode: st.layerMode })))
     case r of
       Left e -> H.modify_ (note (Aff.message e) <<< _ { cardBusy = false })
@@ -969,6 +982,8 @@ handleAction = case _ of
   SetVoice v -> H.modify_ \s ->
     s { voice = onlyVoices s.kind (clamp 1 4 (fromMaybe s.voice (Int.fromString v))) }
   AskWrite v -> H.modify_ _ { confirmWrite = v }
+
+  SetPlaceSliced b -> H.modify_ _ { placeSliced = b }
 
   WriteCard dest replace -> do
     H.modify_ _ { cardBusy = true, confirmWrite = Nothing }
@@ -3342,11 +3357,46 @@ render st =
             ]
         , if n == 0 then HH.text "" else
             HH.div [ HP.class_ (HH.ClassName "q-pickdo") ]
-              [ HH.button
+              -- | **Where it lands, beside the button that lands it.**
+              -- |
+              -- | These were only ever in the Bench's Export panel, so the
+              -- | Library could tick sets and press "Onto the card" with no
+              -- | way to say which bank — and its own tooltip promised a
+              -- | letter "chosen below" that was on another page. The letter
+              -- | is not optional: a write deletes the slot it lands on, so
+              -- | `placeOnCard` refuses without one and the press did nothing
+              -- | but say so.
+              [ small "letter" st.letter SetLetter
+              , small "bank" st.bank SetBank
+              , HH.label [ HP.class_ (HH.ClassName "q-field is-tight") ]
+                  [ HH.span_ [ HH.text "voice" ]
+                  , HH.select [ HE.onValueChange SetVoice ]
+                      (map (\vn -> HH.option
+                              [ HP.value (show vn), HP.selected (vn == st.voice) ]
+                              [ HH.text (show vn) ])
+                          [ 1, 2, 3, 4 ])
+                  ]
+              -- The one thing a set's own description cannot settle, because
+              -- it is not a fact about the audio. See `Http.placeSet`.
+              , HH.label [ HP.class_ (HH.ClassName "q-field is-tight") ]
+                  [ HH.span_ [ HH.text "as" ]
+                  , HH.select [ HE.onValueChange (SetPlaceSliced <<< (_ == "sliced")) ]
+                      (map (\o -> HH.option
+                              [ HP.value o.v
+                              , HP.selected ((o.v == "sliced") == st.placeSliced) ]
+                              [ HH.text o.t ])
+                          [ { v: "layers", t: "layers — the layer CV picks" }
+                          , { v: "sliced", t: "one sliced file — the start point picks" }
+                          ])
+                  ]
+              , HH.button
                   [ HP.class_ (HH.ClassName "q-plain")
-                  , HP.disabled st.cardBusy
-                  , HP.title "each one as its own kit, at the bank letter and \
-                             \voice chosen below"
+                  , HP.disabled (st.cardBusy || st.letter == "")
+                  , HP.title (if st.letter == ""
+                                then "name a bank letter first — a write deletes \
+                                     \the slot it lands on, so nothing happens \
+                                     \until you say which"
+                                else "each one as its own kit in bank " <> st.letter)
                   , HE.onClick \_ -> PlacePicked
                   ]
                   [ HH.text ("Onto the card") ]
