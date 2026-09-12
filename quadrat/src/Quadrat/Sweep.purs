@@ -44,6 +44,8 @@ module Quadrat.Sweep
   , conflicts
   , sayConflict
   , collapsed
+  , fixPitch
+  , sizeOfAxis
   , fingerprint
   , pacedStale
   , spacingAt

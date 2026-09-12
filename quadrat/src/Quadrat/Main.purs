@@ -484,7 +484,18 @@ handleAction = case _ of
                     -- span still bounds it: outside the table the realiser
                     -- clamps, and pointing at notes the sweep never measured is
                     -- the commonest mistake with a fresh calibration.
-                    cells = max 1 (Encoding.total st0.sweep.extent)
+                    --
+                    -- **This parameter's own axis, not the whole grid.** It
+                    -- read `Encoding.total`, which is the same number on a
+                    -- one-dimensional run and the PRODUCT on a grid: picking a
+                    -- calibration on a 12 x 4 asked for 48 degrees and handed
+                    -- back C2-E3-G4-B5, a stack of major thirds wearing the
+                    -- name of an octave. Same mistake as `fixPitch` had, in
+                    -- the one other place that sets a range — and this one
+                    -- writes the plan directly, so `fixPitch` never got the
+                    -- chance to correct it afterwards.
+                    cells = Sweep.sizeOfAxis st0.sweep
+                              (maybe 0 _.axis (Array.index st0.sweep.params i))
                     -- **Start on a C.** Sampling an instrument wants an octave
                     -- you can name, and a bank that begins on G#1 is one every
                     -- later decision has to work around. The nearest C at or
@@ -493,8 +504,11 @@ handleAction = case _ of
                     -- would come out on one pitch.
                     lo = tlo + mod (12 - mod tlo 12) 12
                     hi = min thi (lo + cells - 1)
+                -- Through `fixPitch`, so the one rule about how long a pitch
+                -- run is lives in one place. `hi` here is only what will fit
+                -- inside the measured span; the invariant decides the rest.
                 H.modify_ \st -> st
-                  { sweep = st.sweep
+                  { sweep = Sweep.fixPitch (st.sweep
                       { params = fromMaybe st.sweep.params
                           (Array.modifyAt i
                             (_ { pitch = Just
@@ -502,14 +516,24 @@ handleAction = case _ of
                                   , noteLo: lo
                                   , noteHi: hi
                                   , table: t.points } })
-                            st.sweep.params) } }
-                -- The default range is the table's OWN span, because a range
-                -- outside it clamps silently and the commonest mistake with a
-                -- newly-picked calibration is to be pointing at notes the sweep
-                -- never measured.
-                H.modify_ (note (label <> ": " <> Pitch.noteName lo <> "–" <> Pitch.noteName hi
+                            st.sweep.params) }) }
+                stp <- H.get
+                liftEffect (Sweep.remember stp.sweep)
+                -- **Report what was STORED**, not what was asked for. The
+                -- invariant sets the top from the size of the axis, so a run
+                -- longer than the calibration reaches now says so here rather
+                -- than coming back with its top notes all on one pitch, which
+                -- is what a silent clamp looks like from the module.
+                let saidHi = fromMaybe hi
+                      (Array.index stp.sweep.params i >>= _.pitch >>> map _.noteHi)
+                H.modify_ (note (label <> ": " <> Pitch.noteName lo <> "–" <> Pitch.noteName saidHi
                                   <> " (measured " <> Pitch.noteName tlo <> "–" <> Pitch.noteName thi
-                                  <> ", " <> show (Array.length t.points) <> " points)"))
+                                  <> ", " <> show (Array.length t.points) <> " points)"
+                                  <> (if saidHi > thi
+                                        then " — the top of this run is past what the table \
+                                             \measures, where the realiser clamps and every \
+                                             \note above it comes back the same"
+                                        else "")))
   Init -> do
     n <- liftEffect (slugFor Kind.DrumHits)
     -- The sweep plan as it was left. See `Quadrat.Sweep.restore` — a run,

@@ -817,9 +817,9 @@ body {
    notes are drawn into it. */
 .q-pcard.is-fixed .q-curvecard { background: #f7f4ed; border-color: #ded7c6; }
 .q-pcard.is-fixed .q-curveface:hover { background: #f1ece0; }
-.q-pcard.is-fixed.is-moot .q-curvecard { background: var(--bg); border-color: var(--rule); }
-.q-pcard.is-fixed.is-moot .q-swname,
-.q-pcard.is-fixed.is-moot .q-swsays { color: var(--muted); }
+.q-pcard.is-fixed.is-idle .q-curvecard { background: var(--bg); border-color: var(--rule); }
+.q-pcard.is-fixed.is-idle .q-swname,
+.q-pcard.is-fixed.is-idle .q-swsays { color: var(--muted); }
 /* The height a thumbnail occupies, so the cards line up whether or not there
    is anything to draw in them yet. */
 .q-fixedface { height: 52px; }
@@ -864,8 +864,12 @@ body {
 .q-swtoggle.is-on { background: #1f2d3d; border-color: #1f2d3d; color: #fff; }
 /* An off card is still legible — you have to be able to read what you turned
    off in order to want it back — but it is plainly not in the run. */
+/* Dimmed, and still operable — the control that turns it back on lives on
+   the card, so `pointer-events: none` here would be a dead end you can see
+   but not leave. That is what the global `.is-moot` does, and why these two
+   have a class of their own. */
 .q-pcard.is-off .q-curvecard,
-.q-pcard.is-fixed.is-moot .q-curvecard { opacity: .45; }
+.q-pcard.is-fixed.is-idle .q-curvecard { opacity: .45; }
 .q-pcard.is-off .q-swsays, .q-pcard.is-off .q-swname { color: var(--muted); }
 /* A name that is what it is: Trigger and Pitch cannot be called anything
    else, so they are set rather than typed — same size and baseline as the

@@ -520,8 +520,15 @@ part h which =
   -- | things differ, and both are real: the name is a label rather than a
   -- | field, because Trigger and Pitch are what they are; and there is no
   -- | axis bar, because neither has a value per cell to place on an axis.
+  -- | **`is-idle`, not `is-moot`.**
+  -- |
+  -- | The global `.is-moot` carries `pointer-events: none`, which is right for
+  -- | a whole section that does not apply and catastrophic for a card whose
+  -- | own control is what turns it back on: choosing "none" greyed the Pitch
+  -- | card, and greying it took away the button that would have undone it.
+  -- | A dead end you can see but not leave.
   fixedCard c =
-    HH.div [ cls ("q-pcard is-fixed" <> if c.moot then " is-moot" else "") ]
+    HH.div [ cls ("q-pcard is-fixed" <> if c.moot then " is-idle" else "") ]
       [ HH.div [ cls "q-curvecard" ]
           [ HH.button
               [ cls "q-curveface"
