@@ -2187,14 +2187,25 @@ render st =
                 _ -> HH.text ""
             , case st.modal of
                 Just DivisionModal -> modalBox "Division details" divisionPanel
-                Just TriggerModal -> modalBox "Trigger"
-                  (HH.div_
-                    [ case st.fill of
-                        Swept -> SweepView.settings sweepHandlers
-                        Played -> handPanel
-                    , SweepView.triggerView sweepHandlers
-                    , pacingPanel
-                    ])
+                -- **A take nobody triggers has no trigger settings.**
+                --
+                -- The gate, the note, the settle, flat-against-measured — all
+                -- of it describes a schedule, and a take played by hand has
+                -- none: there is no spacing to choose because nothing is being
+                -- spaced, and the division comes from the audio afterwards.
+                -- Shown anyway they read as settings that must be got right
+                -- before playing, and the pacing pair in particular looks
+                -- exactly like the missing "manual" a player goes looking for.
+                -- The manual option is `triggered by → my own hands` in the
+                -- sentence, which is what opened this door.
+                Just TriggerModal -> case st.fill of
+                  Played -> modalBox "Playing it yourself" handPanel
+                  Swept -> modalBox "Trigger"
+                    (HH.div_
+                      [ SweepView.settings sweepHandlers
+                      , SweepView.triggerView sweepHandlers
+                      , pacingPanel
+                      ])
                 -- Opened with the pitch parameter ALREADY expanded: the reason
                 -- to come in here is the values, and a door that opens onto a
                 -- second door is a door too many.
@@ -3284,13 +3295,23 @@ render st =
           _ -> HH.text ""
       , HH.p [ HP.class_ (HH.ClassName "q-blurb") ]
           [ HH.text (Kind.blurb st.kind)
-          , HH.text (" Captured from " <> srcName <> " as it comes"
+          , HH.text (" Captured from " <> labelFor st srcName <> " as it comes"
               <> ", and folded to "
               <> (if Kind.foldsTo st.kind == ToMono then "mono" else "stereo")
               <> " on the way to a card"
               <> (if Kind.voicesOn st.kind == 2
                     then " — where it takes two of the four voices."
                     else "."))
+          -- **What is deliberately absent, said out loud.**
+          --
+          -- A player arriving here looks for the setting that keeps their
+          -- decays from being cut, and a swept run has several that look like
+          -- it. None of them applies: nothing is triggered, so nothing is
+          -- spaced, and where a sample ends is decided afterwards by the
+          -- divider, over the audio you actually made.
+          , HH.text " Nothing is triggered and nothing is timed: play it as \
+                    \you like, and the divider finds the boundaries \
+                    \afterwards over what you played."
           ]
       ]
 
