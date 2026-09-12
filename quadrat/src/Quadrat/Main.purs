@@ -2850,6 +2850,7 @@ render st =
                                then maybe "" (\c -> fmt c.secs <> " s recorded, not divided yet") (cap st)
                                else show (Set.size st.keep) <> " of "
                                     <> show (Array.length st.regions) <> " kept") ]
+              , strayRegions
               , dryTakeSays
               , spread
               , declaredVsFound
@@ -3420,6 +3421,32 @@ render st =
                              \brightness — whatever was meant to change did not reach \
                              \the instrument"
                    else "level ×" <> fmt rp <> ", brightness ×" <> fmt rz) ]
+
+  -- | **Regions that do not fit the take they are drawn on.**
+  -- |
+  -- | The regions live on the page and the audio lives in the daemon, so
+  -- | anything that starts a new capture leaves the two describing different
+  -- | recordings — and the page goes on drawing, cramming fifty seconds of
+  -- | bands into six and leaving three rows of a grid empty. It looks like the
+  -- | samples changed. Nothing changed; the picture is of two things.
+  -- |
+  -- | Measured 2026-09-12, and caused by my own diagnostics: `rig-alive.mjs`
+  -- | captures through the daemon to read the input, which replaces whatever
+  -- | take was being looked at.
+  strayRegions =
+    let lastEnd = fromMaybe 0.0 (map _.end (Array.last st.regions))
+        held = maybe 0.0 _.secs (cap st)
+    in
+      if Array.null st.regions || held <= 0.0 || lastEnd <= held + 0.5
+        then HH.text ""
+        else
+          HH.span [ HP.class_ (HH.ClassName "q-warn") ]
+            [ HH.text ("these bands run to " <> fmt lastEnd <> " s and the take \
+                       \the daemon is holding is " <> fmt held <> " s — they \
+                       \belong to a different recording, so what is drawn here \
+                       \is two things at once. The samples on disk are not \
+                       \affected; record again, or open the set from the \
+                       \Library.") ]
 
   -- | You said how many positions; the detector found this many. Worth saying
   -- | now, while the divider and the gap are one press away, rather than on the
