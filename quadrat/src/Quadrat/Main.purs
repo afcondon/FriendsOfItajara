@@ -3379,11 +3379,28 @@ render st =
   pickedWide =
     Array.any (\r -> Set.member r.name st.picked && r.stereo) st.sets
 
+  -- | **The kit this placement will actually address.**
+  -- |
+  -- | A blank kit field does not mean "any kit" — it means each ticked set
+  -- | makes a kit of its own name. Reading blank as a wildcard is what made
+  -- | the warning fire on `bia oct x decay` for a placement that was never
+  -- | going near it.
+  targetKit
+    | st.kit /= "" = Just st.kit
+    | otherwise = case Array.fromFoldable st.picked of
+        [ one ] -> Just one
+        -- Several ticked, each making its own kit: no single address to warn
+        -- about, and the slot readout already says which range they take.
+        _ -> Nothing
+
+  -- | What already sits at that address. Named by the letter, because that is
+  -- | what the module shows and what a write deletes; the bank *name* is only
+  -- | the legend.
   sittingAt = do
     v <- st.cardView
+    k <- targetKit
     Array.find
-      (\r -> r.letter == st.letter && r.voice == st.voice
-               && (st.kit == "" || r.kit == st.kit))
+      (\r -> r.letter == st.letter && r.voice == st.voice && r.kit == k)
       v.rows
 
   -- | **What to do with the ticked ones.**
@@ -3411,6 +3428,29 @@ render st =
             , HH.text (if n == 0 then " select \x2014 then say where it goes"
                        else " " <> show n <> " selected")
             ]
+        -- | **Say what is about to be destroyed, before it is.** A kit's voice
+        -- | is an address, and sending to one that is taken replaces what is
+        -- | there unless you said to add.
+        -- |
+        -- | On its own line, not inside the row: set among the controls it was
+        -- | squeezed into a column two characters wide and rendered in
+        -- | letter-spaced capitals, one word per line down the side of the
+        -- | page. A warning nobody can read is worse than none, because it
+        -- | takes the space anyway.
+        , case sittingAt of
+            Just r | n > 0 ->
+              HH.p [ HP.class_ (HH.ClassName "q-occupied") ]
+                [ HH.text (landsAt <> " voice " <> show st.voice <> " holds "
+                    -- One set can be several layers of one voice, and naming
+                    -- it four times says nothing four times.
+                    <> joinWith ", " (Array.nub r.sets)
+                    <> (if r.slicer > 0 then " in " <> show r.slicer <> " slots" else "")
+                    <> (if Array.length (Array.nub r.sets) == 1
+                          then (if st.placeAppend then " \x2014 this will stand beside it"
+                                else " \x2014 this will take its place")
+                          else (if st.placeAppend then " \x2014 this will stand beside them"
+                                else " \x2014 this will take their place"))) ]
+            _ -> HH.text ""
         , if n == 0 then HH.text "" else
             HH.div [ HP.class_ (HH.ClassName "q-pickdo") ]
               -- | **Where it lands, beside the button that lands it.**
@@ -3496,22 +3536,6 @@ render st =
                   , HE.onClick \_ -> PlacePicked
                   ]
                   [ HH.text ("Onto the card") ]
-              -- **Say what is about to be destroyed, before it is.** A kit's
-              -- voice is an address, and sending to one that is taken replaces
-              -- what is there unless you said to add. It happened four times
-              -- in a row without a word being said, back when the kit name
-              -- stuck to the first take and every later send addressed the
-              -- same slot.
-              , case sittingAt of
-                  Nothing -> HH.text ""
-                  Just r ->
-                    HH.span [ HP.class_ (HH.ClassName "q-warn") ]
-                      [ HH.text (st.letter <> " " <> r.kit <> " voice "
-                          <> show st.voice <> " holds " <> joinWith ", " r.sets
-                          <> (if r.slicer > 0 then " in " <> show r.slicer <> " slots" else "")
-                          <> (if st.placeAppend
-                                then " — this will stand beside them"
-                                else " — this will take their place")) ]
               , if st.confirmDrop
                   then HH.span [ HP.class_ (HH.ClassName "q-twoverbs") ]
                     [ HH.button

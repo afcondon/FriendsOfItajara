@@ -149,6 +149,18 @@ body {
   padding: 4px 8px;
 }
 .q-pickbar { flex-wrap: wrap; }
+/* **A warning is prose, and prose needs a line.**
+   `.q-warn` is set in letter-spaced capitals, which is right for three words
+   at the end of a control and catastrophic inside a flex row of them: it was
+   allotted a column two characters wide and set one word per line down the
+   side of the page. So this is its own paragraph at full width, in the hot
+   colour but in ordinary sentence case, and it forces a line break in the
+   wrapping row it sits in. */
+.q-occupied {
+  flex: 1 0 100%; margin: 2px 0 8px; max-width: 74ch;
+  color: var(--hot); font-size: 12.5px; line-height: 1.5;
+  text-transform: none; letter-spacing: 0;
+}
 .q-muted { color: var(--muted); font-size: 13px; max-width: 62ch; }
 .q-log { font: 12px/1.7 ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); }
 
