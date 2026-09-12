@@ -11,6 +11,10 @@ module Quadrat.Wave
   ( bucketsFor
   , svg
   , klass
+  -- | The two SVG primitives, so a caller that needs one small picture of its
+  -- | own does not have to keep a private copy of `elementNS`.
+  , el
+  , attr
   ) where
 
 import Prelude

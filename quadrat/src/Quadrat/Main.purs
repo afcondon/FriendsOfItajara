@@ -2075,10 +2075,11 @@ render st =
   -- | statement that runs the full width of a wide screen reads as a caption.
   statement =
     HH.section [ HP.class_ (HH.ClassName "q-say") ]
-      [ HH.p [ HP.class_ (HH.ClassName "q-sayline") ]
+      [ listening
+      , HH.p [ HP.class_ (HH.ClassName "q-sayline") ]
           ( [ HH.text "Making ", slotExtent
             , HH.text " ", slotPitched
-            , HH.text " samples from ", slotSource, listening
+            , HH.text " samples from ", slotSource
             , HH.text ", triggered by ", slotTrigger
             , HH.text ", kept as ", slotName
             , HH.text " for ", slotEncoding
@@ -2130,13 +2131,45 @@ render st =
   -- | the input and naming was not enough — but a sparkline lying flat in the
   -- | middle of the sentence is the same news, delivered where the decision is
   -- | made rather than as a paragraph beside the act.
+  -- | **A meter beside the sentence, not a word inside it.**
+  -- |
+  -- | Twenty block characters in a line of prose read as an empty underlined
+  -- | word — Andrew, 2026-09-12, having just lost a transect to a silent
+  -- | input: *"I just didn't make that association when it wasn't moving"*.
+  -- | Which is the failure exactly: the one thing it exists to say is said by
+  -- | NOT moving, and a flat row of `▁` in a sentence looks like a rendering
+  -- | fault rather than like silence.
+  -- |
+  -- | Drawn, and to the left of the statement, it is a meter: an object with a
+  -- | baseline, so flat is a reading rather than an absence. It also says so
+  -- | in words underneath, because the whole point is that the picture alone
+  -- | was not enough.
   listening =
-    HH.span
-      [ HP.class_ (HH.ClassName ("q-spark" <> if quiet then " is-quiet" else ""))
-      , HP.title (fmt srcDb <> " dB — the last two seconds of input level"
-                    <> (if quiet then ". Nothing is playing into it." else ""))
-      ]
-      [ HH.text sparkline ]
+    let
+      n = 20
+      recent = Array.takeEnd n st.levels
+      padded = Array.replicate (n - Array.length recent) 0.0 <> recent
+      w = 1.0 / Int.toNumber n
+      bar i v =
+        let h = max 0.02 (clampN 0.0 1.0 v)
+        in Wave.el "rect"
+             [ Wave.attr "x" (show (Int.toNumber i * w + w * 0.12))
+             , Wave.attr "y" (show (1.0 - h))
+             , Wave.attr "width" (show (w * 0.76))
+             , Wave.attr "height" (show h) ] []
+    in
+      HH.div
+        [ HP.class_ (HH.ClassName ("q-meter" <> if quiet then " is-quiet" else ""))
+        , HP.title (fmt srcDb <> " dB — the last two seconds of input level"
+                      <> (if quiet then ". Nothing is playing into it." else ""))
+        ]
+        [ Wave.el "svg"
+            [ Wave.attr "viewBox" "0 0 1 1", Wave.attr "preserveAspectRatio" "none"
+            , Wave.attr "class" "q-meterpic" ]
+            (Array.mapWithIndex bar padded)
+        , HH.span [ HP.class_ (HH.ClassName "q-meterword") ]
+            [ HH.text (if quiet then "silent" else fmt srcDb <> " dB") ]
+        ]
 
   -- | One axis is a number you can say; two are a shape, and the shape belongs
   -- | with the axes that make it rather than in the middle of a sentence.
@@ -2208,10 +2241,15 @@ render st =
 
   -- | The measured table, in small letters: which scheme turns notes into
   -- | volts. `— none —` is not a gap, it is the unpitched case said plainly.
+  -- | **The label alone.** A calibration names a signal path and the module
+  -- | name is the longest thing on it; set at the sentence's own weight it was
+  -- | half the paragraph, for a fact you check once. The label is the handle;
+  -- | the module belongs where the table is being CHOSEN, which is the Pitch
+  -- | modal, and it is there.
   slotCalib =
-    sel "q-slot is-fine" (fromMaybe "" pitchLabel) AddPitch
+    sel "q-slot" (fromMaybe "" pitchLabel) AddPitch
       ( Array.cons { v: "", t: "— none, unpitched —" }
-          (map (\t -> { v: t.label, t: t.label <> " · " <> t.module }) st.tables) )
+          (map (\t -> { v: t.label, t: t.label }) st.tables) )
 
   pitchLabel = map _.label (Array.findMap _.pitch st.sweep.params)
 
@@ -2424,18 +2462,6 @@ render st =
   -- The cell at this index, in the encoding's own recording order.
   cellAt j = fromMaybe []
     (Array.index (Encoding.cells st.sweep.encoding st.sweep.extent) j)
-
-  -- | Eight block characters, oldest to newest. Empty history draws the
-  -- | floor rather than nothing, so the line does not appear and disappear.
-  sparkline =
-    let
-      blocks = [ "\x2581", "\x2582", "\x2583", "\x2584", "\x2585", "\x2586", "\x2587", "\x2588" ]
-      pick v = fromMaybe "\x2581"
-        (Array.index blocks (clamp 0 7 (Int.round (clampN 0.0 1.0 v * 7.0))))
-      recent = Array.takeEnd 20 st.levels
-      padded = Array.replicate (20 - Array.length recent) 0.0 <> recent
-    in
-      Array.fold (map pick padded)
 
   -- Whichever is chosen, or the first the daemon says is available.
   srcNow =

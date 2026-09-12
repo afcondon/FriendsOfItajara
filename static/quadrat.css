@@ -573,13 +573,37 @@ body {
    page furniture above the real thing. At half width it is a paragraph with a
    shape, it wraps to three or four lines, and it is unmistakably the first
    thing on the page rather than the label of what follows. */
-.q-say { width: 50%; margin: 0 auto; padding: 40px 0 34px; }
+.q-say {
+  width: 56%; margin: 0 auto; padding: 40px 0 34px;
+  display: flex; align-items: flex-start; gap: 22px;
+}
+.q-say .q-sayline { flex: 1 1 auto; min-width: 0; }
 .q-sayline {
   margin: 0; font-size: 23px; line-height: 1.55; font-weight: 300;
   letter-spacing: -0.01em;
 }
 /* Narrow enough that half of it is not a column any more. */
 @media (max-width: 1180px) { .q-say { width: 100%; padding: 26px 0 22px; } }
+
+/* **A meter, not a word.** Twenty block characters inside the sentence read
+   as an empty underlined word — and the one thing the thing exists to say is
+   said by NOT moving, so flat looked like a rendering fault rather than like
+   silence. Drawn, beside the statement, with a baseline and a label: flat is
+   then a reading. */
+.q-meter { flex: 0 0 72px; padding-top: 6px; }
+.q-meterpic {
+  display: block; width: 100%; height: 34px;
+  background: #fff; border: 1px solid var(--rule); border-radius: 2px;
+}
+.q-meterpic rect { fill: var(--live); }
+.q-meterword {
+  display: block; margin-top: 4px; font-size: 10px; letter-spacing: .03em;
+  color: var(--muted); font-variant-numeric: tabular-nums; text-align: center;
+}
+/* Silence is the reading that costs a whole transect, so it is the one that
+   is coloured rather than the one that is not. */
+.q-meter.is-quiet .q-meterpic rect { fill: var(--rule); }
+.q-meter.is-quiet .q-meterword { color: var(--hot); font-weight: 600; }
 
 /* Two things pointed at one jack. Loud, and in the sentence, because both
    halves of this were already displayed correctly in two different panels and
@@ -622,8 +646,6 @@ body {
 .q-slot.is-num::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .q-slot.is-name { min-width: 12em; cursor: text; }
 .q-slot.is-fixed { border-bottom: 1px dotted var(--rule); cursor: default; }
-.q-slot.is-fine { font-size: 12px; font-weight: 600; color: var(--muted); }
-.q-slot.is-fine:hover { color: var(--ink); }
 
 /* The input is chosen in the sentence; only the measurement stays by the
    Run button, because a meter moves and a name does not. */
@@ -700,15 +722,6 @@ body {
 .q-big.is-rec:hover:enabled { background: #b03a22; border-color: #b03a22; }
 .q-recdot { width: 10px; height: 10px; border-radius: 50%; background: #fff; display: inline-block; }
 
-/* The input, as two seconds of history in eight characters rather than as
-   the loudest bar on the page. A single bar says how loud it is NOW, which
-   between two hits is nothing at all. */
-.q-spark {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 15px; line-height: 1; letter-spacing: -0.06em;
-  color: var(--live); white-space: pre;
-}
-.q-spark.is-quiet { color: var(--rule); }
 
 /* Record and the four doors are peers: all of them are things you do to
    this take, and a row each implied a separation that is not there.
@@ -739,9 +752,6 @@ body {
 .q-doors { display: flex; flex-wrap: wrap; gap: 10px; flex: 0 1 auto; }
 .q-doors .q-door { flex: 0 1 auto; min-width: 136px; max-width: 260px; justify-content: center; }
 
-/* The level sits inside the sentence, next to the input it measures —
-   quiet enough to be part of a line of prose. */
-.q-sayline .q-spark { font-size: 13px; margin-left: 6px; vertical-align: baseline; }
 
 /* Record, play and stop are one family and belong in one row. The two
    audio verbs were a labelled pair under the waveform that read as a
