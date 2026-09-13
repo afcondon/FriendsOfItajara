@@ -2205,6 +2205,35 @@ pitchTint n
       in
         Just ("background: hsl(" <> show (pc * 30) <> "deg 48% " <> show light <> "%)")
 
+-- | **A duration as a width**, log-scaled and clamped at both ends.
+-- |
+-- | The floor is the module\'s own minimum sample — 50 ms, below which `msm`
+-- | refuses — and the ceiling is thirty seconds, past which nothing here is a
+-- | sample. So the scale is absolute rather than per-set, and a drum hit is
+-- | visibly shorter than a chord WHEREVER the two are seen together, which a
+-- | per-set normalisation would hide.
+-- |
+-- | Log rather than linear because the range is two and a half decades: on a
+-- | linear scale a 0.4 s hit and a 0.9 s hit differ by three pixels while a
+-- | 20 s take runs off the page. Logarithmically the four decays of a decay
+-- | sweep — 0.40, 0.92, 1.03, 1.85 — come out as four distinct widths, which
+-- | is the axis the picture was missing.
+widthOf :: Number -> String
+widthOf d
+  | d <= 0.0 = "width: 13px"
+  | otherwise =
+      let
+        floorSecs = 0.05
+        ceilSecs = 30.0
+        span = Number.log (ceilSecs / floorSecs)
+        at = clampN 0.0 1.0 (Number.log (max floorSecs d / floorSecs) / span)
+      in
+        "width: " <> show (Int.round (5.0 + 26.0 * at)) <> "px"
+
+-- | Two decimals, for a duration in a tooltip.
+secs2 :: Number -> String
+secs2 d = show (Int.round (d * 100.0) / 100)
+
 -- | A MIDI note as a person would say it. Sharps rather than flats, because
 -- | the only thing naming them here is a tooltip and a consistent spelling
 -- | beats a correct enharmonic nobody asked for.
@@ -4715,18 +4744,41 @@ render st =
   -- | and everything that was written out goes behind a click.
   sampleCell r i =
     HH.div
-      [ HP.class_ (HH.ClassName ("q-scell" <> if noteOf r i < 0 then "" else " has-pitch"))
-      , maybe (HP.attr (HH.AttrName "data-none") "") (HP.attr (HH.AttrName "style"))
-          (pitchTint (noteOf r i))
-      , HP.title (show (i + 1) <> (case noteOf r i of
-          nn | nn >= 0 -> " \x00b7 " <> noteName nn
-          _ -> ""))
+      [ HP.class_ (HH.ClassName ("q-scell is-" <> sampleClass r i))
+      , HP.attr (HH.AttrName "style")
+          (widthOf (secsOf r i) <> fromMaybe "" (map (\s -> "; " <> s) (pitchTint (noteOf r i))))
+      , HP.title (show (i + 1)
+          <> (case noteOf r i of
+                nn | nn >= 0 -> " \x00b7 " <> noteName nn
+                _ -> "")
+          <> (case secsOf r i of
+                d | d > 0.0 -> " \x00b7 " <> secs2 d <> "s"
+                _ -> ""))
       , HE.onMouseEnter \_ -> HearOne r.name i
       , HE.onClick \_ -> PeekSet (Just r.name)
       ]
       []
 
   noteOf r i = fromMaybe (-1) (Array.index r.notes i)
+  secsOf r i = fromMaybe 0.0 (Array.index r.secs i)
+
+  -- | **Three classes, all declared, none inferred.**
+  -- |
+  -- | A sample carries a pitch when the sweep set one, and that is per-sample
+  -- | and exact. A sample is a chord when the TAKE was chord-hits, which is
+  -- | per-set and was declared at the moment of recording — and is the only
+  -- | reliable statement of it, since `samples[].notes` is carrying something
+  -- | that is not note-ons. Everything else is neither, and says so by being
+  -- | neither.
+  -- |
+  -- | Deliberately not measured. `decay`, `zcr` and `tilt` would let the page
+  -- | GUESS that one sample is a hit and another a wash, and a half-built
+  -- | shape inferred from its own state is exactly what this project keeps
+  -- | having to unpick.
+  sampleClass r i
+    | noteOf r i >= 0 = "pitch"
+    | r.kind == "chord-hits" = "chord"
+    | otherwise = "plain"
 
   -- | **The first transformation: what these samples BECOME.**
   -- |

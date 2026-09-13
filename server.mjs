@@ -524,6 +524,19 @@ function storedSets() {
       // between an arrangement that can reach a pitch and one that cannot.
       notes: (set?.samples ?? []).map((s) =>
         (s.means ?? []).reduce((n, m) => (n >= 0 ? n : Number(m.note)), -1)),
+      // **How long each sample is**, in file order. The decay axis of a sweep
+      // IS a duration axis — 0.40 / 0.92 / 1.03 / 1.85 down the four rows of
+      // the drum grid — and nothing on the page has ever shown it. It is also
+      // what decides the slot each layer gets, so it is the same number the
+      // manifest writes as `slot`.
+      secs: (set?.samples ?? []).map((s) =>
+        Math.max(0, Number(s.end ?? 0) - Number(s.start ?? 0))),
+      // What the take WAS, declared when it was recorded. The one reliable
+      // statement that a sample is a chord: `samples[].notes` cannot be used
+      // for it — a chord-hits set records 36 to 42 "notes" per sample spanning
+      // 0 to 123, including 0,1,2,3,4,5,6, and a sibling set recorded the same
+      // morning has none at all. Something other than note-ons is reaching it.
+      kind: set?.kind ?? "",
     });
   }
   return out.sort((a, b) => String(b.made).localeCompare(String(a.made)));

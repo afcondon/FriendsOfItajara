@@ -1171,10 +1171,28 @@ body {
    Banded by row, because the outer axis is what becomes a LAYER — and
    seeing the bands here is what makes the arrangement beside it legible as
    a rearrangement of these. */
-.q-spic { display: inline-flex; flex-direction: column; gap: 1px; margin-bottom: 5px; }
-.q-srow { display: flex; gap: 1px; }
-.q-scell { width: 6px; height: 6px; border-radius: 1px; background: #5d7fa8; }
+.q-spic { display: inline-flex; flex-direction: column; gap: 2px; margin-bottom: 5px; }
+.q-srow { display: flex; gap: 2px; }
+/* **Wide by duration, log-scaled**, from the module's own 50 ms floor to
+   thirty seconds — absolute rather than per-set, so a drum hit is visibly
+   shorter than a chord wherever the two are seen together. The width comes
+   inline from `widthOf`; height is the constant, because the row is the
+   outer axis and a row that changed height would say something it does not
+   mean. */
+.q-scell { height: 11px; border-radius: 1px; background: #5d7fa8; flex: none; }
 .q-srow.is-odd .q-scell { background: #86a4c4; }
+/* A chord: bars, because it is several notes at once and nothing here knows
+   WHICH — the take said "chord-hits" and `samples[].notes` is carrying
+   something that is not note-ons. Bars say "more than one" without naming
+   any. */
+.q-scell.is-chord {
+  background: repeating-linear-gradient(
+    to bottom, #7a6ca8 0 2px, #b3a9d0 2px 4px);
+}
+.q-srow.is-odd .q-scell.is-chord {
+  background: repeating-linear-gradient(
+    to bottom, #8d80b6 0 2px, #c2badb 2px 4px);
+}
 .q-set-n { text-align: left; }
 .q-set-n > div { font-variant-numeric: tabular-nums; }
 
@@ -1216,8 +1234,11 @@ body {
 .q-set-name { cursor: default; }
 .q-set-ch { color: var(--muted); font-size: 9px; letter-spacing: 1px; white-space: nowrap; }
 .q-spic { margin-bottom: 0; cursor: pointer; }
-.q-scell { transition: transform .08s; }
-.q-scell:hover { transform: scale(1.6); border-radius: 0; }
+.q-scell { transition: box-shadow .08s; }
+/* Scaling a variable-width cell moves its neighbours, so the hover reads as
+   an outline instead: the picture must not jump under the pointer that is
+   auditioning it. */
+.q-scell:hover { box-shadow: 0 0 0 2px var(--ink); border-radius: 0; position: relative; z-index: 1; }
 /* A sample that stands for a note wears it — the colour arrives inline, from
    `pitchTint`, because the hue IS the datum. Adjacent semitones are adjacent
    hues, so a chromatic run reads as a run and a repeat reads as a repeat,
@@ -1225,13 +1246,13 @@ body {
    pitch and one that cannot. The class is only a hook: a pitched cell takes
    no row banding, since the banding says "outer axis" and the colour is
    already saying something louder. */
-.q-scell.has-pitch { box-shadow: inset 0 0 0 1px rgba(0,0,0,.10); }
+.q-scell.is-pitch { box-shadow: inset 0 0 0 1px rgba(0,0,0,.10); }
 
 /* ── A set's own page ────────────────────────────────────────────────── */
 .q-modal.is-set { max-width: 620px; }
 .q-setpage { display: flex; flex-direction: column; gap: 16px; }
 .q-setpic .q-spic { cursor: pointer; }
-.q-setpic .q-scell { width: 11px; height: 11px; }
+.q-setpic .q-scell { height: 15px; }
 .q-facts { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 0; font-size: 13px; }
 .q-facts dt { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
 .q-facts dd { margin: 0; }

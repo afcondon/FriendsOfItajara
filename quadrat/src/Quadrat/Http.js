@@ -167,6 +167,8 @@ export const storedSets = () =>
       // array is honest: the boxes then carry no pitch and say so by not
       // being coloured.
       notes: (s.notes ?? []).map(Number),
+      secs: (s.secs ?? []).map(Number),
+      kind: String(s.kind ?? ""),
     })),
   })).catch(() => ({ ok: false, sets: [] }));
 

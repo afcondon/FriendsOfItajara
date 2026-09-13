@@ -331,6 +331,19 @@ type SetRow =
   -- | reads as a repeat — which is exactly the difference between an
   -- | arrangement that can reach a pitch and one that cannot.
   , notes :: Array Int
+  -- | **How long each sample is**, in file order. The decay axis of a sweep
+  -- | is a duration axis, and nothing on the page has ever shown it; it is
+  -- | also the number that decides the slot a layer gets.
+  , secs :: Array Number
+  -- | What the take was, declared when it was recorded: `drum-hits`,
+  -- | `chord-hits`, `bars`, `chromatic`, `longform`.
+  -- |
+  -- | **The only reliable statement that a sample is a chord.** Not
+  -- | `samples[].notes` — a chord-hits set records 36 to 42 of those per
+  -- | sample spanning 0 to 123, including 0 through 6, and a sibling set
+  -- | recorded the same morning has none at all. Something other than
+  -- | note-ons is reaching that field, so nothing may be concluded from it.
+  , kind :: String
   }
 
 -- | **A name the owner chose, against the wire name the daemon uses.**
