@@ -1354,3 +1354,17 @@ body {
 /* The sample being read. An outline, not a fill: the cell's own colour is
    its pitch and must not be taken away to say "this one". */
 .q-scell.is-reading { box-shadow: 0 0 0 2px var(--ink); position: relative; z-index: 1; }
+
+/* ── A rebus ─────────────────────────────────────────────────────────────
+   An ordered pair (or more) of coloured icons standing for a content, so a
+   library of `chord-hits-0912-164548` and `chord-hits-0912-164852` is a row
+   of pictures rather than two timestamps differing in the middle. Every
+   icon has a word, so the identity is speakable and typeable too.
+
+   Baseline-aligned and inline: it sits beside a name, not instead of one. */
+.q-rebus { display: inline-flex; align-items: center; gap: 3px; vertical-align: -2px; }
+.q-rebusicon { display: block; }
+/* A CONTAINER's alias is monochrome so it cannot be read as a CONTENT
+   identity, which is coloured. Two rows of the same width meaning different
+   kinds of thing is exactly the confusion identity exists to prevent. */
+.q-rebus.is-mono { color: var(--muted); }
