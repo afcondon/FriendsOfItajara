@@ -2951,9 +2951,25 @@ render st =
           , notesChanPick
           , HH.text (case Array.length (believed st) of
                        0 -> " — nothing played yet. " <> tallySays
-                       _ -> ". " <> tallySays)
+                       _ -> ". " <> rangeSays <> tallySays)
           , HH.text chanSays
           ]
+
+  -- | **The register they arrived in, always said.**
+  -- |
+  -- | The range is what identifies a source, and it was only being printed in
+  -- | the per-channel breakdown — which is suppressed when there is one
+  -- | channel, i.e. in the ordinary case. A count says a port is busy; the
+  -- | span says whether a hand is playing. Somebody at a keyboard stays
+  -- | inside a register you could sing, and the traffic that wrote itself
+  -- | into the chord sets of 2026-09-12 ran C-1 to E9.
+  rangeSays =
+    let ns = Array.sort (map _.note (believed st))
+    in case Array.head ns, Array.last ns of
+      Just lo, Just hi
+        | lo == hi -> "All of them " <> noteName lo <> ". "
+        | otherwise -> noteName lo <> "\x2013" <> noteName hi <> ". "
+      _, _ -> ""
 
   -- | What each port has said, named. The point is the comparison.
   tallySays = case Array.filter (\t -> t.n > 0) portTally of
