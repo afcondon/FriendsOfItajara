@@ -43,3 +43,8 @@ workspace:
       path: ../itajara/client
     itajara-surface:
       path: ../itajara/surface
+    # Identity without a name: a content or a key, as a memorable pair of
+    # coloured icons. Extracted from Triggerfish so that a chord set can wear
+    # the SAME identity in both places. By path until it earns publishing.
+    rebus:
+      path: ../../code-typography/rebus

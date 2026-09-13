@@ -101,7 +101,12 @@ body {
 .q-set-tick input { cursor: pointer; margin: 0; }
 .q-set.is-picked { background: #f2f6fb; }
 .q-set:last-child { border-bottom: 1px solid var(--rule); }
-.q-set-name { font-size: 15px; font-weight: 600; }
+.q-set-name { font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 7px; min-width: 0; }
+/* The name still carries the facts — which take, which minute — but it is no
+   longer the thing you find the set BY. It can wrap or clip; the picture
+   cannot. */
+.q-set-nametext { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.q-modalhead .q-rebus { margin-right: 2px; }
 .q-set-when { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; margin-top: 2px; }
 .q-set-n { font-variant-numeric: tabular-nums; font-size: 15px; text-align: right; }
 .q-set-n span { font-size: 12px; color: var(--muted); }

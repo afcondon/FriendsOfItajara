@@ -14,6 +14,8 @@ wherever it is shown. Substituting a different icon set would leave the hash
 agreeing and the pictures disagreeing, which is worse than not sharing the
 identity at all: you would trust a match that is not one.
 
+The deck itself is read from Rebus's `defaultDeck`, so the two cannot drift.
+
 Run:  python3 tools/vendor-rebus-icons.py <path-to-fontawesome-free-web-dir>
 
 Font Awesome Free icons are CC BY 4.0 (https://fontawesome.com/license/free)
@@ -21,19 +23,27 @@ and the attribution is carried into the generated module.
 """
 import json, os, re, sys
 
-# The deck, which is Rebus's and must be copied from it rather than guessed.
-# A name here that Rebus does not have, or vice versa, is an icon that will
-# never render or a path that is never asked for.
-DECK = [
-    "bomb", "star", "moon", "sun", "cloud", "bolt", "fire", "leaf",
-    "tree", "feather", "fish", "frog", "crow", "dove", "cat", "dog",
-    "horse", "hippo", "dragon", "spider", "bug", "ghost", "skull", "heart",
-    "anchor", "bell", "key", "lock", "gem", "crown", "cube", "dice",
-    "flask", "rocket", "bicycle", "car", "plane", "ship", "truck", "bus",
-    "tractor", "compass", "map", "book", "guitar", "drum", "music", "umbrella",
-    "snowflake", "mountain", "tornado", "meteor", "atom", "brain", "eye", "cow",
-    "ambulance", "hammer", "wrench", "gear", "seedling", "spa", "plug", "bath",
-]
+# **The deck is read from Rebus, never copied.**
+#
+# It used to be a list here with a comment saying it must be kept in step,
+# which is a guard that works right up until it doesn't: if Rebus's deck ever
+# changed, this would silently vendor the wrong sixty-four and icons would go
+# missing or — worse — draw under the wrong name. Reading it from the source
+# removes the possibility instead of detecting it.
+REBUS_DECK = os.path.join(
+    os.path.dirname(__file__), "..", "..", "..", "code-typography", "rebus",
+    "src", "Rebus", "Deck.purs")
+
+
+def deck():
+    src = open(REBUS_DECK).read()
+    i = src.index("defaultDeck :: Deck")
+    block = src[i:src.index("deckIcons", i)]
+    names = re.findall(r'"([a-z-]+)"', block)
+    if len(names) < 8:
+        sys.exit(f"read only {len(names)} icons from {REBUS_DECK} — has its shape changed?")
+    return names
+
 
 OUT = os.path.join(os.path.dirname(__file__), "..", "quadrat", "src", "Quadrat", "RebusIcons.purs")
 
@@ -48,8 +58,9 @@ def main(fa):
         for a in (v.get("aliases") or {}).get("names") or []:
             alias[a] = k
 
+    names = deck()
     rows = []
-    for name in DECK:
+    for name in names:
         key = name if os.path.exists(os.path.join(fa, "svgs", "solid", name + ".svg")) else alias.get(name)
         if not key:
             sys.exit(f"{name}: no solid icon and no alias for it")

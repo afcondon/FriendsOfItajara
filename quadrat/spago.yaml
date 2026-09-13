@@ -39,6 +39,7 @@ package:
     - numbers
     - ordered-collections
     - prelude
+    - rebus
     - strings
     - tuples
     - web-dom

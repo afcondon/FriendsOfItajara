@@ -77,6 +77,8 @@ import Data.Set as Set
 import Control.Promise (toAffE)
 import Quadrat.Audio as Audio
 import Quadrat.Http as Http
+import Quadrat.RebusView as RebusView
+import Quadrat.SetIdentity (setGlyph)
 import Quadrat.Stave as Stave
 import Quadrat.Wave as Wave
 import Quadrat.Kind (Close(..), Fold(..), Kind)
@@ -3888,8 +3890,21 @@ render st =
               , HE.onChange \_ -> PickSet r.name
               ]
           ]
+      -- | **A picture that is not a timestamp.**
+      -- |
+      -- | The name of every set here is the minute it was made, so a library
+      -- | of them is a column of near-identical strings — which is why
+      -- | deleting one makes you read the names AND hear the audio first. The
+      -- | rebus is the same identity said in a form the eye can take in at
+      -- | once, and its words make it sayable and typeable too.
       , HH.div [ HP.class_ (HH.ClassName "q-set-id") ]
-          [ HH.div [ HP.class_ (HH.ClassName "q-set-name") ] [ HH.text r.name ]
+          [ HH.div [ HP.class_ (HH.ClassName "q-set-name") ]
+              [ let g = setGlyph r
+                in RebusView.chip
+                     { height: 15.0, mono: false, title: g.alias }
+                     g.icons
+              , HH.span [ HP.class_ (HH.ClassName "q-set-nametext") ] [ HH.text r.name ]
+              ]
           , HH.div [ HP.class_ (HH.ClassName "q-set-when") ]
               [ HH.text (String.take 10 r.made
                   <> (if r.take == "" then "" else " · from " <> r.take)) ]
@@ -4950,7 +4965,11 @@ render st =
         HH.div [ HP.class_ (HH.ClassName "q-scrim") ]
           [ HH.div [ HP.class_ (HH.ClassName "q-modal is-set") ]
               [ HH.div [ HP.class_ (HH.ClassName "q-modalhead") ]
-                  [ HH.h2_ [ HH.text nm ]
+                  [ let g = setGlyph r
+                    in RebusView.chip
+                         { height: 19.0, mono: false, title: g.alias }
+                         g.icons
+                  , HH.h2_ [ HH.text nm ]
                   , HH.button
                       [ HP.class_ (HH.ClassName "q-plain")
                       , HE.onClick \_ -> PeekSet Nothing ]

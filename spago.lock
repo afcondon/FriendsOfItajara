@@ -51,6 +51,7 @@
             "numbers",
             "ordered-collections",
             "prelude",
+            "rebus",
             "strings",
             "tuples",
             "web-dom",
@@ -718,6 +719,9 @@
       },
       "itajara-surface": {
         "path": "../itajara/surface"
+      },
+      "rebus": {
+        "path": "../../code-typography/rebus"
       }
     }
   },
@@ -1440,6 +1444,16 @@
         "newtype",
         "prelude",
         "tuples"
+      ]
+    },
+    "rebus": {
+      "type": "local",
+      "path": "../../code-typography/rebus",
+      "dependencies": [
+        "arrays",
+        "maybe",
+        "prelude",
+        "strings"
       ]
     },
     "refs": {
