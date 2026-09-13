@@ -1293,3 +1293,22 @@ body {
 .q-scell.is-over {
   clip-path: polygon(0 0, calc(100% - 4px) 0, 100% 50%, calc(100% - 4px) 100%, 0 100%);
 }
+
+/* **How much material, as its own mark.**
+
+   No per-cell width can say this. A set of one 166-second take draws one
+   cell; a set of twelve eight-second chords draws twelve, and twelve cells
+   are longer than one at any scale — so the row holding six times LESS
+   material looked six times bigger. That is not a scale to tune, it is a
+   second fact wanting a second mark.
+
+   Linear, because the totals here span a factor of six and a log would
+   flatten exactly the comparison it exists to make. A hairline, because it
+   is the quieter of the two readings: which samples differ is what you look
+   at, how much there is in total is what you check. */
+.q-swrap { display: inline-flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+.q-stotal { height: 2px; background: var(--muted); opacity: .45; border-radius: 1px; flex: none; }
+.q-stotal.is-over {
+  clip-path: polygon(0 0, calc(100% - 3px) 0, 100% 50%, calc(100% - 3px) 100%, 0 100%);
+  opacity: .75;
+}

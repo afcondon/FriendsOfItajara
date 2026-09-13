@@ -2233,10 +2233,26 @@ widthOf d
 -- | and a 30-second one are both pinned at full width, and the difference
 -- | between them is a fact the picture must not swallow.
 atOf :: Number -> Number
-atOf d = clampN 0.0 1.0 (Number.log (max 0.05 d / 0.05) / Number.log (30.0 / 0.05))
+atOf d = clampN 0.0 1.0 (Number.log (max 0.05 d / 0.05) / Number.log (300.0 / 0.05))
 
 overScale :: Number -> Boolean
-overScale d = d > 30.0
+overScale d = d > 300.0
+
+-- | **How much material a set is**, which is a different question from how
+-- | long any one sample is — and one that no per-cell width can answer.
+-- |
+-- | The arithmetic is against it: a set of one 166-second take draws one
+-- | cell, and a set of twelve eight-second chords draws twelve. Twelve cells
+-- | are longer than one at any scale, so the row that holds six times less
+-- | material looks six times bigger. That is not a scale to be tuned, it is
+-- | a second fact needing a second mark.
+-- |
+-- | Linear, not log: totals here run 26 to 166 seconds, a range of six, and
+-- | a log would flatten the very comparison the bar exists to make. Past
+-- | five minutes it clamps and notches, which is where a "set" has stopped
+-- | being a set of samples anyway.
+totalWidth :: Number -> String
+totalWidth total = "width: " <> show (Int.round (2.0 + 258.0 * clampN 0.0 1.0 (total / 300.0))) <> "px"
 
 -- | Two decimals, for a duration in a tooltip.
 secs2 :: Number -> String
@@ -4726,7 +4742,22 @@ render st =
   -- | The rows are banded because the outer axis is what a layer will become,
   -- | and seeing the bands here is what makes the arrangement beside it
   -- | legible as a rearrangement of these.
+  -- | The picture, and under it the bar that says how much of it there is.
   samplePic r =
+    HH.div [ HP.class_ (HH.ClassName "q-swrap") ]
+      [ samplePicOnly r
+      , let total = Array.foldl (+) 0.0 (Array.filter (_ > 0.0) r.secs)
+        in if total <= 0.0 then HH.text ""
+           else HH.div
+                  [ HP.class_ (HH.ClassName ("q-stotal"
+                      <> (if total > 300.0 then " is-over" else "")))
+                  , HP.attr (HH.AttrName "style") (totalWidth total)
+                  , HP.title (secs2 total <> " seconds of material in all")
+                  ]
+                  []
+      ]
+
+  samplePicOnly r =
     let
       n = r.count
       cols = case r.extent of
