@@ -1120,12 +1120,25 @@ body {
    Squares, not bars: the picture has to read the same in a table cell, in a
    modal, and beside a set in the library, and a bar changes meaning with the
    width it is given. */
-.q-vpic { display: inline-flex; flex-direction: column; gap: 1px; }
-.q-vrow { display: flex; gap: 1px; }
-.q-vcell { width: 7px; height: 7px; background: var(--ink); border-radius: 1px; }
+.q-vpic { display: inline-flex; flex-direction: column; gap: 2px; }
+.q-vrow { display: flex; gap: 2px; }
+/* The card side is drawn out of the SAME cells as the library side — same
+   colours, same widths — so that arranging the boxes on the left and seeing
+   those boxes land on the right is one continuous picture rather than two
+   diagrams of it. A cell with no set behind it falls back to ink: a slot
+   already on the card was written by somebody else and nothing here knows
+   what is in it. */
+.q-vcell { width: 7px; height: 9px; background: var(--ink); border-radius: 1px; flex: none; }
+.q-vcell.is-chord {
+  background: repeating-linear-gradient(to bottom, #7a6ca8 0 2px, #b3a9d0 2px 4px);
+}
+.q-vcell.is-plain { background: #5d7fa8; }
+.q-vcell.is-over {
+  clip-path: polygon(0 0, calc(100% - 4px) 0, 100% 50%, calc(100% - 4px) 100%, 0 100%);
+}
 /* What is about to go. The same shape with no ink — the comparison is the
    whole reason for drawing it, so it cannot be a different picture. */
-.q-vpic.is-dim .q-vcell { background: transparent; box-shadow: inset 0 0 0 1px var(--rule); }
+.q-vpic.is-dim .q-vcell { background: transparent !important; box-shadow: inset 0 0 0 1px var(--rule); }
 .q-holdsays { font-size: 12px; color: var(--muted); margin-top: 5px; }
 
 /* Before and after, and the arrow between them. The only arrow on the page,
@@ -1263,3 +1276,20 @@ body {
   font-variant-numeric: tabular-nums;
 }
 .q-modal.is-set .q-set-do { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-start; }
+
+/* **Unknown is not short.** A cell with no measured length is hatched and
+   narrow, and must never be mistaken for a real one — a plausible default
+   width produced a wrong conclusion on the first day it existed: two takes
+   of 166 and 124 seconds drawn at the width of a half-second hit, and read
+   as "these are not long". */
+.q-scell.is-unmeasured {
+  background: repeating-linear-gradient(
+    45deg, var(--rule) 0 2px, transparent 2px 4px) !important;
+  box-shadow: inset 0 0 0 1px var(--rule);
+}
+/* **Off the top of the scale.** Thirty seconds and a hundred and sixty look
+   the same at full width, and the difference is exactly what a longform set
+   is. A notched right edge says "longer than this can show". */
+.q-scell.is-over {
+  clip-path: polygon(0 0, calc(100% - 4px) 0, 100% 50%, calc(100% - 4px) 100%, 0 100%);
+}

@@ -529,8 +529,15 @@ function storedSets() {
       // the drum grid — and nothing on the page has ever shown it. It is also
       // what decides the slot each layer gets, so it is the same number the
       // manifest writes as `slot`.
-      secs: (set?.samples ?? []).map((s) =>
-        Math.max(0, Number(s.end ?? 0) - Number(s.start ?? 0))),
+      // A set cut before sets were stored has no `samples`, so the lengths
+      // come off the files themselves. **Worth the header reads**: those are
+      // exactly the sets nobody can tell anything about, and an absent length
+      // drawn as a default width is not "unknown", it is a WRONG number that
+      // reads as a real one. The two longform sets came out looking like
+      // half-second hits when they are 166 and 124 seconds.
+      secs: (set?.samples ?? []).length
+        ? set.samples.map((s) => Math.max(0, Number(s.end ?? 0) - Number(s.start ?? 0)))
+        : fileSecs(dir),
       // What the take WAS, declared when it was recorded. The one reliable
       // statement that a sample is a chord: `samples[].notes` cannot be used
       // for it — a chord-hits set records 36 to 42 "notes" per sample spanning
@@ -557,6 +564,20 @@ function storedSet(name) {
   } catch (e) {
     return { ok: false, output: `${name} has no ${SET_JSON} — it was cut before sets were stored` };
   }
+}
+
+// Every WAV in a directory, by length, in the order the module would sort
+// them. Capped, because this runs per set on every list refresh and a
+// directory of a thousand would cost a thousand opens for a picture that
+// cannot show a thousand boxes anyway.
+function fileSecs(dir) {
+  try {
+    return fs.readdirSync(dir)
+      .filter((f) => f.toLowerCase().endsWith(".wav") && !f.startsWith("."))
+      .sort()
+      .slice(0, 256)
+      .map((f) => wavSecs(path.join(dir, f)) ?? 0);
+  } catch { return []; }
 }
 
 function wavShape(dir, set) {

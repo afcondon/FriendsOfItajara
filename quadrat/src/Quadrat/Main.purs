@@ -2218,17 +2218,25 @@ pitchTint n
 -- | 20 s take runs off the page. Logarithmically the four decays of a decay
 -- | sweep — 0.40, 0.92, 1.03, 1.85 — come out as four distinct widths, which
 -- | is the axis the picture was missing.
+-- | **An unknown length is not a short one.** Zero gets a narrow cell that
+-- | is marked as unknown rather than a plausible default: a default width
+-- | reads as a real measurement, and it produced a wrong conclusion on the
+-- | first day it existed — two 166- and 124-second takes drawn at the width
+-- | of a half-second hit, and read as "these are not long".
 widthOf :: Number -> String
 widthOf d
-  | d <= 0.0 = "width: 13px"
-  | otherwise =
-      let
-        floorSecs = 0.05
-        ceilSecs = 30.0
-        span = Number.log (ceilSecs / floorSecs)
-        at = clampN 0.0 1.0 (Number.log (max floorSecs d / floorSecs) / span)
-      in
-        "width: " <> show (Int.round (5.0 + 26.0 * at)) <> "px"
+  | d <= 0.0 = "width: 9px"
+  | otherwise = "width: " <> show (Int.round (5.0 + 26.0 * atOf d)) <> "px"
+
+-- | Where a duration sits on the scale, 0 to 1. Separate from the width so
+-- | that "off the top of the scale" can be drawn as such: a 166-second take
+-- | and a 30-second one are both pinned at full width, and the difference
+-- | between them is a fact the picture must not swallow.
+atOf :: Number -> Number
+atOf d = clampN 0.0 1.0 (Number.log (max 0.05 d / 0.05) / Number.log (30.0 / 0.05))
+
+overScale :: Number -> Boolean
+overScale d = d > 30.0
 
 -- | Two decimals, for a duration in a tooltip.
 secs2 :: Number -> String
@@ -4696,7 +4704,8 @@ render st =
       , HH.td_ [ HH.text r.kit ]
       , HH.td_ [ HH.text (show r.voice <> (if r.stereo then " + " <> show (r.voice + 1) else "")) ]
       , HH.td_
-          [ voicePic { layers: max 1 (Array.length r.sets), slices: r.slicer, dim: false }
+          [ voicePicOf { layers: max 1 (Array.length r.sets), slices: r.slicer, dim: false }
+              (Array.nub r.sets)
           , HH.div [ HP.class_ (HH.ClassName "q-holdsays") ]
               [ HH.text (joinWith ", " (Array.nub r.sets)
                   <> (if r.stereo then " · stereo" else "")
@@ -4744,7 +4753,9 @@ render st =
   -- | and everything that was written out goes behind a click.
   sampleCell r i =
     HH.div
-      [ HP.class_ (HH.ClassName ("q-scell is-" <> sampleClass r i))
+      [ HP.class_ (HH.ClassName ("q-scell is-" <> sampleClass r i
+          <> (if secsOf r i <= 0.0 then " is-unmeasured" else "")
+          <> (if overScale (secsOf r i) then " is-over" else "")))
       , HP.attr (HH.AttrName "style")
           (widthOf (secsOf r i) <> fromMaybe "" (map (\s -> "; " <> s) (pitchTint (noteOf r i))))
       , HP.title (show (i + 1)
@@ -4753,7 +4764,7 @@ render st =
                 _ -> "")
           <> (case secsOf r i of
                 d | d > 0.0 -> " \x00b7 " <> secs2 d <> "s"
-                _ -> ""))
+                _ -> " \x00b7 length unknown"))
       , HE.onMouseEnter \_ -> HearOne r.name i
       , HE.onClick \_ -> PeekSet (Just r.name)
       ]
@@ -4867,6 +4878,7 @@ render st =
                           (show r.count
                             <> (if Array.null r.extent then ""
                                 else " on " <> joinWith " × " (map show r.extent)))
+                      <> fact "lengths" (lengthsSays r)
                       <> fact "moved" (joinWith ", " r.moved)
                       <> fact "encoding" r.encoding
                       <> fact "channels" (if r.stereo then "stereo — takes a voice pair"
@@ -4891,6 +4903,21 @@ render st =
     where
     fact k v = if v == "" then [] else
       [ HH.dt_ [ HH.text k ], HH.dd_ [ HH.text v ] ]
+    -- | **The lengths, in seconds, for sanity.** The shortest and the longest
+    -- | bound the picture, and the longest is also the SLOT every slice in a
+    -- | layer has to fit — so it is the number that decides what a sliced
+    -- | arrangement wastes. The total says whether a set is minutes or
+    -- | seconds, which is the difference between a bank of hits and a drone.
+    lengthsSays r =
+      let ds = Array.filter (_ > 0.0) r.secs
+      in case Array.head (Array.sort ds), Array.last (Array.sort ds) of
+        Just lo, Just hi ->
+          (if lo == hi then secs2 hi <> "s each"
+           else secs2 lo <> "\x2013" <> secs2 hi <> "s")
+            <> " \x00b7 " <> secs2 (Array.foldl (+) 0.0 ds) <> "s in all"
+            <> (if Array.length ds == r.count then ""
+                else " \x00b7 " <> show (r.count - Array.length ds) <> " unmeasured")
+        _, _ -> if r.count == 0 then "" else "unmeasured"
     audioFacts = case st.openSetInfo of
       Nothing -> fact "the files" "reading…"
       Just i | i.audio.rate > 0 ->
@@ -5040,21 +5067,58 @@ render st =
   -- |
   -- | `dim` draws what is ABOUT TO GO rather than what lands. Same shape, no
   -- | ink: the comparison is the whole point of showing it.
-  voicePic o =
+  voicePic o = voicePicOf o []
+
+  -- | **The same picture, made of the same samples.**
+  -- |
+  -- | `from` is the sets this voice is built out of, in order, so the card
+  -- | side is drawn in the material\'s own colours and lengths rather than in
+  -- | anonymous ink. It is the point of the whole encoding: you arrange the
+  -- | boxes on the left and see THOSE boxes land on the right, so a 4 × 12
+  -- | that keeps its four runs and a 1 × 48 that strings them end to end are
+  -- | two pictures of the same material and can be told apart at a glance.
+  -- |
+  -- | With no sets named it falls back to plain cells, which is right for a
+  -- | slot already on the card: those files were written by somebody else and
+  -- | nothing here knows what is in them.
+  voicePicOf o from =
     HH.div
       [ HP.class_ (HH.ClassName ("q-vpic" <> if o.dim then " is-dim" else ""))
       , HP.title (show o.layers <> " layer" <> (if o.layers == 1 then "" else "s")
           <> (if cols > 1 then " of " <> show cols <> " slices" else ""))
       ]
-      (map layerRow (Array.range 1 (max 1 (min 12 o.layers))))
+      (map layerRow (Array.range 0 (max 1 (min 12 o.layers) - 1)))
     where
     -- Twelve is the module's ceiling for layers and the picture stops there for
     -- the same reason the build does: a thirteenth never plays.
     cols = max 1 o.slices
-    layerRow _ =
+    -- Every sample of every set named, end to end — which is the order the
+    -- arrangement lays them out in, layer by layer.
+    pool = do
+      nm <- from
+      r <- Array.filter (\x -> x.name == nm) st.sets
+      Array.range 0 (r.count - 1) <#> \i -> { r, i }
+    layerRow y =
       HH.div [ HP.class_ (HH.ClassName "q-vrow") ]
-        (map (\_ -> HH.div [ HP.class_ (HH.ClassName "q-vcell") ] [])
-          (Array.range 1 cols))
+        (map (\x -> cell (y * cols + x)) (Array.range 0 (cols - 1)))
+    cell k = case Array.index pool k of
+      Nothing -> HH.div [ HP.class_ (HH.ClassName "q-vcell") ] []
+      Just { r, i } ->
+        HH.div
+          [ HP.class_ (HH.ClassName ("q-vcell is-" <> sampleClass r i
+              <> (if overScale (secsOf r i) then " is-over" else "")))
+          , HP.attr (HH.AttrName "style")
+              (widthOf (secsOf r i)
+                <> fromMaybe "" (map (\s -> "; " <> s) (pitchTint (noteOf r i))))
+          , HP.title (r.name <> " " <> show (i + 1)
+              <> (case noteOf r i of
+                    nn | nn >= 0 -> " \x00b7 " <> noteName nn
+                    _ -> "")
+              <> (case secsOf r i of
+                    d | d > 0.0 -> " \x00b7 " <> secs2 d <> "s"
+                    _ -> ""))
+          ]
+          []
 
   writeRow v =
     HH.div [ HP.class_ (HH.ClassName "q-send") ]
@@ -5195,7 +5259,8 @@ render st =
                          ]
               , HH.div [ HP.class_ (HH.ClassName "q-becomes") ] [ HH.text "\x2192" ]
               , HH.div [ HP.class_ (HH.ClassName "q-side") ]
-                  [ voicePic { layers: s.files, slices: s.slots, dim: false }
+                  [ voicePicOf { layers: s.files, slices: s.slots, dim: false }
+                      (slotSets s.slot)
                   , HH.div [ HP.class_ (HH.ClassName "q-sidesays") ]
                       [ HH.text (s.name
                           <> (if s.slots > 0 then " \x00b7 SLICER /" <> show s.slots else "")) ]
@@ -5203,6 +5268,18 @@ render st =
                   ]
               ]
       ]
+
+  -- | **Which sets a planned slot is made of.**
+  -- |
+  -- | The survey is `msm`\'s and knows nothing about sets — it reports files
+  -- | and slots. The manifest does know, so the join runs through it: a slot
+  -- | is a letter and a kit index, and the card view carries both on every
+  -- | voice row along with the set names on it. That is what lets the write
+  -- | preview be drawn in the material\'s own colours rather than in ink.
+  slotSets slot = Array.nub do
+    v <- Array.fromFoldable st.cardView
+    r <- Array.filter (\x -> x.letter <> show x.kitIx == slot) v.rows
+    r.sets
 
   fateSays s = case Http.fateOf s.fate of
     Http.Create -> "new"
