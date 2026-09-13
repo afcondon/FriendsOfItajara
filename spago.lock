@@ -52,6 +52,7 @@
             "ordered-collections",
             "prelude",
             "strings",
+            "tuples",
             "web-dom",
             "web-html",
             "web-uievents"
