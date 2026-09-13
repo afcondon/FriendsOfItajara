@@ -169,6 +169,11 @@ export const storedSets = () =>
       notes: (s.notes ?? []).map(Number),
       secs: (s.secs ?? []).map(Number),
       kind: String(s.kind ?? ""),
+      // Per sample, the chords struck into it. Empty for anything not declared
+      // a chord take, and empty from an older server — in both cases the set
+      // simply has no chord content, which is exactly what an empty array
+      // says.
+      voicings: (s.voicings ?? []).map((v) => (v ?? []).map((c) => (c ?? []).map(Number))),
       notesFrom: String(s.notesFrom ?? ""),
       notesChan: Number(s.notesChan ?? 0),
     })),

@@ -116,6 +116,17 @@ body {
 .q-set-dirt { display: block; margin-top: 3px; font-size: 12px;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--ink); }
 .q-set-do { display: flex; gap: 8px; justify-content: flex-end; }
+/* A rendering of the set in another tool's notation, with the button that sends
+   it there. The label row carries the button so the block below it stays a
+   plain selectable code block — a copy that the browser refuses still leaves
+   the text there to drag. */
+.q-xfer { margin-top: 12px; }
+.q-xfer .q-factlab { display: flex; align-items: baseline; gap: 10px; margin-bottom: 2px; }
+.q-xfer .q-set-dirt { white-space: pre; overflow-x: auto; line-height: 1.5; }
+.q-copy { font: inherit; text-transform: inherit; letter-spacing: inherit;
+  color: var(--muted); background: none; border: 0; padding: 0; cursor: pointer;
+  border-bottom: 1px solid currentColor; }
+.q-copy:hover { color: var(--ink); }
 
 @media (max-width: 900px) {
   .q-set { grid-template-columns: 22px 1fr auto; gap: 6px 16px; }

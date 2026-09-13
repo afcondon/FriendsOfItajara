@@ -358,6 +358,15 @@ type SetRow =
   -- | recorded the same morning has none at all. Something other than
   -- | note-ons is reaching that field, so nothing may be concluded from it.
   , kind :: String
+  -- | **The chords this set was played as**, one entry per sample and in file
+  -- | order, each entry the chords struck into that region. Empty for anything
+  -- | not declared a chord take.
+  -- |
+  -- | On the LISTING, not only on a set's page, because a chord set's identity
+  -- | is made of them: it wears the rebus of its own chords, which is what
+  -- | makes the same progression draw the same picture here and in Vetula.
+  -- | The list is where that picture earns its keep.
+  , voicings :: Array (Array (Array Int))
   -- | **Which MIDI port and channel the notes were taken from.** Empty and
   -- | zero for every set written before this was recorded, which is an honest
   -- | "not known" and not "nothing" — and zero as a CHANNEL means "all of

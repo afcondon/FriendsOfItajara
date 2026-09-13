@@ -352,6 +352,26 @@ function cards() {
 
 // What each sample set holds, so the page can say "11 samples" without
 // guessing from the name.
+// **The chords a set was played as**, one entry per sample and in file order.
+//
+// `struck` keeps two chords played into one region as TWO, which is the whole
+// reason it exists: flattened, that pair is an eleven-note voicing, a different
+// musical object from the two that were played. A set stored before strikes
+// were separated has the flat `notes` list only and is read as one chord.
+//
+// The rule lives here and only here. It used to live in the client as well,
+// and two copies of a rule that decides an IDENTITY is two pictures for one
+// chord as soon as they drift.
+function voicingsOf(set) {
+  return (set?.samples ?? []).map((s) => {
+    const struck = (Array.isArray(s.struck) ? s.struck : [])
+      .filter((c) => Array.isArray(c) && c.length);
+    if (struck.length) return struck;
+    const flat = Array.isArray(s.notes) ? s.notes : [];
+    return flat.length ? [flat] : [];
+  });
+}
+
 function sets() {
   if (!fs.existsSync(SAMPLES)) return {};
   const out = {};
@@ -559,6 +579,20 @@ function storedSets() {
       // 0 to 123, including 0,1,2,3,4,5,6, and a sibling set recorded the same
       // morning has none at all. Something other than note-ons is reaching it.
       kind: set?.kind ?? "",
+      // **The voicings, on the listing** — per sample, the chords struck into
+      // it, in playing order.
+      //
+      // Here rather than only on the set's own page because the CHORD SET'S
+      // IDENTITY IS MADE OF THEM: a chord set wears the rebus of its chords,
+      // which is how the same progression gets the same picture in Quadrat and
+      // in Vetula, and the library list is exactly where that picture has to
+      // be drawn. Read from `set.json`, which is already parsed for every row.
+      //
+      // Only for a set DECLARED a chord take. A sweep's `samples[].notes` are
+      // single pitches and would make every sweep look like a progression of
+      // one-note chords — and worse, would give it a content identity that
+      // means nothing, which is the one thing an identity must not do.
+      voicings: (set?.kind ?? "") === "chord-hits" ? voicingsOf(set) : [],
       // What it was listening to. Empty for every set written before this was
       // recorded, which is an honest "not known" rather than "nothing".
       notesFrom: set?.listened?.notesFrom ?? "",

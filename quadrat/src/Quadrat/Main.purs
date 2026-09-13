@@ -76,10 +76,12 @@ import Data.Set (Set)
 import Data.Set as Set
 import Control.Promise (toAffE)
 import Quadrat.Audio as Audio
+import Quadrat.Clip (copyText)
 import Quadrat.Http as Http
 import Quadrat.RebusView as RebusView
-import Quadrat.SetIdentity (setGlyph)
+import Quadrat.SetIdentity (markOf)
 import Quadrat.Stave as Stave
+import Quadrat.Tidal as Tidal
 import Quadrat.Wave as Wave
 import Quadrat.Kind (Close(..), Fold(..), Kind)
 import Quadrat.Kind as Kind
@@ -490,6 +492,11 @@ data Action
   | DropPicked
   -- | Every ticked set onto the card, each as its own kit.
   | PlacePicked
+  -- | **Put a transferable line on the clipboard.** The text is already on
+  -- | screen and selectable; this only saves the drag. Carries the string
+  -- | rather than a pointer to what to render, so the button and the block
+  -- | below it cannot come to disagree.
+  | Copy String
 
 component :: forall q i o m. MonadAff m => H.Component q i o m
 component = H.mkComponent
@@ -1089,6 +1096,8 @@ handleAction = case _ of
     case st.openSet of
       Nothing -> pure unit
       Just nm -> handleAction (HearOne nm i)
+
+  Copy s -> liftEffect (copyText s)
 
   SetPlaceSliced b -> H.modify_ _ { placeSliced = b }
 
@@ -3899,10 +3908,11 @@ render st =
       -- | once, and its words make it sayable and typeable too.
       , HH.div [ HP.class_ (HH.ClassName "q-set-id") ]
           [ HH.div [ HP.class_ (HH.ClassName "q-set-name") ]
-              [ let g = setGlyph r
+              [ let m = markOf r
                 in RebusView.chip
-                     { height: 15.0, mono: false, title: g.alias }
-                     g.icons
+                     { height: 15.0, mono: m.mono
+                     , title: m.glyph.alias <> " \x2014 " <> m.says }
+                     m.glyph.icons
               , HH.span [ HP.class_ (HH.ClassName "q-set-nametext") ] [ HH.text r.name ]
               ]
           , HH.div [ HP.class_ (HH.ClassName "q-set-when") ]
@@ -4965,10 +4975,11 @@ render st =
         HH.div [ HP.class_ (HH.ClassName "q-scrim") ]
           [ HH.div [ HP.class_ (HH.ClassName "q-modal is-set") ]
               [ HH.div [ HP.class_ (HH.ClassName "q-modalhead") ]
-                  [ let g = setGlyph r
+                  [ let m = markOf r
                     in RebusView.chip
-                         { height: 19.0, mono: false, title: g.alias }
-                         g.icons
+                         { height: 19.0, mono: m.mono
+                         , title: m.glyph.alias <> " \x2014 " <> m.says }
+                         m.glyph.icons
                   , HH.h2_ [ HH.text nm ]
                   , HH.button
                       [ HP.class_ (HH.ClassName "q-plain")
@@ -4998,12 +5009,11 @@ render st =
                   -- recorded for — a folder of numbered files is a named,
                   -- indexed set at both ends. Said for all of them, because
                   -- that is the finding.
-                  , if dirt r == "" then HH.text ""
-                    else HH.div_
-                      [ HH.div [ HP.class_ (HH.ClassName "q-factlab") ]
-                          [ HH.text "in a pattern" ]
-                      , HH.code [ HP.class_ (HH.ClassName "q-set-dirt") ] [ HH.text (dirt r) ]
-                      ]
+                  , transferable "in a pattern" (dirt r)
+                  , transferable "as a progression \x2014 paste into Vetula"
+                      (Tidal.progression
+                         { name: r.name, alias: (markOf r).glyph.alias }
+                         (Array.filter (not <<< Array.null) (join r.voicings)))
                   , HH.div [ HP.class_ (HH.ClassName "q-set-do") ] (setVerbs r)
                   ]
               ]
@@ -5053,38 +5063,23 @@ render st =
     -- | played it, and the relation between one voicing and the next is the
     -- | thing you go back to a set for. Hovering still sounds one and marks
     -- | it in the picture above; it no longer decides what you can see.
-    voicingPanel r = case st.openSetInfo of
-      Nothing -> HH.text ""
-      Just i ->
-        let
-          voices = Array.mapWithIndex (\k _ -> chordsAt i k) (Array.range 0 (r.count - 1))
-          -- One extent for the whole set, so the staff lines sit at the same
-          -- pitch in every cell. Without it each stave sizes itself and a
-          -- note that LOOKS higher than its neighbour need not be — which is
-          -- the one comparison a progression is drawn for.
-          ext = Stave.spanOf (join (join voices))
-        in
-          if Array.null (Array.filter (not <<< Array.null) voices) then HH.text "" else
-          HH.div [ HP.class_ (HH.ClassName "q-voicing") ]
-            [ HH.div [ HP.class_ (HH.ClassName "q-factlab") ]
-                [ HH.text (show (Array.length (Array.filter (not <<< Array.null) voices))
-                    <> " voicings, in the order they were played") ]
-            , HH.div [ HP.class_ (HH.ClassName "q-staves") ]
-                (Array.mapWithIndex (staveCell r ext) voices)
-            ]
-
-    -- | One sample's chords. `struck` keeps two chords played into one region
-    -- | as two, which is why `strikesIn` separated them: flattened, that pair
-    -- | is an eleven-note voicing, a different musical object from the two
-    -- | that were played. A set stored before strikes were separated has the
-    -- | flat list only and is read as one chord.
-    chordsAt i k =
-      let live = Array.filter (not <<< Array.null) in
-      case Array.index i.struck k of
-        Just chords | not (Array.null (live chords)) -> live chords
-        _ -> case Array.index i.notes k of
-          Just ns | not (Array.null ns) -> [ ns ]
-          _ -> []
+    voicingPanel r =
+      let
+        voices = r.voicings
+        -- One extent for the whole set, so the staff lines sit at the same
+        -- pitch in every cell. Without it each stave sizes itself and a
+        -- note that LOOKS higher than its neighbour need not be — which is
+        -- the one comparison a progression is drawn for.
+        ext = Stave.spanOf (join (join voices))
+      in
+        if Array.null (Array.filter (not <<< Array.null) voices) then HH.text "" else
+        HH.div [ HP.class_ (HH.ClassName "q-voicing") ]
+          [ HH.div [ HP.class_ (HH.ClassName "q-factlab") ]
+              [ HH.text (show (Array.length (Array.filter (not <<< Array.null) voices))
+                  <> " voicings, in the order they were played") ]
+          , HH.div [ HP.class_ (HH.ClassName "q-staves") ]
+              (Array.mapWithIndex (staveCell r ext) voices)
+          ]
 
     staveCell r ext k chords
       | Array.null chords = HH.text ""
@@ -5104,6 +5099,28 @@ render st =
             [ HH.div [ HP.class_ (HH.ClassName "q-staverow") ]
                 (map (Stave.grandIn { lo: ext.lo, hi: ext.hi, clefs: k == 0 }) chords)
             , HH.div [ HP.class_ (HH.ClassName "q-staveno") ] [ HH.text (show (k + 1)) ]
+            ]
+
+    -- | **A rendering of this set in somebody else's notation**, with the
+    -- | button that sends it there.
+    -- |
+    -- | Both of them are the same shape of thing — a SuperDirt pattern and a
+    -- | Vetula progression — and both are consumed by being pasted, so they
+    -- | get one affordance rather than two. Empty draws nothing: a set with no
+    -- | chords has no progression, and an empty code block would read as one.
+    transferable lab text
+      | text == "" = HH.text ""
+      | otherwise =
+          HH.div [ HP.class_ (HH.ClassName "q-xfer") ]
+            [ HH.div [ HP.class_ (HH.ClassName "q-factlab") ]
+                [ HH.text lab
+                , HH.button
+                    [ HP.class_ (HH.ClassName "q-copy")
+                    , HP.title "copy to the clipboard"
+                    , HE.onClick \_ -> Copy text ]
+                    [ HH.text "copy" ]
+                ]
+            , HH.code [ HP.class_ (HH.ClassName "q-set-dirt") ] [ HH.text text ]
             ]
 
     fact k v = if v == "" then [] else
