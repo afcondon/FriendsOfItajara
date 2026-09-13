@@ -306,6 +306,15 @@ type State =
   -- | the modal is open and says so, because a card that takes a moment must
   -- | not look like a card with nothing on it.
   , preview :: Maybe Http.Preview
+  -- | **The mounted card, read without being asked.**
+  -- |
+  -- | The same report, fetched on every refresh when exactly one card is
+  -- | mounted, so that the letter strip can show which banks are taken while
+  -- | you are choosing one — rather than at the write, which is after the
+  -- | choice. One card because with two mounted there is no "the" card and
+  -- | the strip would have to say which; that wants the destination picker,
+  -- | which has one entry.
+  , cardPeek :: Maybe Http.Preview
   -- | **Stacked or sliced**, for a set placed from the Library.
   -- |
   -- | A placement decision, not a property of the cut: the audio is the same
@@ -470,6 +479,7 @@ component = H.mkComponent
       , page: Bench, fill: Swept, pivot: Nothing
       , levels: [], modal: Nothing, kept: false, confirmKeep: false
       , picked: Set.empty, confirmDrop: false, confirmWrite: Nothing, preview: Nothing
+      , cardPeek: Nothing
       , placeSliced: false, placeAppend: false, srcNames: []
       , heard: [], midiIn: [], midiOk: true }
   , render
@@ -832,7 +842,19 @@ handleAction = case _ of
     r <- H.liftAff (attempt (toAffE Http.card))
     case r of
       Left e -> H.modify_ (note ("could not read the card: " <> Aff.message e))
-      Right v -> H.modify_ _ { cardView = Just v }
+      Right v -> do
+        H.modify_ _ { cardView = Just v }
+        -- With one card mounted, read it too. A letter is chosen before a
+        -- write and the occupancy was only ever fetched at the write, which
+        -- is after the choice it should have informed.
+        case v.cards of
+          [ one ] -> do
+            pk <- H.liftAff (attempt (toAffE (Http.previewCard one)))
+            H.modify_ _ { cardPeek = either (const Nothing) Just pk }
+          -- No card, or a choice of them: nothing here is "the" card, and a
+          -- strip that quietly showed one of two would be worse than one that
+          -- shows only the manifest's own letters.
+          _ -> H.modify_ _ { cardPeek = Nothing }
     handleAction RefreshSets
   RefreshSets -> do
     r <- H.liftAff (attempt (toAffE Http.storedSets))
@@ -3589,7 +3611,7 @@ render st =
               -- | is not optional: a write deletes the slot it lands on, so
               -- | `placeOnCard` refuses without one and the press did nothing
               -- | but say so.
-              [ small "letter" st.letter SetLetter
+              [ letterStrip
           , small "bank" st.bank SetBank
           , small "kit" st.kit SetKit
           , HH.label [ HP.class_ (HH.ClassName "q-field is-tight") ]
@@ -4640,13 +4662,100 @@ render st =
       , HH.td_ [ HH.text r.kit ]
       , HH.td_ [ HH.text (show r.voice <> (if r.stereo then " + " <> show (r.voice + 1) else "")) ]
       , HH.td_
-          [ HH.text (r.set <> " — "
-              <> (if r.slicer > 0
-                    then "one file, SLICER " <> show r.slicer
-                    else show r.count
-                           <> (if r.count == 1 then " sample" else " samples"))
-              <> (if r.stereo then ", stereo" else "")) ]
+          [ voicePic { layers: max 1 (Array.length r.sets), slices: r.slicer, dim: false }
+          , HH.div [ HP.class_ (HH.ClassName "q-holdsays") ]
+              [ HH.text (joinWith ", " (Array.nub r.sets)
+                  <> (if r.stereo then " · stereo" else "")
+                  <> (if r.mode == "" || r.mode == "manual" then ""
+                      else " · " <> r.mode)) ]
+          ]
       ]
+
+  -- | **The bank letters, as twenty-six cells.**
+  -- |
+  -- | This was a text field you typed a letter into and a sentence elsewhere
+  -- | listing the free ones — so choosing where a set goes meant reading a
+  -- | string of twenty-three characters and checking your letter against it,
+  -- | for the one decision on this page that destroys things. **The letter is
+  -- | the blast radius**: a write deletes the whole slot it lands on, and a
+  -- | letter chosen by accident once cost a bank of Squarp's own content.
+  -- |
+  -- | Three states, and they are genuinely different: free, held by this
+  -- | manifest, and held by somebody else on the card. The third is the one
+  -- | worth seeing without asking for it.
+  letterStrip =
+    HH.div [ HP.class_ (HH.ClassName "q-field is-tight q-letters") ]
+      [ HH.span_ [ HH.text "letter" ]
+      , HH.div [ HP.class_ (HH.ClassName "q-strip") ]
+          (map cell alphabet)
+      ]
+    where
+    alphabet = String.split (String.Pattern "")
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    -- Letters this manifest is already using. From the card view rather than
+    -- from the peek, because the manifest exists whether or not a card is
+    -- mounted — which is most of the time.
+    ours = Array.nub (map _.letter (maybe [] _.rows st.cardView))
+    -- What is on the card and is not ours. `free` already excludes the
+    -- manifest's own letters, so anything neither free nor ours is somebody
+    -- else's — and with no card read, nothing is known and nothing is shown.
+    freeOn = map _.free st.cardPeek
+    cell c =
+      let
+        mine = Array.elem c ours
+        taken = case freeOn of
+          Nothing -> false
+          Just f -> not mine && String.contains (String.Pattern c) f == false
+      in
+        HH.button
+          [ HP.class_ (HH.ClassName ("q-letter"
+              <> (if c == st.letter then " is-on" else "")
+              <> (if mine then " is-mine" else "")
+              <> (if taken then " is-taken" else "")))
+          , HP.title (c <> (if mine then " — this manifest writes here"
+                            else if taken then " — already on the card; writing \
+                                               \here deletes what is in it"
+                            else case freeOn of
+                                   Nothing -> ""
+                                   Just _ -> " — free"))
+          , HE.onClick \_ -> SetLetter c
+          ]
+          [ HH.text c ]
+
+  -- | **What a voice holds, drawn.**
+  -- |
+  -- | The two axes of a Rample voice are the two things the page kept saying in
+  -- | words and the two things you cannot hold in your head together: **layers
+  -- | are alternatives the module picks between** (the layer CV, or velocity, or
+  -- | random) and **slices are positions only you can reach** (the start point,
+  -- | one CC per voice). A voice of four layers of twelve slices is a 4 × 12
+  -- | grid, and the sentence for it — "bia oct x decay — one file, SLICER 12" —
+  -- | said neither number in a way that could be compared with the voice below
+  -- | it.
+  -- |
+  -- | So: a row per layer, a cell per slice. A plain stack of layers is one
+  -- | column, which is honest — it has no positions — and a sliced voice is one
+  -- | row of many, which is equally honest. The picture and the grid a set was
+  -- | swept on are deliberately the same shape, because for most sets here they
+  -- | are the same grid.
+  -- |
+  -- | `dim` draws what is ABOUT TO GO rather than what lands. Same shape, no
+  -- | ink: the comparison is the whole point of showing it.
+  voicePic o =
+    HH.div
+      [ HP.class_ (HH.ClassName ("q-vpic" <> if o.dim then " is-dim" else ""))
+      , HP.title (show o.layers <> " layer" <> (if o.layers == 1 then "" else "s")
+          <> (if cols > 1 then " of " <> show cols <> " slices" else ""))
+      ]
+      (map layerRow (Array.range 1 (max 1 (min 12 o.layers))))
+    where
+    -- Twelve is the module's ceiling for layers and the picture stops there for
+    -- the same reason the build does: a thirteenth never plays.
+    cols = max 1 o.slices
+    layerRow _ =
+      HH.div [ HP.class_ (HH.ClassName "q-vrow") ]
+        (map (\_ -> HH.div [ HP.class_ (HH.ClassName "q-vcell") ] [])
+          (Array.range 1 cols))
 
   writeRow v =
     HH.div [ HP.class_ (HH.ClassName "q-send") ]
@@ -4757,20 +4866,42 @@ render st =
           ]
       , case Http.fateOf s.fate of
           Http.Keep ->
-            HH.div [ HP.class_ (HH.ClassName "q-muted") ]
-              [ HH.text (show s.thereFiles <> " files already on the card, untouched") ]
+            HH.div [ HP.class_ (HH.ClassName "q-swap") ]
+              [ HH.div [ HP.class_ (HH.ClassName "q-side") ]
+                  [ voicePic { layers: s.thereFiles, slices: 0, dim: true }
+                  , HH.div [ HP.class_ (HH.ClassName "q-sidesays") ]
+                      [ HH.text (show s.thereFiles <> " files, untouched") ]
+                  ]
+              ]
+          -- | **Both ends of it, side by side and the same shape.**
+          -- |
+          -- | Which is the one thing the sentences could not do. "deletes 1
+          -- | file" and "4 files, SLICER /12" are two facts of the same kind
+          -- | in two different units, and a person has to convert both into a
+          -- | picture before they can be compared — so the page draws the
+          -- | picture instead. The left is greyed because it is going.
           _ ->
-            HH.div_
-              [ if s.thereFiles == 0 then HH.text ""
-                else HH.div [ HP.class_ (HH.ClassName "q-gone") ]
-                       [ HH.text ("deletes " <> show s.thereFiles <> " file"
-                           <> (if s.thereFiles == 1 then "" else "s")
-                           <> " — " <> joinWith ", " s.thereNames) ]
-              , HH.div_
-                  [ HH.text (s.name <> " — " <> show s.files <> " file"
-                      <> (if s.files == 1 then "" else "s")
-                      <> (if s.slots > 0 then ", SLICER /" <> show s.slots else "")) ]
-              , HH.div [ HP.class_ (HH.ClassName "q-muted") ] [ HH.text s.settings ]
+            HH.div [ HP.class_ (HH.ClassName "q-swap") ]
+              [ if s.thereFiles == 0
+                  then HH.div [ HP.class_ (HH.ClassName "q-side is-empty") ]
+                         [ HH.div [ HP.class_ (HH.ClassName "q-sidesays") ]
+                             [ HH.text "empty" ] ]
+                  else HH.div [ HP.class_ (HH.ClassName "q-side") ]
+                         [ voicePic { layers: s.thereFiles, slices: 0, dim: true }
+                         -- Named, never counted: two takes of one morning
+                         -- differ by four characters in the middle, and this
+                         -- is the last moment anyone can notice.
+                         , HH.div [ HP.class_ (HH.ClassName "q-gone") ]
+                             [ HH.text (joinWith ", " s.thereNames) ]
+                         ]
+              , HH.div [ HP.class_ (HH.ClassName "q-becomes") ] [ HH.text "\x2192" ]
+              , HH.div [ HP.class_ (HH.ClassName "q-side") ]
+                  [ voicePic { layers: s.files, slices: s.slots, dim: false }
+                  , HH.div [ HP.class_ (HH.ClassName "q-sidesays") ]
+                      [ HH.text (s.name
+                          <> (if s.slots > 0 then " \x00b7 SLICER /" <> show s.slots else "")) ]
+                  , HH.div [ HP.class_ (HH.ClassName "q-muted") ] [ HH.text s.settings ]
+                  ]
               ]
       ]
 
