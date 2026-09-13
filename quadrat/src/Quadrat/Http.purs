@@ -19,6 +19,8 @@ module Quadrat.Http
   , Meant
   , addToCard
   , SetRow
+  , Centre
+  , setCentre
   , storedSets
   , SourceName
   , sourceLabels
@@ -319,6 +321,11 @@ foreign import addToCard
   -> Effect (Promise Wrote)
 
 -- | One row of the stored-set list: enough to choose by, never the whole thing.
+-- | A declared key centre. `tonality` is `""`, `"major"` or `"minor"` — the
+-- | empty case being a set whose root is known and whose intent is not, which
+-- | is a real position and not a half-filled form.
+type Centre = { root :: Int, tonality :: String }
+
 type SetRow =
   { name :: String
   , count :: Int
@@ -367,6 +374,18 @@ type SetRow =
   -- | makes the same progression draw the same picture here and in Vetula.
   -- | The list is where that picture earns its keep.
   , voicings :: Array (Array (Array Int))
+  -- | **The key centre this set was played in**, as declared by whoever played
+  -- | it. `root` is a pitch class, or `-1` for "nobody has said".
+  -- |
+  -- | Declared and never inferred, because for a capture off a generator the
+  -- | key and the major/minor switch are SETTINGS SOMEBODY CHOSE — recovering
+  -- | them from the audio would hand back an input, badly. And a wrong centre
+  -- | is worse than none: everything downstream transposes from it silently.
+  -- |
+  -- | The root alone is what makes the set transposable; `tonality` is context
+  -- | for reading how far out a chord is, since against an intended minor a
+  -- | major I is further out than a minor chord of the same complexity.
+  , centre :: Centre
   -- | **Which MIDI port and channel the notes were taken from.** Empty and
   -- | zero for every set written before this was recorded, which is an honest
   -- | "not known" and not "nothing" — and zero as a CHANNEL means "all of
@@ -389,6 +408,11 @@ foreign import sourceLabels :: Effect (Promise (Array SourceName))
 -- | One label. Empty clears it, and the source goes back to showing its wire
 -- | name, so there is no second control for forgetting.
 foreign import nameSource :: String -> String -> Effect (Promise Wrote)
+
+-- | Declare (or clear) a set's key centre. Only that field is written: a
+-- | declaration made months later must not rewrite what the recording
+-- | measured.
+foreign import setCentre :: String -> Centre -> Effect (Promise Wrote)
 
 foreign import storedSets :: Effect (Promise { ok :: Boolean, sets :: Array SetRow })
 

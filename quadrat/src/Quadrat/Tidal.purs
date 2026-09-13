@@ -67,11 +67,15 @@ chordBracket ns = "[" <> joinWith "," (map noteName (Array.sort ns)) <> "]"
 -- | — so they are used to say where this came from, which is the one thing a
 -- | note list cannot say about itself once it is in another app.
 -- |
+-- | The first comment also carries the declared key centre when there is one,
+-- | since that is precisely what a bare note-list cannot say about itself and
+-- | what the far end needs in order to transpose.
+-- |
 -- | The second comment is the **feet**, in order. Quadrat cannot name a chord:
 -- | it has pitches and no harmonic reading, and a guessed `Cmaj7` in a comment
 -- | would be believed. The lowest sounding note of each voicing is not a guess,
 -- | and read across the row it is the bass line.
-progression :: { name :: String, alias :: String } -> Array (Array Int) -> String
+progression :: { name :: String, alias :: String, centre :: String } -> Array (Array Int) -> String
 progression who chords
   | Array.null chords = ""
   | otherwise =
@@ -79,6 +83,11 @@ progression who chords
         [ "-- quadrat \xb7 " <> who.name
             <> (if who.alias == "" then "" else " \xb7 " <> who.alias)
             <> " \xb7 " <> show (Array.length chords) <> " chords"
+            -- The declared centre travels with the chords because it is the
+            -- one fact the note-lists cannot carry and the receiving end needs
+            -- to transpose them. Omitted entirely when undeclared: an empty
+            -- "in:" would read as a claim that there isn't one.
+            <> (if who.centre == "" then "" else " \xb7 in " <> who.centre)
         , "-- feet: " <> joinWith "   " (Array.mapWithIndex foot chords)
         , "note \"<" <> joinWith " " brackets <> ">\""
         , "-- all in one cycle:"

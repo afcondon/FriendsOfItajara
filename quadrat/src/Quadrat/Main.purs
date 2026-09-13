@@ -492,6 +492,10 @@ data Action
   | DropPicked
   -- | Every ticked set onto the card, each as its own kit.
   | PlacePicked
+  -- | **Declare the key centre of a chord set**, or clear it. Carries the whole
+  -- | centre rather than one field, so the root and the intent are written in
+  -- | one act and a half-applied pair cannot exist.
+  | DeclareCentre String Http.Centre
   -- | **Put a transferable line on the clipboard.** The text is already on
   -- | screen and selectable; this only saves the drag. Carries the string
   -- | rather than a pointer to what to render, so the button and the block
@@ -1096,6 +1100,16 @@ handleAction = case _ of
     case st.openSet of
       Nothing -> pure unit
       Just nm -> handleAction (HearOne nm i)
+
+  DeclareCentre nm c -> do
+    r <- H.liftAff (attempt (toAffE (Http.setCentre nm c)))
+    case r of
+      -- A failed declaration is worth saying out loud: silently keeping the
+      -- old centre would leave every later transposition wrong with nothing
+      -- on screen to explain it.
+      Left e -> H.modify_ \st -> st { log = st.log <> [ "could not set the key centre: " <> show e ] }
+      Right v | not v.ok -> H.modify_ \st -> st { log = st.log <> [ v.output ] }
+      Right _ -> handleAction RefreshSets
 
   Copy s -> liftEffect (copyText s)
 
@@ -2299,6 +2313,40 @@ noteName :: Int -> String
 noteName n = fromMaybe "?" (Array.index names (n `mod` 12)) <> show ((n / 12) - 1)
   where
   names = [ "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" ]
+
+-- | A pitch CLASS by name, with no octave — a key centre has no register, and
+-- | showing one would invite the reading that the root must be played there.
+pcName :: Int -> String
+pcName pc = fromMaybe "?" (Array.index names (pc `mod` 12))
+  where
+  names = [ "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" ]
+
+-- | **What a declared centre buys**, said where it is declared.
+-- |
+-- | The root and the intent are worth different things and the sentence says
+-- | which, because a control whose value does nothing visible is a control
+-- | nobody fills in.
+centreSays :: Http.Centre -> String
+centreSays c
+  | c.root < 0 =
+      "without a root this set cannot be transposed \x2014 "
+        <> "its chords are absolute, and intervals have to be measured "
+        <> "from something"
+  | otherwise =
+      "transposable from " <> pcName c.root
+        <> (case c.tonality of
+              "major" -> ", meant major"
+              "minor" -> ", meant minor"
+              _ -> "; how far out a chord is needs the intent too")
+
+-- | The centre as one word for a comment line, or empty when undeclared.
+-- | `"D minor"` when both are known, `"D"` when only the root is — never
+-- | `"D unknown"`, which would read as a claim.
+centreWord :: Http.Centre -> String
+centreWord c
+  | c.root < 0 = ""
+  | c.tonality == "" = pcName c.root
+  | otherwise = pcName c.root <> " " <> c.tonality
 
 -- | The nearest voice this kind can use, at or below the one asked for.
 onlyVoices :: Kind -> Int -> Int
@@ -5009,10 +5057,14 @@ render st =
                   -- recorded for — a folder of numbered files is a named,
                   -- indexed set at both ends. Said for all of them, because
                   -- that is the finding.
+                  , centrePanel r
                   , transferable "in a pattern" (dirt r)
                   , transferable "as a progression \x2014 paste into Vetula"
                       (Tidal.progression
-                         { name: r.name, alias: (markOf r).glyph.alias }
+                         { name: r.name
+                         , alias: (markOf r).glyph.alias
+                         , centre: centreWord r.centre
+                         }
                          (Array.filter (not <<< Array.null) (join r.voicings)))
                   , HH.div [ HP.class_ (HH.ClassName "q-set-do") ] (setVerbs r)
                   ]
@@ -5099,6 +5151,66 @@ render st =
             [ HH.div [ HP.class_ (HH.ClassName "q-staverow") ]
                 (map (Stave.grandIn { lo: ext.lo, hi: ext.hi, clefs: k == 0 }) chords)
             , HH.div [ HP.class_ (HH.ClassName "q-staveno") ] [ HH.text (show (k + 1)) ]
+            ]
+
+    -- | **The key centre, declared by hand.**
+    -- |
+    -- | Only for a set that HAS chords: a drum grid has no centre, and an
+    -- | empty picker on it would be a question with no answer.
+    -- |
+    -- | Two controls and they do different jobs. The ROOT is what makes the
+    -- | set transposable — intervals have to be measured from something — and
+    -- | it is the only one transposition uses. The INTENT is context for
+    -- | reading the set: against an intended minor, a major I is further out
+    -- | than a minor chord of the same complexity, and no amount of looking at
+    -- | the notes recovers what you meant.
+    -- |
+    -- | Both are declarations and neither is offered as a guess. For a capture
+    -- | off a generator they are settings somebody chose, so a suggestion here
+    -- | would be handing an input back — and a wrong centre is worse than
+    -- | none, since everything downstream transposes from it in silence.
+    centrePanel r
+      | Array.null (Array.filter (not <<< Array.null) (join r.voicings)) = HH.text ""
+      | otherwise =
+          HH.div [ HP.class_ (HH.ClassName "q-centre") ]
+            [ HH.div [ HP.class_ (HH.ClassName "q-factlab") ] [ HH.text "played in" ]
+            , HH.div [ HP.class_ (HH.ClassName "q-centrepick") ]
+                [ HH.select
+                    [ HP.class_ (HH.ClassName "q-sel")
+                    , HP.title "the root these chords are measured from"
+                    , HE.onValueChange \v ->
+                        DeclareCentre r.name
+                          { root: fromMaybe (-1) (Int.fromString v)
+                          , tonality: r.centre.tonality }
+                    ]
+                    ( [ HH.option
+                          [ HP.value "-1", HP.selected (r.centre.root < 0) ]
+                          [ HH.text "root not said" ]
+                      ]
+                        <> map
+                          (\pc -> HH.option
+                            [ HP.value (show pc), HP.selected (r.centre.root == pc) ]
+                            [ HH.text (pcName pc) ])
+                          (Array.range 0 11)
+                    )
+                , HH.select
+                    [ HP.class_ (HH.ClassName "q-sel")
+                    , HP.title "what you meant it to be \x2014 not what the notes are"
+                    , HE.onValueChange \v ->
+                        DeclareCentre r.name { root: r.centre.root, tonality: v }
+                    ]
+                    ( map
+                        (\o -> HH.option
+                          [ HP.value o.value, HP.selected (r.centre.tonality == o.value) ]
+                          [ HH.text o.label ])
+                        [ { value: "", label: "intent not said" }
+                        , { value: "major", label: "meant major" }
+                        , { value: "minor", label: "meant minor" }
+                        ]
+                    )
+                ]
+            , HH.div [ HP.class_ (HH.ClassName "q-set-what") ]
+                [ HH.text (centreSays r.centre) ]
             ]
 
     -- | **A rendering of this set in somebody else's notation**, with the

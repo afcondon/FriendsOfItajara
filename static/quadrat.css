@@ -120,6 +120,14 @@ body {
    it there. The label row carries the button so the block below it stays a
    plain selectable code block — a copy that the browser refuses still leaves
    the text there to drag. */
+/* The declared key centre: two pickers and a sentence saying what each buys.
+   Sits under the staves because that is what you look at while deciding. */
+.q-centre { margin-top: 12px; }
+.q-centrepick { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
+.q-centrepick .q-sel { padding: 5px 7px; border: 1px solid var(--rule);
+  border-radius: 3px; font: inherit; font-size: 12px; background: #fff; }
+.q-centre .q-set-what { font-size: 12px; }
+
 .q-xfer { margin-top: 12px; }
 .q-xfer .q-factlab { display: flex; align-items: baseline; gap: 10px; margin-bottom: 2px; }
 .q-xfer .q-set-dirt { white-space: pre; overflow-x: auto; line-height: 1.5; }

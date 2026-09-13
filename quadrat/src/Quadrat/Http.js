@@ -174,6 +174,12 @@ export const storedSets = () =>
       // simply has no chord content, which is exactly what an empty array
       // says.
       voicings: (s.voicings ?? []).map((v) => (v ?? []).map((c) => (c ?? []).map(Number))),
+      // root -1 = nobody has said. An older server sends none, which reads the
+      // same way and is the truth about every set recorded before this existed.
+      centre: {
+        root: Number(s.centre?.root ?? -1),
+        tonality: String(s.centre?.tonality ?? ""),
+      },
       notesFrom: String(s.notesFrom ?? ""),
       notesChan: Number(s.notesChan ?? 0),
     })),
@@ -224,6 +230,9 @@ export const loadSet = (name) => () =>
 // Throw sets away. Plural because the useful gesture is "these four", and a
 // loop of single deletes is four chances to stop halfway.
 export const deleteSets = (names) => () => post("/api/sets/delete", { names });
+
+export const setCentre = (name) => (centre) => () =>
+  post("/api/sets/centre", { name, centre });
 
 export const loadSpec = (name) => () =>
   fetch("/api/sets/" + encodeURIComponent(name))

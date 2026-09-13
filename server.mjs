@@ -352,6 +352,82 @@ function cards() {
 
 // What each sample set holds, so the page can say "11 samples" without
 // guessing from the name.
+// **The key centre a set was played in** — DECLARED, never inferred.
+//
+// A chord set is a bag of absolute MIDI and knows nothing about what it is
+// "in". Two things want that knowledge and neither can recover it:
+//
+//   * **Transposition.** A set only becomes a transposable bank — the
+//     `Key -> chords` shape Vetula's palettes have — once there is a root to
+//     measure its intervals from. That needs the ROOT ALONE; major or minor
+//     does not enter into shifting a set of intervals.
+//   * **Reading how far out a chord is.** That needs the intended tonality,
+//     and only as context: against an intended MINOR, a major I is further
+//     out than a minor chord of the same complexity. It is a fact about what
+//     you meant, so it cannot be measured from what came back.
+//
+// Why declared. For a capture off a generator like Progressions the key and
+// the major/minor switch are SETTINGS SOMEBODY CHOSE. Recovering "D minor"
+// from the audio would be handing back an input, badly; being told it is
+// exact. And an inferred centre that is wrong is worse than none, because
+// everything downstream transposes from it silently.
+//
+// `root` is a pitch class 0..11 — register is not part of a key centre — and
+// -1 means undeclared, which is the honest state for every set recorded
+// before this existed. `tonality` is "", "major" or "minor"; "" is a set
+// whose root is known and whose intent is not, which is a real position and
+// not a half-filled form.
+function readCentre(raw) {
+  const r = Number(raw?.root);
+  const root = Number.isInteger(r) && r >= 0 && r <= 11 ? r : -1;
+  const t = String(raw?.tonality ?? "");
+  return { root, tonality: t === "major" || t === "minor" ? t : "" };
+}
+
+// **Clearing and failing must not look alike.**
+//
+// `readCentre` is lenient because it also reads sets off disk, where an absent
+// or ancient field has to degrade to "not said". A WRITE cannot be lenient in
+// the same way: a caller sending root 99 has a bug, and quietly storing "not
+// said" for it would erase a declaration that everything downstream transposes
+// from — the exact silent failure this field exists to prevent.
+//
+// So: absent or -1 clears, on purpose. 0..11 sets. Anything else is refused
+// with the value in the sentence, because the number that was wrong is the
+// only thing worth telling the caller.
+function checkCentre(raw) {
+  const hasRoot = raw?.root !== undefined && raw?.root !== null;
+  const r = Number(raw?.root);
+  if (hasRoot && !(Number.isInteger(r) && r >= -1 && r <= 11)) {
+    return { bad: `a key centre's root is a pitch class 0..11, or -1 for none — not ${JSON.stringify(raw.root)}` };
+  }
+  const t = raw?.tonality === undefined || raw?.tonality === null ? "" : String(raw.tonality);
+  if (t !== "" && t !== "major" && t !== "minor") {
+    return { bad: `a key centre's tonality is "major", "minor", or "" for not said — not ${JSON.stringify(raw.tonality)}` };
+  }
+  return { centre: { root: hasRoot ? r : -1, tonality: t } };
+}
+
+// Write the centre onto a stored set, in place. Only this field is touched:
+// a declaration made months after the recording must not rewrite anything the
+// recording measured.
+function setCentre(body) {
+  const name = safe(String(body?.name ?? ""));
+  const dir = path.join(SAMPLES, name);
+  const f = path.join(dir, SET_JSON);
+  if (!name || !fs.existsSync(f)) return { ok: false, output: `no set called ${name}` };
+  try {
+    const checked = checkCentre(body?.centre);
+    if (checked.bad) return { ok: false, output: checked.bad };
+    const set = JSON.parse(fs.readFileSync(f, "utf8"));
+    set.centre = checked.centre;
+    fs.writeFileSync(f, JSON.stringify(set, null, 2) + "\n");
+    return { ok: true, centre: set.centre };
+  } catch (e) {
+    return { ok: false, output: `could not write the centre: ${e.message}` };
+  }
+}
+
 // **The chords a set was played as**, one entry per sample and in file order.
 //
 // `struck` keeps two chords played into one region as TWO, which is the whole
@@ -593,6 +669,10 @@ function storedSets() {
       // one-note chords — and worse, would give it a content identity that
       // means nothing, which is the one thing an identity must not do.
       voicings: (set?.kind ?? "") === "chord-hits" ? voicingsOf(set) : [],
+      // The declared key centre, or root -1 for "nobody has said". See
+      // `readCentre` — on the listing because it is what makes a set
+      // transposable, and that is a property you want to see before opening it.
+      centre: readCentre(set?.centre),
       // What it was listening to. Empty for every set written before this was
       // recorded, which is an honest "not known" rather than "nothing".
       notesFrom: set?.listened?.notesFrom ?? "",
@@ -1790,6 +1870,10 @@ const server = http.createServer(async (req, res) => {
     }
     if (url.pathname === "/api/sources" && req.method === "PUT") {
       return json(res, 200, setSourceLabels(await readBody(req)));
+    }
+    // Declare (or clear) a set's key centre. See `setCentre`.
+    if (url.pathname === "/api/sets/centre" && req.method === "POST") {
+      return json(res, 200, setCentre(await readBody(req)));
     }
     if (url.pathname === "/api/sets" && req.method === "GET") {
       return json(res, 200, { ok: true, sets: storedSets() });
