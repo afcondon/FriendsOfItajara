@@ -299,6 +299,20 @@ foreign import addToCard
      -- | re-running — and the difference has to be recorded, because a set
      -- | that claims a spec it never ran by is worse than one with none.
      , spec :: Nullable spec
+     -- | **What this take was listening to**, and NOT part of the spec.
+     -- |
+     -- | The spec is null for a hand-played take, and rightly: a set that
+     -- | claims a sweep it never ran by is worse than one with none. But
+     -- | which MIDI port and channel the notes were taken from, and which
+     -- | audio input the sound came back on, are facts about the RECORDING
+     -- | rather than about a sweep — and they are true of a played take too.
+     -- |
+     -- | Keeping them inside the spec threw them away for exactly the takes
+     -- | most likely to need them. The three chord sets of 2026-09-12 carry
+     -- | regions holding 20 to 42 notes spanning 0 to 124, against real
+     -- | voicings of five to seven, and nothing stored with them can say
+     -- | which port or channel let that in.
+     , listened :: { notesFrom :: String, notesChan :: Int, source :: String }
      , schedule :: Array Number
      , samples :: Array Meant
      }
@@ -344,6 +358,13 @@ type SetRow =
   -- | recorded the same morning has none at all. Something other than
   -- | note-ons is reaching that field, so nothing may be concluded from it.
   , kind :: String
+  -- | **Which MIDI port and channel the notes were taken from.** Empty and
+  -- | zero for every set written before this was recorded, which is an honest
+  -- | "not known" and not "nothing" — and zero as a CHANNEL means "all of
+  -- | them on that port", which is the setting that let a sequencer's traffic
+  -- | into a chord.
+  , notesFrom :: String
+  , notesChan :: Int
   }
 
 -- | **A name the owner chose, against the wire name the daemon uses.**

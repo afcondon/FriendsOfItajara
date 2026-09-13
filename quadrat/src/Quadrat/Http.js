@@ -169,6 +169,8 @@ export const storedSets = () =>
       notes: (s.notes ?? []).map(Number),
       secs: (s.secs ?? []).map(Number),
       kind: String(s.kind ?? ""),
+      notesFrom: String(s.notesFrom ?? ""),
+      notesChan: Number(s.notesChan ?? 0),
     })),
   })).catch(() => ({ ok: false, sets: [] }));
 

@@ -471,6 +471,21 @@ function writeSet(dir, meta) {
     // Null for a take played by hand. The samples and their measurements are
     // still worth keeping; what is missing is the ability to run it again.
     spec: meta.spec ?? null,
+    // **What it was listening to, spec or no spec.**
+    //
+    // Which MIDI port and channel the notes were taken from, and which audio
+    // input the sound came back on, are facts about the RECORDING — true of a
+    // hand-played take as much as a swept one. They used to live inside the
+    // spec, which is null for a played take, so they were discarded for
+    // exactly the takes whose notes go wrong. The three chord sets of
+    // 2026-09-12 hold regions of 20 to 42 notes spanning 0 to 124 against
+    // real voicings of five to seven, and nothing stored with them can say
+    // which port or channel let that in.
+    listened: {
+      notesFrom: meta.listened?.notesFrom ?? "",
+      notesChan: Number(meta.listened?.notesChan ?? 0),
+      source: meta.listened?.source ?? "",
+    },
     schedule: Array.isArray(meta.schedule) ? meta.schedule : [],
     samples,
   };
@@ -544,6 +559,10 @@ function storedSets() {
       // 0 to 123, including 0,1,2,3,4,5,6, and a sibling set recorded the same
       // morning has none at all. Something other than note-ons is reaching it.
       kind: set?.kind ?? "",
+      // What it was listening to. Empty for every set written before this was
+      // recorded, which is an honest "not known" rather than "nothing".
+      notesFrom: set?.listened?.notesFrom ?? "",
+      notesChan: Number(set?.listened?.notesChan ?? 0),
     });
   }
   return out.sort((a, b) => String(b.made).localeCompare(String(a.made)));
@@ -1074,6 +1093,7 @@ async function addToCard(body) {
     stereo: !!body.stereo,
     sliced, slots, slotSecs,
     spec: body.spec ?? null,
+    listened: body.listened ?? null,
     schedule: body.schedule ?? [],
     samples: body.samples ?? [],
   });

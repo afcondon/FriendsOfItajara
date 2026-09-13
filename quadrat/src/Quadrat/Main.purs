@@ -1184,6 +1184,15 @@ handleAction = case _ of
               , spec: if Array.null st.schedule
                         then Nullable.null
                         else Nullable.notNull (Sweep.flatten st.sweep)
+              -- **Always**, spec or no spec. Which port and channel the notes
+              -- came from is a fact about the recording and not about a
+              -- sweep, so a hand-played take has one too — and a hand-played
+              -- take is precisely the one whose notes go wrong.
+              , listened:
+                  { notesFrom: st.sweep.notesFrom
+                  , notesChan: st.sweep.notesChan
+                  , source: st.sweep.source
+                  }
               , schedule: st.schedule
               , samples: kept })))
         case r of
@@ -2962,16 +2971,33 @@ render st =
   chanTally =
     let onPort = Array.filter (\h -> h.from == st.sweep.notesFrom) st.heard
     in Array.sortWith _.c
-         (map (\c -> { c, n: Array.length (Array.filter (\h -> h.chan == c) onPort) })
+         (map
+           (\c ->
+             let ns = map _.note (Array.filter (\h -> h.chan == c) onPort)
+             in { c
+                , n: Array.length ns
+                , lo: fromMaybe 0 (Array.head (Array.sort ns))
+                , hi: fromMaybe 0 (Array.last (Array.sort ns))
+                })
            (Array.nub (map _.chan onPort)))
 
+  -- | **The count and the RANGE, because the range is what identifies it.**
+  -- |
+  -- | A count says a channel is busy; it does not say what is on it. Somebody
+  -- | playing chords stays inside a register you could sing — roughly 36 to
+  -- | 84 — while the traffic that wrote itself into the chord sets of
+  -- | 2026-09-12 ran 0 to 124, which no keyboard reaches and no hand plays.
+  -- | So the span is printed beside the count, and telling the two apart is
+  -- | one glance rather than an afternoon in the data afterwards.
   chanSays = case Array.filter (\t -> t.n > 0) chanTally of
     -- One channel is not a choice worth showing; it is just where the notes
     -- are.
     [ _ ] -> ""
     [] -> ""
     ts -> " By channel: "
-            <> joinWith ", " (map (\t -> show t.c <> " \x2192 " <> show t.n) ts)
+            <> joinWith ", "
+                 (map (\t -> show t.c <> " \x2192 " <> show t.n
+                         <> " (" <> noteName t.lo <> "\x2013" <> noteName t.hi <> ")") ts)
             <> "."
 
   notesChanPick =
@@ -4910,6 +4936,7 @@ render st =
                             <> (if Array.null r.extent then ""
                                 else " on " <> joinWith " × " (map show r.extent)))
                       <> fact "lengths" (lengthsSays r)
+                      <> fact "notes from" (heardSays r)
                       <> fact "moved" (joinWith ", " r.moved)
                       <> fact "encoding" r.encoding
                       <> fact "channels" (if r.stereo then "stereo — takes a voice pair"
@@ -4939,6 +4966,16 @@ render st =
     -- | layer has to fit — so it is the number that decides what a sliced
     -- | arrangement wastes. The total says whether a set is minutes or
     -- | seconds, which is the difference between a bank of hits and a drone.
+    -- | **Which port and channel the notes were taken from.**
+    -- |
+    -- | "All channels" is worth naming rather than leaving blank: it is the
+    -- | setting under which a sequencer sharing the port writes its own notes
+    -- | into your chord, and it is the default.
+    heardSays r
+      | r.notesFrom == "" = if r.count == 0 then "" else "not recorded"
+      | r.notesChan == 0 = r.notesFrom <> " \x00b7 every channel"
+      | otherwise = r.notesFrom <> " \x00b7 channel " <> show r.notesChan
+
     lengthsSays r =
       let ds = Array.filter (_ > 0.0) r.secs
       in case Array.head (Array.sort ds), Array.last (Array.sort ds) of
