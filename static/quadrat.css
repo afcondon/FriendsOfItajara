@@ -1341,6 +1341,16 @@ body {
 .q-staveledger { stroke: var(--muted); stroke-width: 1; }
 .q-stavehead { fill: var(--ink); }
 .q-stavesharp { fill: var(--ink); font-size: 8px; font-family: serif; }
+/* **The clefs.** U+1D11E and U+1D122 live in Apple Symbols and, on this
+   machine, in no other installed font — checked, not assumed. Quadrat runs
+   on the rig, which is a Mac; if it ever leaves one, these want drawing as
+   SVG paths rather than hoping for a fallback that does not exist. */
+.q-clef { fill: var(--ink); font-family: "Apple Symbols", serif; }
+/* The staves are pitch-linear, so their ten lines are evenly spaced and can
+   read as one staff until the eye finds middle C. The clefs are what break
+   that: a reader looks for them first and everything else follows. */
+.q-clef.is-g { opacity: .85; }
+.q-clef.is-f { opacity: .85; }
 /* The sample being read. An outline, not a fill: the cell's own colour is
    its pitch and must not be taken away to say "this one". */
 .q-scell.is-reading { box-shadow: 0 0 0 2px var(--ink); position: relative; z-index: 1; }

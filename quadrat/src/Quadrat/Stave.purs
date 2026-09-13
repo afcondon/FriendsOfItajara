@@ -106,11 +106,17 @@ spanOf notes =
 -- | an empty staff: a sample with no notes recorded is not a sample with no
 -- | notes.
 grand :: forall w i. Array Int -> HH.HTML w i
-grand notes = grandIn (spanOf notes) notes
+grand notes =
+  let s = spanOf notes
+  in grandIn { lo: s.lo, hi: s.hi, clefs: true } notes
 
 -- | A voicing drawn on an extent chosen by the caller, so several can share
 -- | one and be compared.
-grandIn :: forall w i. { lo :: Int, hi :: Int } -> Array Int -> HH.HTML w i
+-- |
+-- | `clefs` because a system carries them once at its start and not on every
+-- | bar of it: a row of seven voicings is one system, and seven copies of a
+-- | G clef is six copies of a thing you already read.
+grandIn :: forall w i. { lo :: Int, hi :: Int, clefs :: Boolean } -> Array Int -> HH.HTML w i
 grandIn ext notes
   | Array.null notes = HH.text ""
   | otherwise =
@@ -120,7 +126,7 @@ grandIn ext notes
         , attr "height" (num height)
         , attr "class" "q-stave"
         ]
-        (staffLines <> ledgers <> heads)
+        (staffLines <> clefGlyphs <> ledgers <> heads)
   where
   ds = map diatonic (Array.sort notes)
   -- The extent is given rather than derived, so a row of these lines up. It
@@ -130,17 +136,46 @@ grandIn ext notes
   loD = min ext.lo (fromMaybe ext.lo (Array.head (Array.sort (map _.d ds))))
   pad = 5.0
   height = Int.toNumber (hiD - loD) * step + pad * 2.0
-  -- Room for an accidental, a notehead, and the second-offset a cluster needs.
-  width = 34.0
-  x0 = 14.0
+  -- Room for an accidental, a notehead, and the second-offset a cluster
+  -- needs — plus the clefs, when this stave carries them.
+  clefRoom = if ext.clefs then 20.0 else 0.0
+  width = 34.0 + clefRoom
+  x0 = 14.0 + clefRoom
   y d = pad + Int.toNumber (hiD - d) * step
 
   line d extra =
     el "line"
-      ([ attr "x1" (num 6.0), attr "y1" (num (y d))
+      ([ attr "x1" (num (clefRoom + 6.0)), attr "y1" (num (y d))
        , attr "x2" (num (width - 2.0)), attr "y2" (num (y d))
        ] <> extra)
       []
+
+  -- | **The clefs, as glyphs.**
+  -- |
+  -- | Each is anchored on the line it names, which is what a clef IS: the G
+  -- | clef curls around G4 and the F clef's two dots straddle F3. Positioned
+  -- | from those lines rather than from the staff, so the arithmetic above
+  -- | stays the only thing that can be wrong.
+  -- |
+  -- | The glyphs live in Apple Symbols and, on this machine, in nothing else
+  -- | — so a fallback stack cannot save them off a Mac. Quadrat runs on the
+  -- | rig, which is one; if it ever leaves, these want drawing as paths.
+  clefGlyphs
+    | not ext.clefs = []
+    | otherwise =
+        [ clefAt "\x1d11e" (_.d (diatonic 67)) 34.0 "q-clef is-g"
+        , clefAt "\x1d122" (_.d (diatonic 53)) 22.0 "q-clef is-f"
+        ]
+
+  clefAt glyph onLine size klass =
+    el "text"
+      [ attr "x" (num 4.0)
+      , attr "y" (num (y onLine))
+      , attr "font-size" (num size)
+      , attr "dominant-baseline" "central"
+      , attr "class" klass
+      ]
+      [ HH.text glyph ]
 
   staffLines = map (\d -> line d [ attr "class" "q-staveline" ])
     (trebleLines <> bassLines)

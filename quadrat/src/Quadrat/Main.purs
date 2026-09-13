@@ -5079,8 +5079,11 @@ render st =
                       else ""))
             , HE.onMouseEnter \_ -> PeekSample k
             ]
+            -- **The clefs once, on the first cell.** A system carries them
+            -- at its start and not on every bar of it; seven copies of a G
+            -- clef is six copies of something already read.
             [ HH.div [ HP.class_ (HH.ClassName "q-staverow") ]
-                (map (Stave.grandIn ext) chords)
+                (map (Stave.grandIn { lo: ext.lo, hi: ext.hi, clefs: k == 0 }) chords)
             , HH.div [ HP.class_ (HH.ClassName "q-staveno") ] [ HH.text (show (k + 1)) ]
             ]
 
