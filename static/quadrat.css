@@ -1063,3 +1063,49 @@ body {
 .q-notes { font-size: 12px; color: var(--muted); }
 .q-notes summary { cursor: pointer; }
 .q-notes .q-plan { margin-top: 8px; }
+
+/* ── Two places ──────────────────────────────────────────────────────────
+   The library on the left, the destination on the right. DropSync's
+   geometry, because you cannot judge what a transfer will do from a list of
+   sources alone — but NOT its symmetry. rsync goes both ways; this is a
+   transform and it only goes one, so there are no arrows in the gutter and
+   no second direction to choose. The rule between the panes is the whole
+   frame: what happens between them is said in words, not in chevrons.
+
+   The library gets the extra width. It is the artefact — long names, a date,
+   a sentence, a line of pattern code — where the card is a table of five
+   short columns that is finished at any width. */
+.q-panes {
+  display: grid; grid-template-columns: minmax(420px, 3fr) minmax(360px, 2fr);
+  gap: 0 32px; align-items: start;
+}
+.q-pane.is-dest { border-left: 1px solid var(--rule); padding-left: 32px; }
+/* Inside a pane the library is always the narrow layout: the column is half
+   a window wide whatever the window is, so the viewport is the wrong thing
+   to ask. */
+.q-pane.is-library .q-set { grid-template-columns: 22px 1fr auto; gap: 6px 16px; }
+.q-pane.is-library .q-set-what,
+.q-pane.is-library .q-set-do { grid-column: 1 / -1; justify-content: flex-start; }
+/* The card is no longer underneath anything, so it stops announcing itself
+   with a rule of its own. */
+.q-pane.is-dest .q-card { border-top: 0; padding-top: 0; margin-top: 26px; }
+
+.q-desthead .q-sechead { flex-wrap: wrap; }
+.q-desthead .q-muted { max-width: 46ch; }
+
+/* The transform sits between the two places and belongs to neither. Boxed,
+   unlike everything else on this page, because it is the one thing here that
+   is a SETTING rather than a fact — the same set lands differently depending
+   on it, and nothing about the set or the card records that it was chosen. */
+.q-transform {
+  border: 1px solid var(--rule); border-radius: 3px; background: #fff;
+  padding: 12px 14px; margin: 12px 0 0;
+}
+.q-transform .q-pickdo { flex-wrap: wrap; gap: 10px; }
+.q-transform .q-occupied { margin: 0 0 10px; }
+
+@media (max-width: 1080px) {
+  .q-panes { grid-template-columns: 1fr; gap: 0; }
+  .q-pane.is-dest { border-left: 0; padding-left: 0; border-top: 1px solid var(--rule);
+    padding-top: 22px; margin-top: 26px; }
+}

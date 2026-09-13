@@ -2375,8 +2375,21 @@ render st =
                 Just InputsModal -> modalBox "Name the inputs" inputsPanel
                 Nothing -> HH.text ""
             ]
+        -- | **Two places, and the transform between them.**
+        -- |
+        -- | The library on the left and the destination on the right, which
+        -- | is DropSync's geometry and for DropSync's reason: you cannot
+        -- | judge what a transfer will do from a list of sources alone. What
+        -- | it is NOT is DropSync's other half — rsync is symmetrical and
+        -- | this only goes one way. The card is compiled from the library and
+        -- | never edited; nothing comes back, so there are no arrows and no
+        -- | second direction to choose.
         Library ->
-          HH.div_ [ setsView, cardView ]
+          HH.div [ HP.class_ (HH.ClassName "q-panes") ]
+            [ HH.div [ HP.class_ (HH.ClassName "q-pane is-library") ] [ setsView ]
+            , HH.div [ HP.class_ (HH.ClassName "q-pane is-dest") ]
+                [ destHead, transformPanel, cardView ]
+            ]
     , HH.section [ HP.class_ (HH.ClassName "q-log") ]
         (map (\l -> HH.div_ [ HH.text l ]) st.log)
     ]
@@ -3456,115 +3469,16 @@ render st =
             , HH.text (if n == 0 then " select \x2014 then say where it goes"
                        else " " <> show n <> " selected")
             ]
-        -- | **Say what is about to be destroyed, before it is.** A kit's voice
-        -- | is an address, and sending to one that is taken replaces what is
-        -- | there unless you said to add.
-        -- |
-        -- | On its own line, not inside the row: set among the controls it was
-        -- | squeezed into a column two characters wide and rendered in
-        -- | letter-spaced capitals, one word per line down the side of the
-        -- | page. A warning nobody can read is worse than none, because it
-        -- | takes the space anyway.
-        , case sittingAt of
-            Just r | n > 0 ->
-              HH.p [ HP.class_ (HH.ClassName "q-occupied") ]
-                [ HH.text (landsAt <> " voice " <> show st.voice <> " holds "
-                    -- One set can be several layers of one voice, and naming
-                    -- it four times says nothing four times.
-                    <> joinWith ", " (Array.nub r.sets)
-                    <> (if r.slicer > 0 then " in " <> show r.slicer <> " slots" else "")
-                    <> (if Array.length (Array.nub r.sets) == 1
-                          then (if st.placeAppend then " \x2014 this will stand beside it"
-                                else " \x2014 this will take its place")
-                          else (if st.placeAppend then " \x2014 this will stand beside them"
-                                else " \x2014 this will take their place"))) ]
-            _ -> HH.text ""
         , if n == 0 then HH.text "" else
             HH.div [ HP.class_ (HH.ClassName "q-pickdo") ]
-              -- | **Where it lands, beside the button that lands it.**
-              -- |
-              -- | These were only ever in the Bench's Export panel, so the
-              -- | Library could tick sets and press "Onto the card" with no
-              -- | way to say which bank — and its own tooltip promised a
-              -- | letter "chosen below" that was on another page. The letter
-              -- | is not optional: a write deletes the slot it lands on, so
-              -- | `placeOnCard` refuses without one and the press did nothing
-              -- | but say so.
-              [ small "letter" st.letter SetLetter
-              , small "bank" st.bank SetBank
-              , small "kit" st.kit SetKit
-              , HH.label [ HP.class_ (HH.ClassName "q-field is-tight") ]
-                  [ HH.span_ [ HH.text "voice" ]
-                  -- A ticked set that is stereo needs a PAIR, so the offer
-                  -- narrows to the two starts a pair can have. Any ticked one
-                  -- being stereo is enough: they are all going to the same
-                  -- voice number.
-                  , HH.select [ HE.onValueChange SetVoice ]
-                      (map (\vn -> HH.option
-                              [ HP.value (show vn), HP.selected (vn == st.voice) ]
-                              [ HH.text (show vn
-                                  <> (if pickedWide then " + " <> show (vn + 1) else "")) ])
-                          (voicesWide pickedWide))
-                  ]
-              -- The one thing a set's own description cannot settle, because
-              -- it is not a fact about the audio. See `Http.placeSet`.
-              , HH.label [ HP.class_ (HH.ClassName "q-field is-tight") ]
-                  [ HH.span_ [ HH.text "as" ]
-                  , HH.select [ HE.onValueChange (SetPlaceSliced <<< (_ == "sliced")) ]
-                      (map (\o -> HH.option
-                              [ HP.value o.v
-                              , HP.selected ((o.v == "sliced") == st.placeSliced) ]
-                              [ HH.text o.t ])
-                          [ { v: "layers", t: "layers — the layer CV picks" }
-                          , { v: "sliced", t: "one sliced file — the start point picks" }
-                          ])
-                  ]
-              -- **Two things you might mean, and they are opposites.** A voice
-              -- holds a stack, so sending to one that is taken either stands
-              -- beside what is there or takes its place. Offered as a choice
-              -- rather than two buttons because any number of sets can be
-              -- ticked, and "replace" would mean something different for each.
-              , HH.label [ HP.class_ (HH.ClassName "q-field is-tight") ]
-                  [ HH.span_ [ HH.text "if taken" ]
-                  , HH.select [ HE.onValueChange (SetPlaceAppend <<< (_ == "add")) ]
-                      (map (\o -> HH.option
-                              [ HP.value o.v
-                              , HP.selected ((o.v == "add") == st.placeAppend) ]
-                              [ HH.text o.t ])
-                          [ { v: "replace", t: "replace what is there" }
-                          , { v: "add", t: "add as another layer" }
-                          ])
-                  ]
-              -- **How the layer selector moves**, once a voice holds more than
-              -- one thing to choose between. The whole reason to use layers
-              -- rather than slices: these are the modes where the module
-              -- decides for itself.
-              , HH.label [ HP.class_ (HH.ClassName "q-field is-tight") ]
-                  [ HH.span_ [ HH.text "picked by" ]
-                  , HH.select [ HE.onValueChange SetLayerMode ]
-                      (map (\m -> HH.option
-                              [ HP.value m
-                              , HP.selected (m == (if st.layerMode == "" then "manual" else st.layerMode)) ]
-                              [ HH.text m ])
-                          [ "manual", "velocity", "random", "cyclic" ])
-                  ]
-              -- The module's own name for where this is going. Not a
-              -- control: see `landsAt`.
-              , HH.span [ HP.class_ (HH.ClassName "q-dest") ]
-                  [ HH.text (if st.letter == "" then "\x2192 name a bank letter"
-                             else "\x2192 " <> landsAt) ]
-              , HH.button
-                  [ HP.class_ (HH.ClassName "q-plain")
-                  , HP.disabled (st.cardBusy || st.letter == "")
-                  , HP.title (if st.letter == ""
-                                then "name a bank letter first — a write deletes \
-                                     \the slot it lands on, so nothing happens \
-                                     \until you say which"
-                                else "each one as its own kit in bank " <> st.letter)
-                  , HE.onClick \_ -> PlacePicked
-                  ]
-                  [ HH.text ("Onto the card") ]
-              , if st.confirmDrop
+              -- **The library's own verb, and only that one.**
+              --
+              -- Deleting a set destroys the artefact; putting one on a card
+              -- makes a projection of it. They used to sit in one row, which
+              -- read as two ways of sending — and the destructive one is not
+              -- a way of sending at all. It stays here with the sets; the
+              -- placement moved to the destination beside what it lands on.
+              [ if st.confirmDrop
                   then HH.span [ HP.class_ (HH.ClassName "q-twoverbs") ]
                     [ HH.button
                         [ HP.class_ (HH.ClassName "q-plain is-replacing")
@@ -3608,6 +3522,149 @@ render st =
                       (Array.filter (\r -> Set.member r.name st.picked) st.sets)
               )
         ]
+
+  -- | **Which destination this pane is describing.**
+  -- |
+  -- | One entry today, and a picker anyway — because the shape of the
+  -- | destination is what decides the controls beneath it, and that shape is
+  -- | not a skin. A Rample is banks of kits of four voices of twelve layers
+  -- | with one global SLICER; a QuadDrum is a folder per set at the root,
+  -- | 128 to a voice; an Arbhar stick is six banks of thirty-six, addressed
+  -- | by position. None of the three is the other with different words, so
+  -- | none of them can share this pane's table — and the thing that must NOT
+  -- | be shared is where a second one goes.
+  -- |
+  -- | It also says what the module imposes, which the page has never said
+  -- | anywhere: the limits are enforced by `kit build` and discovered by
+  -- | having a build refused.
+  destHead =
+    HH.div [ HP.class_ (HH.ClassName "q-desthead") ]
+      [ HH.div [ HP.class_ (HH.ClassName "q-sechead") ]
+          [ HH.h2_ [ HH.text "Destination" ]
+          , HH.span [ HP.class_ (HH.ClassName "q-muted") ]
+              [ HH.text "Squarp Rample \x2014 banks of kits, 4 voices, 12 layers each, \
+                        \one SLICER for the whole card" ]
+          ]
+      ]
+
+  -- | **The transform, between the two places.**
+  -- |
+  -- | Not a property of the set and not a property of the card: a set is the
+  -- | same twelve files either way, and what is chosen here is how they are
+  -- | ADDRESSED once they land — layers the layer CV picks between, or one
+  -- | file the start point indexes. Which is why it sits between the library
+  -- | and the card rather than inside either, and why it can be changed and
+  -- | the placement repeated without going back to the take.
+  transformPanel
+    | Set.isEmpty st.picked =
+        HH.p [ HP.class_ (HH.ClassName "q-muted") ]
+          [ HH.text "Tick a set on the left and this says where it lands, and how \
+                    \it is addressed when it gets there." ]
+    | otherwise =
+        HH.div [ HP.class_ (HH.ClassName "q-transform") ]
+          [ -- | **Say what is about to be destroyed, before it is.** A kit's
+            -- | voice is an address, and sending to one that is taken replaces
+            -- | what is there unless you said to add.
+            case sittingAt of
+              Just r ->
+                HH.p [ HP.class_ (HH.ClassName "q-occupied") ]
+                  [ HH.text (landsAt <> " voice " <> show st.voice <> " holds "
+                      -- One set can be several layers of one voice, and naming
+                      -- it four times says nothing four times.
+                      <> joinWith ", " (Array.nub r.sets)
+                      <> (if r.slicer > 0 then " in " <> show r.slicer <> " slots" else "")
+                      <> (if Array.length (Array.nub r.sets) == 1
+                            then (if st.placeAppend then " \x2014 this will stand beside it"
+                                  else " \x2014 this will take its place")
+                            else (if st.placeAppend then " \x2014 this will stand beside them"
+                                  else " \x2014 this will take their place"))) ]
+              _ -> HH.text ""
+          , HH.div [ HP.class_ (HH.ClassName "q-pickdo") ]
+              -- | **Where it lands, beside the button that lands it.**
+              -- |
+              -- | These were only ever in the Bench's Export panel, so the
+              -- | Library could tick sets and press "Onto the card" with no
+              -- | way to say which bank — and its own tooltip promised a
+              -- | letter "chosen below" that was on another page. The letter
+              -- | is not optional: a write deletes the slot it lands on, so
+              -- | `placeOnCard` refuses without one and the press did nothing
+              -- | but say so.
+              [ small "letter" st.letter SetLetter
+          , small "bank" st.bank SetBank
+          , small "kit" st.kit SetKit
+          , HH.label [ HP.class_ (HH.ClassName "q-field is-tight") ]
+              [ HH.span_ [ HH.text "voice" ]
+              -- A ticked set that is stereo needs a PAIR, so the offer
+              -- narrows to the two starts a pair can have. Any ticked one
+              -- being stereo is enough: they are all going to the same
+              -- voice number.
+              , HH.select [ HE.onValueChange SetVoice ]
+                  (map (\vn -> HH.option
+                          [ HP.value (show vn), HP.selected (vn == st.voice) ]
+                          [ HH.text (show vn
+                              <> (if pickedWide then " + " <> show (vn + 1) else "")) ])
+                      (voicesWide pickedWide))
+              ]
+          -- The one thing a set's own description cannot settle, because
+          -- it is not a fact about the audio. See `Http.placeSet`.
+          , HH.label [ HP.class_ (HH.ClassName "q-field is-tight") ]
+              [ HH.span_ [ HH.text "as" ]
+              , HH.select [ HE.onValueChange (SetPlaceSliced <<< (_ == "sliced")) ]
+                  (map (\o -> HH.option
+                          [ HP.value o.v
+                          , HP.selected ((o.v == "sliced") == st.placeSliced) ]
+                          [ HH.text o.t ])
+                      [ { v: "layers", t: "layers — the layer CV picks" }
+                      , { v: "sliced", t: "one sliced file — the start point picks" }
+                      ])
+              ]
+          -- **Two things you might mean, and they are opposites.** A voice
+          -- holds a stack, so sending to one that is taken either stands
+          -- beside what is there or takes its place. Offered as a choice
+          -- rather than two buttons because any number of sets can be
+          -- ticked, and "replace" would mean something different for each.
+          , HH.label [ HP.class_ (HH.ClassName "q-field is-tight") ]
+              [ HH.span_ [ HH.text "if taken" ]
+              , HH.select [ HE.onValueChange (SetPlaceAppend <<< (_ == "add")) ]
+                  (map (\o -> HH.option
+                          [ HP.value o.v
+                          , HP.selected ((o.v == "add") == st.placeAppend) ]
+                          [ HH.text o.t ])
+                      [ { v: "replace", t: "replace what is there" }
+                      , { v: "add", t: "add as another layer" }
+                      ])
+              ]
+          -- **How the layer selector moves**, once a voice holds more than
+          -- one thing to choose between. The whole reason to use layers
+          -- rather than slices: these are the modes where the module
+          -- decides for itself.
+          , HH.label [ HP.class_ (HH.ClassName "q-field is-tight") ]
+              [ HH.span_ [ HH.text "picked by" ]
+              , HH.select [ HE.onValueChange SetLayerMode ]
+                  (map (\m -> HH.option
+                          [ HP.value m
+                          , HP.selected (m == (if st.layerMode == "" then "manual" else st.layerMode)) ]
+                          [ HH.text m ])
+                      [ "manual", "velocity", "random", "cyclic" ])
+              ]
+          -- The module's own name for where this is going. Not a
+          -- control: see `landsAt`.
+          , HH.span [ HP.class_ (HH.ClassName "q-dest") ]
+              [ HH.text (if st.letter == "" then "\x2192 name a bank letter"
+                         else "\x2192 " <> landsAt) ]
+          , HH.button
+              [ HP.class_ (HH.ClassName "q-plain")
+              , HP.disabled (st.cardBusy || st.letter == "")
+              , HP.title (if st.letter == ""
+                            then "name a bank letter first — a write deletes \
+                                 \the slot it lands on, so nothing happens \
+                                 \until you say which"
+                            else "each one as its own kit in bank " <> st.letter)
+              , HE.onClick \_ -> PlacePicked
+              ]
+              [ HH.text ("Onto the card") ]
+              ]
+          ]
 
   -- | How to play it in a pattern. `n` counts from zero and the files from
   -- | one, which is worth saying once here rather than being discovered.
