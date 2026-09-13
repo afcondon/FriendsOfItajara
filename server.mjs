@@ -516,6 +516,14 @@ function storedSets() {
       moved: (set?.spec?.params ?? []).map((q) => q.name),
       extent: set?.spec?.extent ?? [],
       encoding: set?.spec?.encoding ?? "",
+      // **The pitch of each sample, in file order**, or -1 where a sample
+      // stands for no note. Cheap — it is already in `set.json`, one number
+      // per sample — and it is what lets the library DRAW a set rather than
+      // describe it: a chromatic run reads as a run, and the same run
+      // repeated four times reads as a repeat, which is the whole difference
+      // between an arrangement that can reach a pitch and one that cannot.
+      notes: (set?.samples ?? []).map((s) =>
+        (s.means ?? []).reduce((n, m) => (n >= 0 ? n : Number(m.note)), -1)),
     });
   }
   return out.sort((a, b) => String(b.made).localeCompare(String(a.made)));
@@ -524,10 +532,50 @@ function storedSets() {
 function storedSet(name) {
   const dir = path.join(SAMPLES, safe(name));
   try {
-    return { ok: true, set: JSON.parse(fs.readFileSync(path.join(dir, SET_JSON), "utf8")) };
+    const set = JSON.parse(fs.readFileSync(path.join(dir, SET_JSON), "utf8"));
+    // **What the files ARE**, read from the first one's header.
+    //
+    // Not in `set.json`, because the recorder knew it and never wrote it down
+    // — and it is the one fact about a sample that decides whether a module
+    // will play it at all. One header read, and only when a set is opened: on
+    // the list it would be one per set per refresh, for a number nobody reads
+    // while scanning.
+    return { ok: true, set, audio: wavShape(dir, set) };
   } catch (e) {
     return { ok: false, output: `${name} has no ${SET_JSON} — it was cut before sets were stored` };
   }
+}
+
+function wavShape(dir, set) {
+  const first = (set.samples ?? [])[0]?.file
+    ?? fs.readdirSync(dir).find((f) => f.toLowerCase().endsWith(".wav"));
+  if (!first) return null;
+  try {
+    const fd = fs.openSync(path.join(dir, first), "r");
+    const head = Buffer.alloc(4096);
+    const n = fs.readSync(fd, head, 0, 4096, 0);
+    fs.closeSync(fd);
+    if (head.slice(0, 4).toString() !== "RIFF") return null;
+    let off = 12, out = null;
+    while (off + 8 <= n) {
+      const id = head.slice(off, off + 4).toString();
+      const size = head.readUInt32LE(off + 4);
+      if (id === "fmt ") {
+        out = {
+          channels: head.readUInt16LE(off + 10),
+          rate: head.readUInt32LE(off + 12),
+          bits: head.readUInt16LE(off + 22),
+          // 1 is PCM, 0xFFFE is EXTENSIBLE — which the Arbhar refuses
+          // silently. `msm` canonicalises on the way out; this says what is
+          // on disk. See `hardware-wants-canonical-pcm`.
+          tag: head.readUInt16LE(off + 8),
+        };
+        break;
+      }
+      off += 8 + size + (size & 1);
+    }
+    return out;
+  } catch { return null; }
 }
 
 // ===========================================================================

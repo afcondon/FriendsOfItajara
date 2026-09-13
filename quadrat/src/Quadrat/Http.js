@@ -163,6 +163,10 @@ export const storedSets = () =>
       moved: (s.moved ?? []).map(String),
       extent: (s.extent ?? []).map(Number),
       encoding: String(s.encoding ?? ""),
+      // One per sample, -1 for none. An older server sends none, and an empty
+      // array is honest: the boxes then carry no pitch and say so by not
+      // being coloured.
+      notes: (s.notes ?? []).map(Number),
     })),
   })).catch(() => ({ ok: false, sets: [] }));
 
@@ -176,7 +180,8 @@ export const loadSet = (name) => () =>
   fetch("/api/sets/" + encodeURIComponent(name))
     .then(j)
     .then((d) => {
-      if (!d.ok || !d.set) return { ok: false, output: String(d.output ?? "no such set"), take: "", regions: [], schedule: [], notes: [], struck: [] };
+      const noAudio = { rate: 0, bits: 0, channels: 0, tag: 0 };
+      if (!d.ok || !d.set) return { ok: false, output: String(d.output ?? "no such set"), take: "", regions: [], schedule: [], notes: [], struck: [], audio: noAudio };
       const s = d.set;
       const regions = (s.samples ?? []).map((x) => ({
         start: Number(x.start ?? 0), end: Number(x.end ?? 0),
@@ -198,6 +203,12 @@ export const loadSet = (name) => () =>
         // has none, and the page falls back to reading `notes` as one chord.
         struck: (s.samples ?? []).map((x) =>
           (x.struck ?? []).map((g) => (g ?? []).map(Number))),
+        // What the files actually are. Zeroes where the header could not be
+        // read, which the page prints as nothing rather than as a lie.
+        audio: d.audio
+          ? { rate: Number(d.audio.rate ?? 0), bits: Number(d.audio.bits ?? 0),
+              channels: Number(d.audio.channels ?? 0), tag: Number(d.audio.tag ?? 0) }
+          : noAudio,
       };
     });
 

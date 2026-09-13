@@ -315,6 +315,14 @@ type State =
   -- | the strip would have to say which; that wants the destination picker,
   -- | which has one entry.
   , cardPeek :: Maybe Http.Preview
+  -- | **Which set's own page is open.** The library row is a checkbox, a name
+  -- | and a picture now; everything that used to be written out on it — the
+  -- | date, what moved, the pattern line, the verbs — is behind one click,
+  -- | because none of it is read while you are looking for a set and all of
+  -- | it is read once you have found one.
+  , openSet :: Maybe String
+  -- | Its detail, when it arrives. `Nothing` while loading.
+  , openSetInfo :: Maybe Http.StoredSet
   -- | **Stacked or sliced**, for a set placed from the Library.
   -- |
   -- | A placement decision, not a property of the cut: the audio is the same
@@ -460,6 +468,12 @@ data Action
   -- | Tick or untick one stored set.
   -- | Hear a set before doing anything irreversible to it.
   | HearSet String Int
+  -- | One sample of one set, by index. The hover verb: it costs nothing and
+  -- | answers "which one was this" in the only way that cannot be misread.
+  | HearOne String Int
+  -- | Open a set's own page, or shut it. Distinct from `OpenSet`, which puts
+  -- | a set back on the bench: this only reads it.
+  | PeekSet (Maybe String)
   | PickSet String
   -- | Tick all of them, or none.
   | PickAllSets Boolean
@@ -485,7 +499,7 @@ component = H.mkComponent
       , page: Bench, fill: Swept, pivot: Nothing
       , levels: [], modal: Nothing, kept: false, confirmKeep: false
       , picked: Set.empty, confirmDrop: false, confirmWrite: Nothing, preview: Nothing
-      , cardPeek: Nothing
+      , cardPeek: Nothing, openSet: Nothing, openSetInfo: Nothing
       , placeSliced: false, placeLayers: 0, placeAppend: false, srcNames: []
       , heard: [], midiIn: [], midiOk: true }
   , render
@@ -965,6 +979,22 @@ handleAction = case _ of
   -- | because the files are in cell order and on a grid that spans the outer
   -- | axis: on a decay sweep you hear short, middle and long, which is the set
   -- | describing itself in the time it takes to read its name.
+  HearOne nm i -> liftEffect $
+    Audio.playEach [ "/api/set-audio?set=" <> nm <> "&i=" <> show i ] 1.0
+
+  PeekSet v -> do
+    H.modify_ _ { openSet = v, openSetInfo = Nothing }
+    case v of
+      Nothing -> pure unit
+      Just nm -> do
+        r <- H.liftAff (attempt (toAffE (Http.loadSet nm)))
+        st <- H.get
+        -- Only if it is still the set being looked at: two clicks in a row
+        -- must not leave the first one's detail under the second one's name.
+        when (st.openSet == Just nm) case r of
+          Left _ -> pure unit
+          Right s -> H.modify_ _ { openSetInfo = Just s }
+
   HearSet nm n -> liftEffect $
     Audio.playEach
       (map (\i -> "/api/set-audio?set=" <> nm <> "&i=" <> show i)
@@ -2148,6 +2178,41 @@ voicesFor = voicesWide <<< (_ /= ToMono) <<< Kind.foldsTo
 voicesWide :: Boolean -> Array Int
 voicesWide wide = if wide then [ 1, 3 ] else [ 1, 2, 3, 4 ]
 
+-- | **A pitch as a colour**, and `Nothing` for a sample that stands for no
+-- | note.
+-- |
+-- | The twelve semitones around the wheel, which is the one mapping nobody
+-- | has to learn: adjacent notes are adjacent hues, so a chromatic run reads
+-- | as a sweep of colour and a repeat reads as a repeat. That is the whole
+-- | point of colouring them — a 4 × 12 arranged as four layers of twelve
+-- | shows four identical runs, and the same set arranged as one file of
+-- | forty-eight shows the run four times over, where a start point cannot
+-- | reach a pitch without also choosing which decay it comes with.
+-- |
+-- | Octave moves the lightness, not the hue, so an octave apart still reads
+-- | as the same note — which is what it is.
+pitchTint :: Int -> Maybe String
+pitchTint n
+  | n < 0 = Nothing
+  | otherwise =
+      let
+        pc = n `mod` 12
+        -- MIDI 60 is middle C. Two octaves either side is the span anything
+        -- here plays in; beyond it the lightness stops moving rather than
+        -- running to white or black.
+        oct = clamp (-2) 2 ((n - 60) / 12)
+        light = 58 - oct * 7
+      in
+        Just ("background: hsl(" <> show (pc * 30) <> "deg 48% " <> show light <> "%)")
+
+-- | A MIDI note as a person would say it. Sharps rather than flats, because
+-- | the only thing naming them here is a tooltip and a consistent spelling
+-- | beats a correct enharmonic nobody asked for.
+noteName :: Int -> String
+noteName n = fromMaybe "?" (Array.index names (n `mod` 12)) <> show ((n / 12) - 1)
+  where
+  names = [ "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" ]
+
 -- | The nearest voice this kind can use, at or below the one asked for.
 onlyVoices :: Kind -> Int -> Int
 onlyVoices k v =
@@ -2420,6 +2485,7 @@ render st =
             [ HH.div [ HP.class_ (HH.ClassName "q-pane is-library") ] [ setsView ]
             , HH.div [ HP.class_ (HH.ClassName "q-pane is-dest") ]
                 [ destHead, transformPanel, cardView ]
+            , maybe (HH.text "") setModal st.openSet
             ]
     , HH.section [ HP.class_ (HH.ClassName "q-log") ]
         (map (\l -> HH.div_ [ HH.text l ]) st.log)
@@ -3722,82 +3788,16 @@ render st =
       -- **The samples themselves, before the count of them.** A number and a
       -- shape are two readings of one fact and the shape is the faster, so
       -- the picture leads and the number annotates it.
-      , HH.div [ HP.class_ (HH.ClassName "q-set-n") ]
-          [ samplePic r.count r.extent
-          , HH.div_ [ HH.text (show r.count), HH.span_ [ HH.text " samples" ] ]
-          ]
-      , HH.div [ HP.class_ (HH.ClassName "q-set-what") ]
-          -- Said in three words, not thirteen. A library of legacy sets
-          -- repeated the whole sentence down the page and it became the
-          -- loudest thing on it; the reason belongs in a tooltip.
-          [ HH.div
-              [ HP.title (if not r.described
-                            then "cut before sets were stored, so nothing here \
-                                 \knows how it was made"
-                            else "") ]
-              -- The extent is drawn beside this now, so saying it again in
-              -- words is a second reading of a picture that is already there.
-              -- What the words are FOR is the part no picture carries: which
-              -- knobs moved.
-              [ HH.text
-                  (if not r.described then "no description"
-                   else if Array.null r.moved then "played by hand"
-                   else joinWith ", " r.moved
-                        <> (if r.encoding == "" then "" else " · " <> r.encoding)) ]
-          -- Every set is already a SuperDirt bank, whatever it was recorded
-          -- for — a folder of numbered files is a named, indexed set at both
-          -- ends. Said for all of them, because that is the finding.
-          , HH.code [ HP.class_ (HH.ClassName "q-set-dirt") ] [ HH.text (dirt r) ]
-          ]
-      , HH.div [ HP.class_ (HH.ClassName "q-set-do") ]
-          -- **Look at it, before doing anything with it.** Offered first and
-          -- for every set with regions, because it is the only one of these
-          -- that costs nothing and answers "which one was this?" — which is
-          -- the question a library of forty sets is mostly asked.
-          -- **Hear it first.** Offered on every set with audio, and first,
-          -- because it is the only one of these that cannot go wrong and it
-          -- answers the question a list of timestamps mostly raises.
-          [ if r.count > 0
-              then HH.button
-                     [ HP.class_ (HH.ClassName "q-plain is-hear")
-                     , HP.title "three of its samples, a second each — first, \
-                                \middle and last, which on a grid spans the \
-                                \outer axis"
-                     , HE.onClick \_ -> HearSet r.name r.count
-                     ]
-                     [ HH.text "\x266a" ]
-              else HH.text ""
-          , if r.described && r.count > 0
-              then HH.button
-                     [ HP.class_ (HH.ClassName "q-plain")
-                     , HP.disabled st.busy
-                     , HP.title "put it back on the bench, drawn on the take it \
-                                \was cut from — nothing is re-cut or re-measured"
-                     , HE.onClick \_ -> OpenSet r.name
-                     ]
-                     [ HH.text "Open" ]
-              else HH.text ""
-          , if r.runnable
-              then HH.button
-                     [ HP.class_ (HH.ClassName "q-plain")
-                     , HP.title "load the spec that made this set, so it can be \
-                                \recorded again at a different resolution"
-                     , HE.onClick \_ -> RunAgain r.name
-                     ]
-                     [ HH.text "Sweep again\x2026" ]
-              else HH.text ""
-          , if r.described && r.count > 0
-              then HH.button
-                     [ HP.class_ (HH.ClassName "q-plain")
-                     , HP.disabled st.cardBusy
-                     , HP.title "put this set on the card, at the bank and voice \
-                                \chosen on the card below — nothing is cut or \
-                                \measured again"
-                     , HE.onClick \_ -> PlaceSet r.name
-                     ]
-                     [ HH.text "Onto the card" ]
-              else HH.text ""
-          ]
+      , HH.div [ HP.class_ (HH.ClassName "q-set-n") ] [ samplePic r ]
+      -- **Mono or a pair.** A stereo sample plays its right channel on the
+      -- voice AFTER it, so it occupies two of the four and a stereo kit
+      -- answers on SP1 and SP3. That is a fact about the material, decided
+      -- when the set was cut, and it halves what a kit can hold — so it is
+      -- on the row rather than behind the click.
+      , HH.div [ HP.class_ (HH.ClassName "q-set-ch")
+               , HP.title (if r.stereo then "stereo — takes a voice PAIR"
+                           else "mono — one voice") ]
+          [ HH.text (if r.stereo then "\x25cf\x25cf" else "\x25cf") ]
       ]
 
   -- | **Playing it yourself is the other way to fill a take.**
@@ -4688,22 +4688,45 @@ render st =
   -- | The rows are banded because the outer axis is what a layer will become,
   -- | and seeing the bands here is what makes the arrangement beside it
   -- | legible as a rearrangement of these.
-  samplePic n extent =
+  samplePic r =
     let
-      cols = case extent of
+      n = r.count
+      cols = case r.extent of
         [ _, inner ] | inner > 0 -> inner
         _ -> min 16 (max 1 n)
       rows = max 1 ((n + cols - 1) / cols)
     in
       HH.div [ HP.class_ (HH.ClassName "q-spic")
              , HP.title (show n <> " samples"
-                 <> (if Array.null extent then ""
-                     else " on " <> joinWith " × " (map show extent))) ]
+                 <> (if Array.null r.extent then ""
+                     else " on " <> joinWith " × " (map show r.extent))) ]
         (map
-          (\r -> HH.div [ HP.class_ (HH.ClassName ("q-srow" <> if r `mod` 2 == 1 then " is-odd" else "")) ]
-            (map (\_ -> HH.div [ HP.class_ (HH.ClassName "q-scell") ] [])
-              (Array.range 1 (min cols (n - r * cols)))))
+          (\y -> HH.div [ HP.class_ (HH.ClassName ("q-srow" <> if y `mod` 2 == 1 then " is-odd" else "")) ]
+            (map (\x -> sampleCell r (y * cols + x))
+              (Array.range 0 (min cols (n - y * cols) - 1))))
           (Array.range 0 (rows - 1)))
+
+  -- | **One sample. Hover it and hear it; click it and read it.**
+  -- |
+  -- | The row used to carry a date, a sentence, a line of pattern code and
+  -- | three buttons, none of which answers "which one was this" as fast as
+  -- | playing it does. So the picture takes the verbs: the boxes ARE the
+  -- | audition, one sample at a time rather than three spread across the set,
+  -- | and everything that was written out goes behind a click.
+  sampleCell r i =
+    HH.div
+      [ HP.class_ (HH.ClassName ("q-scell" <> if noteOf r i < 0 then "" else " has-pitch"))
+      , maybe (HP.attr (HH.AttrName "data-none") "") (HP.attr (HH.AttrName "style"))
+          (pitchTint (noteOf r i))
+      , HP.title (show (i + 1) <> (case noteOf r i of
+          nn | nn >= 0 -> " \x00b7 " <> noteName nn
+          _ -> ""))
+      , HE.onMouseEnter \_ -> HearOne r.name i
+      , HE.onClick \_ -> PeekSet (Just r.name)
+      ]
+      []
+
+  noteOf r i = fromMaybe (-1) (Array.index r.notes i)
 
   -- | **The first transformation: what these samples BECOME.**
   -- |
@@ -4763,6 +4786,137 @@ render st =
       | a.slices == 0 = show a.layers <> " layers"
       | a.layers == 1 = "1 file, " <> show a.slices <> " slices"
       | otherwise = show a.layers <> " × " <> show a.slices
+
+  -- | **A set\'s own page.**
+  -- |
+  -- | Everything the row used to carry: the date, what moved, the pattern
+  -- | line, the verbs — plus what it never could, because it costs a header
+  -- | read. None of it is consulted while you are LOOKING for a set and all
+  -- | of it is once you have found one, which is the whole case for a door.
+  setModal nm =
+    case Array.find (\r -> r.name == nm) st.sets of
+      Nothing -> HH.text ""
+      Just r ->
+        HH.div [ HP.class_ (HH.ClassName "q-scrim") ]
+          [ HH.div [ HP.class_ (HH.ClassName "q-modal is-set") ]
+              [ HH.div [ HP.class_ (HH.ClassName "q-modalhead") ]
+                  [ HH.h2_ [ HH.text nm ]
+                  , HH.button
+                      [ HP.class_ (HH.ClassName "q-plain")
+                      , HE.onClick \_ -> PeekSet Nothing ]
+                      [ HH.text "done" ]
+                  ]
+              , HH.div [ HP.class_ (HH.ClassName "q-setpage") ]
+                  [ HH.div [ HP.class_ (HH.ClassName "q-setpic") ] [ samplePic r ]
+                  , HH.dl [ HP.class_ (HH.ClassName "q-facts") ]
+                      ( fact "made" (String.take 10 r.made)
+                      <> fact "from take" r.take
+                      <> fact "samples"
+                          (show r.count
+                            <> (if Array.null r.extent then ""
+                                else " on " <> joinWith " × " (map show r.extent)))
+                      <> fact "moved" (joinWith ", " r.moved)
+                      <> fact "encoding" r.encoding
+                      <> fact "channels" (if r.stereo then "stereo — takes a voice pair"
+                                          else "mono")
+                      <> audioFacts
+                      )
+                  , pitchSet r
+                  -- Every set is already a SuperDirt bank, whatever it was
+                  -- recorded for — a folder of numbered files is a named,
+                  -- indexed set at both ends. Said for all of them, because
+                  -- that is the finding.
+                  , if dirt r == "" then HH.text ""
+                    else HH.div_
+                      [ HH.div [ HP.class_ (HH.ClassName "q-factlab") ]
+                          [ HH.text "in a pattern" ]
+                      , HH.code [ HP.class_ (HH.ClassName "q-set-dirt") ] [ HH.text (dirt r) ]
+                      ]
+                  , HH.div [ HP.class_ (HH.ClassName "q-set-do") ] (setVerbs r)
+                  ]
+              ]
+          ]
+    where
+    fact k v = if v == "" then [] else
+      [ HH.dt_ [ HH.text k ], HH.dd_ [ HH.text v ] ]
+    audioFacts = case st.openSetInfo of
+      Nothing -> fact "the files" "reading…"
+      Just i | i.audio.rate > 0 ->
+        fact "the files"
+          (show i.audio.rate <> " Hz · " <> show i.audio.bits <> " bit · "
+            <> (if i.audio.channels == 1 then "mono" else show i.audio.channels <> " ch")
+            -- 0xFFFE is EXTENSIBLE, which the Arbhar refuses silently. `msm`
+            -- canonicalises on the way to a card; this says what is on disk.
+            <> (if i.audio.tag == 65534 then " · EXTENSIBLE header" else ""))
+      _ -> []
+    -- | **Which pitches this set holds**, in their own colours.
+    -- |
+    -- | The distinct notes rather than one per sample: forty-eight samples of
+    -- | twelve pitches is a twelve-note set played four times, and saying
+    -- | "twelve pitches, C2 to B2" is what a person then checks the picture
+    -- | against.
+    pitchSet r =
+      let ps = Array.sort (Array.nub (Array.filter (_ >= 0) r.notes))
+      in if Array.null ps then HH.text "" else
+        HH.div_
+          [ HH.div [ HP.class_ (HH.ClassName "q-factlab") ]
+              [ HH.text (show (Array.length ps) <> " pitches") ]
+          , HH.div [ HP.class_ (HH.ClassName "q-pitchset") ]
+              (map (\n -> HH.span
+                      [ HP.class_ (HH.ClassName "q-pitch")
+                      , maybe (HP.attr (HH.AttrName "data-none") "")
+                          (HP.attr (HH.AttrName "style")) (pitchTint n)
+                      ]
+                      [ HH.text (noteName n) ]) ps)
+          ]
+
+  -- | **The verbs, behind the click.**
+  -- |
+  -- | Four of them, on every row, was a column of buttons a library of forty
+  -- | sets repeated forty times — and the one you reach for depends on which
+  -- | set it is, which is what the row is for finding out.
+  setVerbs r =
+    [ if r.count > 0
+            then HH.button
+                   [ HP.class_ (HH.ClassName "q-plain is-hear")
+                   , HP.title "three of its samples, a second each — first, \
+                              \middle and last, which on a grid spans the \
+                              \outer axis"
+                   , HE.onClick \_ -> HearSet r.name r.count
+                   ]
+                   [ HH.text "\x266a" ]
+            else HH.text ""
+        , if r.described && r.count > 0
+            then HH.button
+                   [ HP.class_ (HH.ClassName "q-plain")
+                   , HP.disabled st.busy
+                   , HP.title "put it back on the bench, drawn on the take it \
+                              \was cut from — nothing is re-cut or re-measured"
+                   , HE.onClick \_ -> OpenSet r.name
+                   ]
+                   [ HH.text "Open" ]
+            else HH.text ""
+        , if r.runnable
+            then HH.button
+                   [ HP.class_ (HH.ClassName "q-plain")
+                   , HP.title "load the spec that made this set, so it can be \
+                              \recorded again at a different resolution"
+                   , HE.onClick \_ -> RunAgain r.name
+                   ]
+                   [ HH.text "Sweep again\x2026" ]
+            else HH.text ""
+        , if r.described && r.count > 0
+            then HH.button
+                   [ HP.class_ (HH.ClassName "q-plain")
+                   , HP.disabled st.cardBusy
+                   , HP.title "put this set on the card, at the bank and voice \
+                              \chosen on the card below — nothing is cut or \
+                              \measured again"
+                   , HE.onClick \_ -> PlaceSet r.name
+                   ]
+                   [ HH.text "Onto the card" ]
+            else HH.text ""
+    ]
 
   -- | **The bank letters, as twenty-six cells.**
   -- |

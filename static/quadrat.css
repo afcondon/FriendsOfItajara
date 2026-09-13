@@ -1203,3 +1203,42 @@ body {
    names come from, since a regrouped layer stands for a position and a
    natural one stands for a value of the parameter you swept. */
 .q-arrangeopt.is-natural .q-arrangesays::after { content: " ·"; color: var(--live); }
+
+/* ── A set is a checkbox, a name and a picture ───────────────────────────
+   The row carried a date, a sentence, a line of pattern code and four
+   buttons, repeated down a library of forty — and none of it answers "which
+   one was this" as fast as playing it does. So the picture takes the verbs:
+   hover a box to hear that sample, click to open the set's own page. What
+   was written out is behind the click, where it is read once rather than
+   scanned forty times. */
+.q-pane.is-library .q-set { grid-template-columns: 22px minmax(0,1fr) auto auto; gap: 4px 14px; align-items: center; }
+.q-pane.is-library .q-set-what, .q-pane.is-library .q-set-do { grid-column: auto; }
+.q-set-name { cursor: default; }
+.q-set-ch { color: var(--muted); font-size: 9px; letter-spacing: 1px; white-space: nowrap; }
+.q-spic { margin-bottom: 0; cursor: pointer; }
+.q-scell { transition: transform .08s; }
+.q-scell:hover { transform: scale(1.6); border-radius: 0; }
+/* A sample that stands for a note wears it — the colour arrives inline, from
+   `pitchTint`, because the hue IS the datum. Adjacent semitones are adjacent
+   hues, so a chromatic run reads as a run and a repeat reads as a repeat,
+   which is the whole difference between an arrangement that can reach a
+   pitch and one that cannot. The class is only a hook: a pitched cell takes
+   no row banding, since the banding says "outer axis" and the colour is
+   already saying something louder. */
+.q-scell.has-pitch { box-shadow: inset 0 0 0 1px rgba(0,0,0,.10); }
+
+/* ── A set's own page ────────────────────────────────────────────────── */
+.q-modal.is-set { max-width: 620px; }
+.q-setpage { display: flex; flex-direction: column; gap: 16px; }
+.q-setpic .q-spic { cursor: pointer; }
+.q-setpic .q-scell { width: 11px; height: 11px; }
+.q-facts { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 0; font-size: 13px; }
+.q-facts dt { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.q-facts dd { margin: 0; }
+.q-factlab { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin-bottom: 5px; }
+.q-pitchset { display: flex; flex-wrap: wrap; gap: 3px; }
+.q-pitch {
+  font-size: 11px; padding: 2px 6px; border-radius: 2px; color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+.q-modal.is-set .q-set-do { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-start; }

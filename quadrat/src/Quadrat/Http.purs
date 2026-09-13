@@ -325,6 +325,12 @@ type SetRow =
   , moved :: Array String
   , extent :: Array Int
   , encoding :: String
+  -- | **The pitch of each sample, in file order**; `-1` where a sample stands
+  -- | for no note. What lets the library draw a set rather than describe it:
+  -- | a chromatic run reads as a run, and the same run repeated four times
+  -- | reads as a repeat — which is exactly the difference between an
+  -- | arrangement that can reach a pitch and one that cannot.
+  , notes :: Array Int
   }
 
 -- | **A name the owner chose, against the wire name the daemon uses.**
@@ -401,7 +407,13 @@ type StoredSet =
   -- | reopened next month still shows its voicings.
   , notes :: Array (Array Int)
   -- | And the chords each was struck as. See `Meant.struck`.
-  , struck :: Array (Array (Array Int)) }
+  , struck :: Array (Array (Array Int))
+  -- | **What the files are**, from the first one's header — the one fact
+  -- | about a sample that decides whether a module will play it at all, and
+  -- | the one `set.json` never recorded because the recorder knew it. A zero
+  -- | in any field means the header did not say, and the page prints nothing
+  -- | rather than a lie.
+  , audio :: { rate :: Int, bits :: Int, channels :: Int, tag :: Int } }
 
 foreign import loadSet :: String -> Effect (Promise StoredSet)
 
