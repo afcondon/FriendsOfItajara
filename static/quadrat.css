@@ -1161,3 +1161,45 @@ body {
 /* Somebody else's, on the card. The only one that costs anything. */
 .q-letter.is-taken { background: #f7ece9; border-color: #e0bcb2; color: #a8442a; }
 .q-letter.is-on { outline: 2px solid var(--ink); outline-offset: 1px; color: var(--ink); font-weight: 600; }
+
+/* ── The samples, as they were made ──────────────────────────────────────
+   One box per sample on the grid the sweep laid them out on. No waveform:
+   the question a library is asked is "which one was this", and forty-eight
+   thumbnails answer it worse than one picture of the shape. A 4 × 12 reads
+   as four passes of twelve; the sentence for it had to be parsed first.
+
+   Banded by row, because the outer axis is what becomes a LAYER — and
+   seeing the bands here is what makes the arrangement beside it legible as
+   a rearrangement of these. */
+.q-spic { display: inline-flex; flex-direction: column; gap: 1px; margin-bottom: 5px; }
+.q-srow { display: flex; gap: 1px; }
+.q-scell { width: 6px; height: 6px; border-radius: 1px; background: #5d7fa8; }
+.q-srow.is-odd .q-scell { background: #86a4c4; }
+.q-set-n { text-align: left; }
+.q-set-n > div { font-variant-numeric: tabular-nums; }
+
+/* ── What they become ────────────────────────────────────────────────────
+   The first transformation, and the one the module actually plays: layers
+   are alternatives it picks between, slices are positions only you can
+   reach. Pictures rather than a dropdown, because the choice IS a shape —
+   and because the dropdown it replaces was a no-op for every set with two
+   axes, the server having read the extent and never consulted it. */
+.q-arrange { display: flex; align-items: flex-start; gap: 10px; flex: 1 1 100%; }
+.q-arrangelab {
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--muted); padding-top: 6px; white-space: nowrap;
+}
+.q-arrangeopts { display: flex; flex-wrap: wrap; gap: 6px; }
+.q-arrangeopt {
+  display: flex; flex-direction: column; align-items: center; gap: 5px;
+  border: 1px solid var(--rule); background: #fff; border-radius: 3px;
+  padding: 7px 9px 5px; cursor: pointer; font: inherit;
+}
+.q-arrangeopt:hover { border-color: var(--ink); }
+.q-arrangeopt.is-on { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+.q-arrangesays { font-size: 10px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.q-arrangeopt.is-on .q-arrangesays { color: var(--ink); }
+/* How it was swept. Not a recommendation — a fact about where the layer
+   names come from, since a regrouped layer stands for a position and a
+   natural one stands for a value of the parameter you swept. */
+.q-arrangeopt.is-natural .q-arrangesays::after { content: " ·"; color: var(--live); }

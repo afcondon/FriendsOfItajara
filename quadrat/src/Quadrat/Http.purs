@@ -27,6 +27,9 @@ module Quadrat.Http
   , calibrations
   , calibration
   , placeSet
+  , Arrangement
+  , arrangementsOf
+  , slicerOffers
   , takePeaks
   , TakePeaks
   , loadSpec
@@ -37,6 +40,9 @@ module Quadrat.Http
   ) where
 
 import Prelude
+
+import Data.Array as Array
+import Data.Maybe (Maybe(..))
 
 import Control.Promise (Promise)
 import Data.Nullable (Nullable)
@@ -406,14 +412,62 @@ foreign import deleteSets :: Array String -> Effect (Promise Wrote)
 -- | Put a set already on disk onto a voice. No take, no cut, no measuring —
 -- | the shape the card needs is in the set's own description.
 -- |
--- | `sliced` is the one thing the description does NOT settle, because it is
--- | not a fact about the audio: the same files are a stack of layers or one
--- | concatenated file with boundaries, and which of those you want depends on
--- | what else is going on the voice.
+-- | **`layers` is the arrangement**, and it is the one thing the description
+-- | does NOT settle, because it is not a fact about the audio. The same
+-- | forty-eight files are four alternatives of twelve positions, or two of
+-- | twenty-four, or one file of forty-eight — and which you want is a fact
+-- | about the module you are playing. Zero leaves it to the sweep's own
+-- | extent, which is the natural arrangement and the old behaviour.
+-- |
+-- | `sliced` survives for sets with no extent at all, where there is no grid
+-- | to regroup and the only question is whether the files are joined.
 foreign import placeSet
   :: { set :: String, bank :: String, letter :: String, kit :: String, voice :: Int
-     , append :: Boolean, sliced :: Boolean, layerMode :: String }
+     , append :: Boolean, sliced :: Boolean, layerMode :: String, layers :: Int }
   -> Effect (Promise Wrote)
+
+-- | **How a set of `n` samples can be arranged for the module**, and nothing
+-- | else about it. Pure, and here beside the wire it travels on.
+-- |
+-- | Two axes, and they are not interchangeable — this is the asymmetry the
+-- | whole transect rests on:
+-- |
+-- | - **layers are alternatives the MODULE picks between**, by the layer CV,
+-- |   by velocity, at random or cyclically. Twelve is the ceiling and the
+-- |   thirteenth is dropped in silence, measured.
+-- | - **slices are positions only YOU can reach**, by the start point, one CC
+-- |   per voice. The division is a single global setting on the module, so
+-- |   every sliced file in a bank must share it.
+-- |
+-- | Only the arrangements that waste nothing are offered. A layer of six in a
+-- | division of eight works — the last two are silent by construction — but
+-- | it is a thing to reach for deliberately, not one to be offered six of.
+type Arrangement = { layers :: Int, slices :: Int }
+
+-- | The divisions `SETTINGS > SLICER` offers. Measured, not documented.
+slicerOffers :: Array Int
+slicerOffers = [ 8, 12, 16, 24, 32, 48, 64, 128 ]
+
+arrangementsOf :: Int -> Array Arrangement
+arrangementsOf n
+  | n <= 0 = []
+  | otherwise =
+      let
+        -- Every even grouping within the twelve-layer ceiling whose rows land
+        -- exactly on a division the module offers.
+        grids = Array.mapMaybe
+          (\l ->
+            if n `mod` l /= 0 then Nothing
+            else
+              let per = n / l
+              in if Array.elem per slicerOffers then Just { layers: l, slices: per }
+                 else Nothing)
+          (Array.range 1 12)
+        -- And the one arrangement that is not a grid: every sample its own
+        -- alternative, no positions at all. Only within the ceiling.
+        plain = if n <= 12 then [ { layers: n, slices: 0 } ] else []
+      in
+        grids <> plain
 
 -- | One stored set's spec, raw. Polymorphic for the same reason `addToCard`
 -- | is: this module is the wire. `Quadrat.Sweep.adopt` is what makes a plan

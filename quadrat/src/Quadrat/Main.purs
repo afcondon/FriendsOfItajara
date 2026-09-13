@@ -324,6 +324,10 @@ type State =
   -- | the answers differ in what they cost — twelve layers fill a voice, one
   -- | sliced file uses one of its twelve and leaves eleven.
   , placeSliced :: Boolean
+  -- | **The arrangement, as a layer count.** Zero means the sweep's own
+  -- | extent decides, which is the natural arrangement and what happened
+  -- | before there was a way to say otherwise. The slices follow from it.
+  , placeLayers :: Int
   -- | Stand beside what is on the voice, or take its place. A voice holds a
   -- | stack, so the two things you might mean are opposites.
   , placeAppend :: Boolean
@@ -423,6 +427,8 @@ data Action
   | Previewed Http.Preview
   -- | Lay a placed set out as one sliced file, or as a stack of layers.
   | SetPlaceSliced Boolean
+  -- | Arrange the ticked set into this many layers. See `Http.arrangementsOf`.
+  | SetPlaceLayers Int
   | SetPlaceAppend Boolean
   | Play Int
   | HoverPlay Int
@@ -480,7 +486,7 @@ component = H.mkComponent
       , levels: [], modal: Nothing, kept: false, confirmKeep: false
       , picked: Set.empty, confirmDrop: false, confirmWrite: Nothing, preview: Nothing
       , cardPeek: Nothing
-      , placeSliced: false, placeAppend: false, srcNames: []
+      , placeSliced: false, placeLayers: 0, placeAppend: false, srcNames: []
       , heard: [], midiIn: [], midiOk: true }
   , render
   , eval: H.mkEval H.defaultEval { handleAction = handleAction, initialize = Just Init }
@@ -879,7 +885,8 @@ handleAction = case _ of
           , voice: st.voice
           , append: st.placeAppend
           , sliced: st.placeSliced
-          , layerMode: st.layerMode })))
+          , layerMode: st.layerMode
+          , layers: st.placeLayers })))
     case r of
       Left e -> H.modify_ (note (Aff.message e) <<< _ { cardBusy = false })
       Right w -> H.modify_ (note (lastLine w.output) <<< _ { cardBusy = false })
@@ -1038,6 +1045,8 @@ handleAction = case _ of
   Previewed pv -> H.modify_ _ { preview = Just pv }
 
   SetPlaceSliced b -> H.modify_ _ { placeSliced = b }
+
+  SetPlaceLayers n -> H.modify_ _ { placeLayers = n }
 
   SetPlaceAppend b -> H.modify_ _ { placeAppend = b }
 
@@ -3627,19 +3636,7 @@ render st =
                               <> (if pickedWide then " + " <> show (vn + 1) else "")) ])
                       (voicesWide pickedWide))
               ]
-          -- The one thing a set's own description cannot settle, because
-          -- it is not a fact about the audio. See `Http.placeSet`.
-          , HH.label [ HP.class_ (HH.ClassName "q-field is-tight") ]
-              [ HH.span_ [ HH.text "as" ]
-              , HH.select [ HE.onValueChange (SetPlaceSliced <<< (_ == "sliced")) ]
-                  (map (\o -> HH.option
-                          [ HP.value o.v
-                          , HP.selected ((o.v == "sliced") == st.placeSliced) ]
-                          [ HH.text o.t ])
-                      [ { v: "layers", t: "layers — the layer CV picks" }
-                      , { v: "sliced", t: "one sliced file — the start point picks" }
-                      ])
-              ]
+          , arrangePicker
           -- **Two things you might mean, and they are opposites.** A voice
           -- holds a stack, so sending to one that is taken either stands
           -- beside what is there or takes its place. Offered as a choice
@@ -3722,8 +3719,13 @@ render st =
               [ HH.text (String.take 10 r.made
                   <> (if r.take == "" then "" else " · from " <> r.take)) ]
           ]
+      -- **The samples themselves, before the count of them.** A number and a
+      -- shape are two readings of one fact and the shape is the faster, so
+      -- the picture leads and the number annotates it.
       , HH.div [ HP.class_ (HH.ClassName "q-set-n") ]
-          [ HH.text (show r.count), HH.span_ [ HH.text " samples" ] ]
+          [ samplePic r.count r.extent
+          , HH.div_ [ HH.text (show r.count), HH.span_ [ HH.text " samples" ] ]
+          ]
       , HH.div [ HP.class_ (HH.ClassName "q-set-what") ]
           -- Said in three words, not thirteen. A library of legacy sets
           -- repeated the whole sentence down the page and it became the
@@ -3733,11 +3735,14 @@ render st =
                             then "cut before sets were stored, so nothing here \
                                  \knows how it was made"
                             else "") ]
+              -- The extent is drawn beside this now, so saying it again in
+              -- words is a second reading of a picture that is already there.
+              -- What the words are FOR is the part no picture carries: which
+              -- knobs moved.
               [ HH.text
                   (if not r.described then "no description"
                    else if Array.null r.moved then "played by hand"
                    else joinWith ", " r.moved
-                        <> " over " <> joinWith " × " (map show r.extent)
                         <> (if r.encoding == "" then "" else " · " <> r.encoding)) ]
           -- Every set is already a SuperDirt bank, whatever it was recorded
           -- for — a folder of numbered files is a named, indexed set at both
@@ -4670,6 +4675,94 @@ render st =
                       else " · " <> r.mode)) ]
           ]
       ]
+
+  -- | **The samples, as they were made.**
+  -- |
+  -- | One box per sample, on the grid the sweep laid them out on. No
+  -- | waveform: the question a library is asked is "which one was this", and
+  -- | forty-eight thumbnails answer it worse than one picture of the shape —
+  -- | a 4 × 12 reads as four passes of twelve at a glance, and the sentence
+  -- | for it ("decay, oct over 4 × 12") has to be parsed before it means
+  -- | anything.
+  -- |
+  -- | The rows are banded because the outer axis is what a layer will become,
+  -- | and seeing the bands here is what makes the arrangement beside it
+  -- | legible as a rearrangement of these.
+  samplePic n extent =
+    let
+      cols = case extent of
+        [ _, inner ] | inner > 0 -> inner
+        _ -> min 16 (max 1 n)
+      rows = max 1 ((n + cols - 1) / cols)
+    in
+      HH.div [ HP.class_ (HH.ClassName "q-spic")
+             , HP.title (show n <> " samples"
+                 <> (if Array.null extent then ""
+                     else " on " <> joinWith " × " (map show extent))) ]
+        (map
+          (\r -> HH.div [ HP.class_ (HH.ClassName ("q-srow" <> if r `mod` 2 == 1 then " is-odd" else "")) ]
+            (map (\_ -> HH.div [ HP.class_ (HH.ClassName "q-scell") ] [])
+              (Array.range 1 (min cols (n - r * cols)))))
+          (Array.range 0 (rows - 1)))
+
+  -- | **The first transformation: what these samples BECOME.**
+  -- |
+  -- | Separate from where they go, and asked first, because it is the
+  -- | decision the module actually plays. The same forty-eight files are four
+  -- | alternatives of twelve positions, or two of twenty-four, or one file of
+  -- | forty-eight — and the two axes are not interchangeable: **layers are
+  -- | alternatives the module picks between** and **slices are positions only
+  -- | you can reach**.
+  -- |
+  -- | It was a two-option dropdown, and for any set with two axes it was a
+  -- | no-op: the server read the sweep's extent and never consulted it. So
+  -- | the arrangement was being decided by how the recording happened to be
+  -- | swept, which is a fact about the take and not about the instrument it
+  -- | is going to.
+  arrangePicker =
+    case Array.fromFoldable st.picked of
+      [ one ] -> case Array.find (\r -> r.name == one) st.sets of
+        Just r | Array.length (Http.arrangementsOf r.count) > 1 ->
+          HH.div [ HP.class_ (HH.ClassName "q-arrange") ]
+            [ HH.span [ HP.class_ (HH.ClassName "q-arrangelab") ] [ HH.text "becomes" ]
+            , HH.div [ HP.class_ (HH.ClassName "q-arrangeopts") ]
+                (map (opt r) (Http.arrangementsOf r.count))
+            ]
+        _ -> HH.text ""
+      -- Several ticked, each its own kit: they need not share an arrangement
+      -- and there is no single picture to draw. The sweep's own extent
+      -- decides for each, which is what it did before any of this.
+      _ -> HH.text ""
+    where
+    -- The sweep's own grouping, which is the natural one and keeps the layer
+    -- names: a layer stands for a value of the outer parameter, and a
+    -- regrouping stands for a position and nothing else.
+    natural r = case r.extent of
+      [ outer, _ ] -> outer
+      _ -> 0
+    opt r a =
+      HH.button
+        [ HP.class_ (HH.ClassName ("q-arrangeopt"
+            <> (if chosen r a then " is-on" else "")
+            <> (if a.layers == natural r then " is-natural" else "")))
+        , HP.title (says a <> (if a.layers == natural r
+                                 then " — how it was swept, so the layers keep \
+                                      \their parameter values"
+                                 else " — regrouped, so the layers carry positions \
+                                      \rather than values"))
+        , HE.onClick \_ -> SetPlaceLayers a.layers
+        ]
+        [ voicePic { layers: a.layers, slices: a.slices, dim: false }
+        , HH.span [ HP.class_ (HH.ClassName "q-arrangesays") ] [ HH.text (says a) ]
+        ]
+    -- Zero is "let the extent decide", and the extent decides the natural
+    -- one — so the natural option is what zero is showing.
+    chosen r a = if st.placeLayers == 0 then a.layers == natural r
+                 else st.placeLayers == a.layers
+    says a
+      | a.slices == 0 = show a.layers <> " layers"
+      | a.layers == 1 = "1 file, " <> show a.slices <> " slices"
+      | otherwise = show a.layers <> " × " <> show a.slices
 
   -- | **The bank letters, as twenty-six cells.**
   -- |

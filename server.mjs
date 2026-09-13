@@ -23,7 +23,11 @@
 //                                  every slot created, replaced or left alone
 //                                  → runs msm harvest,
 //                                    answers { ok, output }
-//   POST /api/card/place           { set, bank, kit, voice, append, layerMode }
+//   POST /api/card/place           { set, bank, letter, kit, voice, append,
+//                                    layerMode, layers } — `layers` is the
+//                                    arrangement: how many alternatives the
+//                                    module picks between. Absent means the
+//                                    sweep's own extent decides.
 //                                  → put a set ALREADY ON DISK onto a voice
 //   GET  /api/sets                 every stored sample set, newest first
 //   GET  /api/sets/:name           one set whole: spec, schedule, measurements,
@@ -680,12 +684,52 @@ function placeOnCard({ set, bank: bankIn, letter: letterIn, kit: kitIn, voice: v
 // sweep are four different lengths and SLICER divides each file by proportion.
 // What must agree is the slot COUNT, which is the one global setting, and
 // `placeOnCard` already refuses a bank whose divisions disagree.
-function gridLayers(set, d, dir) {
+//
+// **`rows` may be asked for rather than inferred.** The sweep's own extent is
+// the natural arrangement and stays the default, but it is not the only legal
+// one: the same 48 files are 4 layers of 12, or 2 of 24, or one file of 48,
+// and which of those you want is a fact about the MODULE you are playing, not
+// about the recording. Until the page could ask, the extent decided — and the
+// `as` control that claimed to choose was never consulted for any set with two
+// axes, which is every set worth arranging.
+//
+// A grouping that is not the sweep's own loses the layer NAMES, and says so:
+// a layer stands for a value of the outer parameter, and four rows regrouped
+// into two stand for nothing anybody can name.
+function gridLayers(set, d, dir, askRows) {
   const ext = (d.spec && d.spec.extent) || [];
-  if (ext.length !== 2 || ext[0] < 2 || ext[1] < 2) return null;
-  const rows = ext[0], cols = ext[1];
   const sm = d.samples || [];
-  if (sm.length !== rows * cols) return null;
+  const n = sm.length;
+
+  // Asked for: any even grouping of the ordered files, within the module's
+  // twelve-layer ceiling. The order is the sweep's, which is the only order
+  // these files have.
+  // How the sweep itself grouped them, or zero for a set that was not swept
+  // on two axes. Two things turn on it and they are NOT the same thing, which
+  // is worth separating here because conflating them broke the 1-D case: a
+  // grouping that is the sweep's own can be VERIFIED against the recorded
+  // cell coordinates and its layers carry parameter values; every other
+  // grouping can do neither. A set with no extent has no sweep grouping at
+  // all — so it cannot be verified either, and it was never "regrouped",
+  // because it was never grouped.
+  const swept = ext.length === 2 && ext[0] >= 2 && ext[1] >= 2 && n === ext[0] * ext[1]
+    ? ext[0] : 0;
+
+  if (askRows) {
+    if (askRows < 1 || askRows > MAX_LAYERS || n === 0 || n % askRows !== 0) return null;
+    return gridOf(set, d, dir, askRows, n / askRows, swept);
+  }
+
+  if (!swept) return null;
+  return gridOf(set, d, dir, swept, n / swept, swept);
+}
+
+const MAX_LAYERS = 12;
+
+function gridOf(set, d, dir, rows, cols, swept) {
+  const sm = d.samples || [];
+  // The sweep's own grouping: verifiable, and its layers stand for values.
+  const own = swept > 0 && rows === swept;
 
   const layers = [];
   for (let r = 0; r < rows; r++) {
@@ -693,7 +737,12 @@ function gridLayers(set, d, dir) {
     // `Encoding.cells` varies the inner axis fastest, so a row of the file
     // order IS a row of the grid — but say so rather than assume it, because a
     // set written by some later encoding would be silently transposed.
-    if (!cells.every((c, i) => Array.isArray(c.cell) && c.cell[0] === r && c.cell[1] === i)) return null;
+    // `Encoding.cells` varies the inner axis fastest, so a row of the file
+    // order IS a row of the grid — checked rather than assumed, because a set
+    // written by some later encoding would be silently transposed. Only for
+    // the sweep's own grouping: a regrouping is deliberately across the cells
+    // and cannot satisfy it.
+    if (own && !cells.every((c, i) => Array.isArray(c.cell) && c.cell[0] === r && c.cell[1] === i)) return null;
     let longest = 0;
     for (const c of cells) {
       const secs = wavSecs(path.join(dir, c.file));
@@ -709,7 +758,7 @@ function gridLayers(set, d, dir) {
     // readable. The first parameter is the one you chose the axis for; a `+2`
     // says the others came with it, and the file beside it in `set.json` still
     // holds all of them exactly.
-    const mine = (cells[0].means || []).filter((m) => m.note < 0);
+    const mine = own ? (cells[0].means || []).filter((m) => m.note < 0) : [];
     const head = mine[0];
     // Letters, digits and hyphens only: anything else comes back as a space in
     // the filename, and `decay-0 2.wav` reads as a mistake rather than as a
@@ -735,8 +784,16 @@ function gridLayers(set, d, dir) {
     seen.add(nm);
     layers[i].name = nm;
   }
-  return { layers, slots: cols };
+  // The division the module must be set to. `cols` is how many pieces each
+  // layer holds; SLICER offers only the eight, so a layer of six sits in eight
+  // with two silent — which is how a smaller set adopts a bank's division
+  // rather than being refused over silence.
+  const slots = SLICE_DIVISIONS.find((x) => x >= cols) || 0;
+  // `regrouped` only where there WAS a grouping to depart from.
+  return { layers, slots, regrouped: swept > 0 && !own };
 }
+
+const SLICE_DIVISIONS = [8, 12, 16, 24, 32, 48, 64, 128];
 
 // Seconds of a WAV, from its header alone. Enough to size a slot, and it does
 // not read the audio to do it.
@@ -800,6 +857,11 @@ function placeStoredSet(body) {
   // `set.json`'s own `sliced` stays the default, so nothing that worked before
   // changes; naming it here overrides for this placement only.
   const askSliced = body.sliced == null ? null : !!body.sliced;
+  // **The arrangement, asked for.** `layers` is how many alternatives the
+  // module picks between; the slices follow from it, since each layer holds
+  // what is left. One layer is "one sliced file"; as many layers as there are
+  // samples is "plain layers" and has no slices at all.
+  const askLayers = Number(body.layers) || 0;
   const SLICES = [8, 12, 16, 24, 32, 48, 64, 128];
   const spans = (d.samples || []).map((x) => Number(x.end) - Number(x.start)).filter((n) => n > 0);
   const ownSlots = SLICES.find((n) => n >= (spans.length || files.length)) || 0;
@@ -807,7 +869,10 @@ function placeStoredSet(body) {
 
   // A grid holds its own shape: layers from the outer axis, slices from the
   // inner. `set.json` says so and nothing else has to be told.
-  const grid = gridLayers(set, d, dir);
+  // Plain layers is the one arrangement that is not a grid: every sample its
+  // own layer, and no division at all. Asking for it is asking for no grid.
+  const plainLayers = askLayers > 0 && askLayers === (d.samples || files).length;
+  const grid = plainLayers ? null : gridLayers(set, d, dir, askLayers || undefined);
   const placed = placeOnCard({
     set, grid,
     bank: body.bank, letter: body.letter, kit: body.kit, voice: body.voice,
@@ -815,6 +880,8 @@ function placeStoredSet(body) {
     shape: grid
       ? { kind: d.kind || "", stereo: !!d.stereo, sliced: true,
           slots: grid.slots, slotSecs: Math.max(...grid.layers.map((l) => l.slotSecs)) }
+      : plainLayers
+        ? { kind: d.kind || "", stereo: !!d.stereo, sliced: false, slots: 0, slotSecs: 0 }
       : askSliced === null
         ? { kind: d.kind || "",
             stereo: !!d.stereo,
@@ -834,7 +901,10 @@ function placeStoredSet(body) {
     ok: true,
     output: grid
       ? `${set} on voice ${Math.min(4, Math.max(1, Number(body.voice) || 1))} — `
-          + `${grid.layers.length} layers of ${grid.slots} slices`
+          + (grid.layers.length === 1
+              ? `one file of ${grid.slots} slices`
+              : `${grid.layers.length} layers of ${grid.slots} slices`)
+          + (grid.regrouped ? ", regrouped — the layers carry positions, not values" : "")
       : askSliced
         ? `${set} on voice ${Math.min(4, Math.max(1, Number(body.voice) || 1))} — `
             + `one file of ${placed.slots || ownSlots} slices, `
