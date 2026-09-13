@@ -72,6 +72,61 @@ const post = (url, body) =>
     .then((d) => ({ ok: !!d.ok, output: String(d.output ?? "") }))
     .catch((e) => ({ ok: false, output: String(e.message ?? e) }));
 
+// What a write to one mounted card would do. Flattened here — the planned
+// side and the present side arrive nested and a row in a table is one thing,
+// so the two are joined into one record and an absent half reads as "" or 0.
+//
+// A failure comes back looking like an answer with no slots in it, so the page
+// has one shape to render and shows `output` when there is one.
+export const previewCard = (dest) => () =>
+  fetch(`/api/card/preview?dest=${encodeURIComponent(dest)}`)
+    .then(j)
+    .then((d) => {
+      const r = d.report;
+      if (!r) return { ...empty, dest, output: String(d.output ?? "could not read the card") };
+      const s = r.survey ?? {};
+      return {
+        // The manifest's own verdict, not the subprocess's exit code: a plan
+        // with problems exits non-zero and is still exactly what was asked for.
+        ok: !!r.ok,
+        output: String(d.output ?? ""),
+        dest: String(s.dest ?? dest),
+        wouldWrite: !!r.wouldWrite,
+        mounted: !!s.mounted,
+        unreadable: String(s.unreadable ?? ""),
+        problems: r.problems ?? [],
+        notes: r.notes ?? [],
+        collisions: s.collisions ?? [],
+        free: (s.free ?? []).join(""),
+        slots: (s.slots ?? []).map((x) => {
+          const p = x.planned, q = x.present;
+          return {
+            slot: String(x.slot ?? ""),
+            letter: String(x.letter ?? ""),
+            fate: String(x.fate ?? ""),
+            name: String(p?.name ?? ""),
+            kind: String(p?.kind ?? ""),
+            settings: String(p?.settings ?? ""),
+            files: Number(p?.files?.length ?? 0),
+            secs: Number(p?.secs ?? 0),
+            // The division is a property of the file, and a kit's files all
+            // carry the same one; the first that names one names the kit's.
+            slots: Number((p?.files ?? []).find((f) => f.slots)?.slots ?? 0),
+            thereFiles: Number(q?.files ?? 0),
+            therePlayable: Number(q?.playable ?? 0),
+            thereBytes: Number(q?.bytes ?? 0),
+            thereNames: q?.names ?? [],
+          };
+        }),
+      };
+    })
+    .catch((e) => ({ ...empty, dest, output: String(e.message ?? e) }));
+
+const empty = {
+  ok: false, output: "", dest: "", wouldWrite: false, mounted: false,
+  unreadable: "", problems: [], notes: [], collisions: [], free: "", slots: [],
+};
+
 export const addToCard = (req) => () => post("/api/card/add", req);
 export const writeToCard = (dest) => (replace) => () =>
   post("/api/card/write", { dest, replace });

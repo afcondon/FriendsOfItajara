@@ -19,6 +19,8 @@
 //   GET  /api/audio?lib=&path=     one file, with byte ranges, for auditioning
 //   POST /api/harvest              { take, module, stick, bank, scene, card, slot,
 //                                    as, overwrite, allLayers, dryRun }
+//   GET  /api/card/preview?dest=   what a write to that mounted card would do:
+//                                  every slot created, replaced or left alone
 //                                  → runs msm harvest,
 //                                    answers { ok, output }
 //   POST /api/card/place           { set, bank, kit, voice, append, layerMode }
@@ -367,6 +369,34 @@ function run(args) {
     child.stderr.on("data", (c) => (err += c));
     child.on("error", (e) => resolve({ ok: false, output: e.message }));
     child.on("close", (code) => resolve({ ok: code === 0, output: (out + err).trim() }));
+  });
+}
+
+// The same, keeping the two streams apart.
+//
+// `run` joins them because for prose that is what a person wants to read. A
+// document cannot be read that way: `msm --json` puts the report on stdout
+// and everything else on stderr precisely so that a parser sees one and a
+// watching person sees the other, and merging them here would undo that.
+//
+// A non-zero exit is NOT a failure to parse. `kit build --json` prints the
+// report and *then* refuses, because the problems are the thing being asked
+// for — so the document is read first and the exit code recorded beside it.
+function runJson(args) {
+  return new Promise((resolve) => {
+    let out = "", err = "";
+    let child;
+    try { child = spawn(MSM, args); }
+    catch (e) { return resolve({ ok: false, report: null, output: `could not start ${MSM}: ${e.message}` }); }
+    child.stdout.on("data", (c) => (out += c));
+    child.stderr.on("data", (c) => (err += c));
+    child.on("error", (e) => resolve({ ok: false, report: null, output: e.message }));
+    child.on("close", (code) => {
+      let report = null;
+      try { report = JSON.parse(out); }
+      catch (e) { return resolve({ ok: false, report: null, output: (err + out).trim() || e.message }); }
+      resolve({ ok: code === 0, report, output: err.trim() });
+    });
   });
 }
 
@@ -1475,6 +1505,25 @@ const server = http.createServer(async (req, res) => {
         plan = await run(["kit", "build", CARD_TOML, path.join(SHOP, "preview")]);
       }
       return json(res, 200, { card, sets: sets(), cards: cards(), plan: plan.output, ok: plan.ok });
+    }
+    // **What a write to THIS card would do**, before doing it.
+    //
+    // `/api/card` dry-runs into a scratch directory, which answers "is the
+    // manifest buildable" and nothing about the card in the slot. The question
+    // in front of the Write button is the other one — *what happens to what is
+    // already there* — and until this existed the only thing that answered it
+    // was the write, by refusing, atomically, in one line at the end of a log.
+    //
+    // Occupancy is read by `msm` rather than here **on purpose**. Enumerating
+    // a mounted Rample volume from this process wedges the event loop dead —
+    // measured 2026-09-12, every later request gets zero bytes — while the
+    // same walk in a subprocess is fine. See the note above `cards()`.
+    if (url.pathname === "/api/card/preview" && req.method === "GET") {
+      const dest = String(url.searchParams.get("dest") || "");
+      if (!cards().includes(dest)) return json(res, 200, { ok: false, report: null, output: `${dest} is not a mounted card` });
+      writeCard(readCard());
+      const r = await runJson(["kit", "build", CARD_TOML, dest, "--json"]);
+      return json(res, 200, r);
     }
     if (url.pathname === "/api/card/add" && req.method === "POST") {
       return json(res, 200, await addToCard(await readBody(req)));

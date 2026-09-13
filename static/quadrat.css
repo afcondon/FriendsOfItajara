@@ -1025,3 +1025,41 @@ body {
 /* A grid's shape, editable in the sentence. */
 .q-slotgrid { display: inline-flex; align-items: baseline; gap: 4px; }
 .q-by { color: var(--muted); font-size: 12px; }
+
+/* ── The write preview ───────────────────────────────────────────────────
+   DropSync's shape, and for DropSync's reason: a sync between two places is
+   not reviewable as a sentence, so it is shown as one block per change with
+   both ends of it visible. The difference here is that ours is a TRANSFORM
+   and it only goes one way — the card is compiled from the library, never
+   edited, and nothing comes back — so there is no second column and no
+   arrows. One block per slot, and what happens to it. */
+.q-modal.is-preview { max-width: 760px; }
+.q-preview { display: flex; flex-direction: column; gap: 10px; }
+
+/* A slot is a block, and its left edge carries the verdict — a rule rather
+   than a fill, so a list of twelve reads as a list and not as a heat map.
+   Replacing is the hot colour because it is the only one that destroys
+   anything; "not ours" is grey because the whole point of listing it is that
+   nothing happens to it. */
+.q-slot {
+  border: 1px solid var(--rule); border-left: 3px solid var(--rule);
+  border-radius: 3px; padding: 10px 14px; background: #fff; font-size: 13px;
+}
+.q-slot.is-create { border-left-color: var(--live); }
+.q-slot.is-replace { border-left-color: var(--hot); }
+.q-slot.is-keep { background: transparent; color: var(--muted); }
+.q-slotname { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+.q-slotname strong { font-variant-numeric: tabular-nums; letter-spacing: 0.04em; }
+.q-fate { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); }
+.q-slot.is-replace .q-fate { color: var(--hot); }
+
+/* What goes. Named, never counted — a count is not a check, and the names of
+   two takes from one morning differ by four characters in the middle. */
+.q-gone {
+  color: #a8442a; font-size: 12px; margin-bottom: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.q-notes { font-size: 12px; color: var(--muted); }
+.q-notes summary { cursor: pointer; }
+.q-notes .q-plan { margin-top: 8px; }

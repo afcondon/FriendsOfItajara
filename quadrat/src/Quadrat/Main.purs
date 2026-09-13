@@ -293,13 +293,19 @@ type State =
   , picked :: Set String
   -- | Deleting is the one thing here that destroys work, so it is asked.
   , confirmDrop :: Boolean
-  -- | **The replace question, held open against one card.**
+  -- | **The write question, held open against one card.**
   -- |
-  -- | A write refuses a kit slot that already exists, and the way past it is
-  -- | `--overwrite`, which deletes each slot's whole directory first. That is
-  -- | the most destructive thing this page can do, so it is asked, and the
-  -- | asking names the slots it would delete.
+  -- | Every write goes through this now, not only the replacing kind. A write
+  -- | refuses a kit slot that already exists — and refuses *all* of it, the
+  -- | free banks included — so "will this go through" is a question about the
+  -- | card in front of you and cannot be answered from the manifest. Asking it
+  -- | is one subprocess, and it is asked before every write rather than after
+  -- | a refusal.
   , confirmWrite :: Maybe String
+  -- | The answer, when it arrives. `Nothing` while the card is being read:
+  -- | the modal is open and says so, because a card that takes a moment must
+  -- | not look like a card with nothing on it.
+  , preview :: Maybe Http.Preview
   -- | **Stacked or sliced**, for a set placed from the Library.
   -- |
   -- | A placement decision, not a property of the cut: the audio is the same
@@ -400,8 +406,12 @@ data Action
   -- | a separate press with the letters it destroys named on it, never a
   -- | default. See `askWrite`.
   | WriteCard String Boolean
-  -- | Hold the replace question open, or drop it.
+  -- | Hold the write question open against a card — which reads the card —
+  -- | or drop it.
   | AskWrite (Maybe String)
+  -- | The card, read. Carried as its own action because the read is a
+  -- | subprocess and the modal opens before it answers.
+  | Previewed Http.Preview
   -- | Lay a placed set out as one sliced file, or as a stack of layers.
   | SetPlaceSliced Boolean
   | SetPlaceAppend Boolean
@@ -459,7 +469,7 @@ component = H.mkComponent
       , schedule: [], sets: [], tables: [], tablesErr: "", overran: false
       , page: Bench, fill: Swept, pivot: Nothing
       , levels: [], modal: Nothing, kept: false, confirmKeep: false
-      , picked: Set.empty, confirmDrop: false, confirmWrite: Nothing
+      , picked: Set.empty, confirmDrop: false, confirmWrite: Nothing, preview: Nothing
       , placeSliced: false, placeAppend: false, srcNames: []
       , heard: [], midiIn: [], midiOk: true }
   , render
@@ -985,14 +995,32 @@ handleAction = case _ of
   SetKit v -> H.modify_ _ { kit = v, kitMine = v /= "" }
   SetVoice v -> H.modify_ \s ->
     s { voice = onlyVoices s.kind (clamp 1 4 (fromMaybe s.voice (Int.fromString v))) }
-  AskWrite v -> H.modify_ _ { confirmWrite = v }
+  -- | **Opening the question reads the card.** Which is the whole change: the
+  -- | page used to ask "replace?" from what the manifest said and nothing
+  -- | else, so it named every slot the manifest holds as though all of them
+  -- | were at risk, and knew about the one that actually was only once the
+  -- | write had refused over it.
+  AskWrite v -> do
+    H.modify_ _ { confirmWrite = v, preview = Nothing }
+    case v of
+      Nothing -> pure unit
+      Just dest -> do
+        r <- H.liftAff (attempt (toAffE (Http.previewCard dest)))
+        -- Only if the question is still open, and still about this card: the
+        -- read takes a moment and cancelling during it must stay cancelled.
+        st <- H.get
+        when (st.confirmWrite == Just dest) case r of
+          Left e -> H.modify_ (note (Aff.message e) <<< _ { confirmWrite = Nothing })
+          Right pv -> handleAction (Previewed pv)
+
+  Previewed pv -> H.modify_ _ { preview = Just pv }
 
   SetPlaceSliced b -> H.modify_ _ { placeSliced = b }
 
   SetPlaceAppend b -> H.modify_ _ { placeAppend = b }
 
   WriteCard dest replace -> do
-    H.modify_ _ { cardBusy = true, confirmWrite = Nothing }
+    H.modify_ _ { cardBusy = true, confirmWrite = Nothing, preview = Nothing }
     r <- H.liftAff (attempt (toAffE (Http.writeToCard dest replace)))
     case r of
       Left e -> H.modify_ (note (Aff.message e) <<< _ { cardBusy = false })
@@ -4544,6 +4572,9 @@ render st =
                     else HH.pre [ HP.class_ (HH.ClassName ("q-plan" <> if v.ok then "" else " is-bad")) ]
                            [ HH.text v.plan ]
                   ]
+      , case st.confirmWrite of
+          Nothing -> HH.text ""
+          Just c -> writeModal c
       ]
 
   row r =
@@ -4571,56 +4602,129 @@ render st =
                  (map (\c -> HH.button
                          [ HP.class_ (HH.ClassName "q-chip is-arm")
                          , HP.disabled (st.cardBusy || not v.ok)
-                         , HP.title ("compile the manifest onto " <> c)
-                         , HE.onClick \_ -> WriteCard c false
+                         , HP.title ("read " <> c <> ", then say what writing to it would do")
+                         , HE.onClick \_ -> AskWrite (Just c)
                          ]
                          [ HH.text c ]) v.cards)
-      -- | **The way past a slot that is already there.**
-      -- |
-      -- | A write refuses rather than replacing, and refuses ALL of it — one
-      -- | occupied slot and nothing lands, including the kits that were free.
-      -- | Which is the right default and left the page with no way to update a
-      -- | card at all: every second write of anything hit it.
-      -- |
-      -- | So the flag exists here, and it is asked for, because `--overwrite`
-      -- | deletes each kit slot's whole directory before writing it. The
-      -- | question names the slots — `L0, L1` — rather than the cards, because
-      -- | **the slots are the blast radius** and a letter chosen by accident
-      -- | once cost a bank of Squarp's own content.
-      , case st.confirmWrite of
-          Just c ->
-            HH.span [ HP.class_ (HH.ClassName "q-twoverbs") ]
-              [ HH.button
-                  [ HP.class_ (HH.ClassName "q-plain is-replacing")
-                  , HP.disabled st.cardBusy
-                  , HE.onClick \_ -> WriteCard c true
-                  ]
-                  [ HH.text ("delete and rewrite " <> slotsSays v <> " on " <> c) ]
+      ]
+
+  -- | **What writing to this card would do, before it does it.**
+  -- |
+  -- | The write used to be a button and a guess. `--overwrite` deletes each
+  -- | kit slot's whole directory, and without it a single occupied slot
+  -- | refuses the entire write — so both answers were wrong to give blind, and
+  -- | the refusal arrived as the last line of a build log at the foot of the
+  -- | page. On 2026-09-12 that cost an evening: a write of two free banks died
+  -- | on a third slot that was already there, and the page showed nothing that
+  -- | said so.
+  -- |
+  -- | So the card is read first, and every slot says which of the three things
+  -- | happens to it. The rows the plan does not touch are listed too: a view
+  -- | of only our own corner offers a bank letter that is taken, and a letter
+  -- | chosen by accident once cost a bank of Squarp's own content.
+  writeModal c =
+    HH.div [ HP.class_ (HH.ClassName "q-scrim") ]
+      [ HH.div [ HP.class_ (HH.ClassName "q-modal is-preview") ]
+          [ HH.div [ HP.class_ (HH.ClassName "q-modalhead") ]
+              [ HH.h2_ [ HH.text ("Writing to " <> c) ]
               , HH.button
                   [ HP.class_ (HH.ClassName "q-plain")
                   , HE.onClick \_ -> AskWrite Nothing ]
                   [ HH.text "cancel" ]
               ]
-          Nothing
-            | Array.null v.cards -> HH.text ""
-            | otherwise ->
-                HH.div [ HP.class_ (HH.ClassName "q-chips") ]
-                  (map (\c -> HH.button
-                          [ HP.class_ (HH.ClassName "q-chip")
-                          , HP.disabled (st.cardBusy || not v.ok)
-                          , HP.title "for a slot that already has something in it"
-                          , HE.onClick \_ -> AskWrite (Just c)
-                          ]
-                          [ HH.text ("replace on " <> c) ]) v.cards)
+          , case st.preview of
+              Nothing ->
+                HH.p [ HP.class_ (HH.ClassName "q-muted") ]
+                  [ HH.text "reading the card…" ]
+              Just pv -> previewPanel c pv
+          ]
       ]
 
-  -- | The kit slots this manifest occupies, in the module's own names. **The
-  -- | slot number is the kit's position in its bank**, so the first kit of
-  -- | bank L is L0 and the second is L1 — which is also why a bank holding
-  -- | only the new kit would write it as L0, over whatever L0 was.
-  slotsSays v =
-    let slots = Array.nub (map (\r -> r.letter <> show r.kitIx) v.rows)
-    in if Array.null slots then "the manifest" else joinWith ", " slots
+  previewPanel c pv =
+    HH.div [ HP.class_ (HH.ClassName "q-preview") ]
+      [ if pv.unreadable == "" then HH.text ""
+        else HH.p [ HP.class_ (HH.ClassName "q-warn") ]
+               [ HH.text ("the card is mounted and cannot be read, so nothing here \
+                          \can be trusted: " <> pv.unreadable) ]
+      , if pv.output == "" then HH.text ""
+        else HH.p [ HP.class_ (HH.ClassName "q-muted") ] [ HH.text pv.output ]
+      , HH.div_ (map previewSlot pv.slots)
+      , if Array.null pv.problems then HH.text ""
+        else HH.div [ HP.class_ (HH.ClassName "q-plan is-bad") ]
+               [ HH.text (joinWith "\n" pv.problems) ]
+      -- The compiler's own asides — what SLICER wants setting to, which kits
+      -- answer on which triggers. Worth saying and not worth refusing over,
+      -- and this is the last moment anyone reads them before the card is in
+      -- the module.
+      , if Array.null pv.notes then HH.text ""
+        else HH.details [ HP.class_ (HH.ClassName "q-notes") ]
+               [ HH.summary_ [ HH.text (show (Array.length pv.notes) <> " things worth knowing") ]
+               , HH.div [ HP.class_ (HH.ClassName "q-plan") ]
+                   [ HH.text (joinWith "\n" pv.notes) ]
+               ]
+      , if pv.free == "" then HH.text ""
+        else HH.p [ HP.class_ (HH.ClassName "q-muted") ]
+               [ HH.text ("free bank letters on this card: " <> pv.free) ]
+      , HH.div [ HP.class_ (HH.ClassName "q-send") ]
+          [ HH.button
+              [ HP.class_ (HH.ClassName ("q-plain" <> if replacing then " is-replacing" else ""))
+              , HP.disabled (st.cardBusy || not pv.ok)
+              , HE.onClick \_ -> WriteCard c replacing
+              ]
+              [ HH.text proceed ]
+          , HH.button
+              [ HP.class_ (HH.ClassName "q-plain")
+              , HE.onClick \_ -> AskWrite Nothing ]
+              [ HH.text "cancel" ]
+          ]
+      ]
+    where
+    -- **Replacing is decided by the card, not by which button was pressed.**
+    -- The old page had two buttons and asked the person to know which applied;
+    -- the card knows, and a collision is the only thing `--overwrite` is for.
+    replacing = not (Array.null pv.collisions)
+    proceed
+      | not pv.ok = "the manifest will not build"
+      | replacing = "Delete and rewrite " <> joinWith ", " pv.collisions
+                      <> ", and write the rest"
+      | otherwise = "Write " <> show (Array.length (Array.filter (\s -> s.fate == "create") pv.slots))
+                      <> " kits"
+
+  -- | One slot, both sides of it. DropSync's shape: what it is now above what
+  -- | it becomes, and a line saying which of the two is at risk.
+  previewSlot s =
+    HH.div [ HP.class_ (HH.ClassName ("q-slot is-" <> s.fate)) ]
+      [ HH.div [ HP.class_ (HH.ClassName "q-slotname") ]
+          [ HH.strong_ [ HH.text s.slot ]
+          , HH.span [ HP.class_ (HH.ClassName "q-fate") ] [ HH.text (fateSays s) ]
+          ]
+      , case Http.fateOf s.fate of
+          Http.Keep ->
+            HH.div [ HP.class_ (HH.ClassName "q-muted") ]
+              [ HH.text (show s.thereFiles <> " files already on the card, untouched") ]
+          _ ->
+            HH.div_
+              [ if s.thereFiles == 0 then HH.text ""
+                else HH.div [ HP.class_ (HH.ClassName "q-gone") ]
+                       [ HH.text ("deletes " <> show s.thereFiles <> " file"
+                           <> (if s.thereFiles == 1 then "" else "s")
+                           <> " — " <> joinWith ", " s.thereNames) ]
+              , HH.div_
+                  [ HH.text (s.name <> " — " <> show s.files <> " file"
+                      <> (if s.files == 1 then "" else "s")
+                      <> (if s.slots > 0 then ", SLICER /" <> show s.slots else "")) ]
+              , HH.div [ HP.class_ (HH.ClassName "q-muted") ] [ HH.text s.settings ]
+              ]
+      ]
+
+  fateSays s = case Http.fateOf s.fate of
+    Http.Create -> "new"
+    Http.Replace -> "REPLACES what is there"
+    Http.Keep -> "not ours"
+    -- A build of `msm` that knows a fate this page does not. Named rather
+    -- than guessed: the mild reading of an unknown verdict is the dangerous
+    -- one.
+    Http.Unknown w -> "unrecognised (" <> w <> ")"
 
   kindBtn k =
     HH.button

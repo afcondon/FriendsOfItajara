@@ -11,6 +11,11 @@ module Quadrat.Http
   , CardView
   , Wrote
   , card
+  , Fate(..)
+  , fateOf
+  , PreviewSlot
+  , Preview
+  , previewCard
   , Meant
   , addToCard
   , SetRow
@@ -30,6 +35,8 @@ module Quadrat.Http
   , StoredSet
   , writeToCard
   ) where
+
+import Prelude
 
 import Control.Promise (Promise)
 import Data.Nullable (Nullable)
@@ -124,6 +131,89 @@ type CardView =
 type Wrote = { ok :: Boolean, output :: String }
 
 foreign import card :: Effect (Promise CardView)
+
+-- | **What becomes of one slot** when the manifest is written to a card.
+-- |
+-- | Closed, and read off a string the compiler chose, which is why `Unknown`
+-- | is here: `msm` and this page are different repositories on different
+-- | release cycles, and a fate this build has never heard of must not render
+-- | as the mildest one. A row that says it does not know is recoverable; a
+-- | row that says "creates" over something it would delete is not.
+data Fate = Create | Replace | Keep | Unknown String
+
+derive instance Eq Fate
+
+fateOf :: String -> Fate
+fateOf = case _ of
+  "create" -> Create
+  "replace" -> Replace
+  "keep" -> Keep
+  other -> Unknown other
+
+-- | One slot, both sides of the transform: what the manifest puts there, and
+-- | what is there now. Flat, because the JS owns the wire shape and this side
+-- | holds what a table holds — a planned-but-absent field is an empty string
+-- | or a zero, never a `Maybe`.
+-- |
+-- | **`there*` is the whole slot, not the part we would overwrite.** A write
+-- | removes the kit's entire directory before rebuilding it, so what is at
+-- | risk is everything in `thereNames` — which is why they are all listed.
+type PreviewSlot =
+  { slot :: String
+  , letter :: String
+  -- | `create`, `replace` or `keep`. Through `fateOf` before it decides
+  -- | anything.
+  , fate :: String
+  -- | The kit the manifest puts here. Empty when this slot is only on the
+  -- | card — those rows exist so that a view of the card is a view of the
+  -- | card, and not only of our own corner of it.
+  , name :: String
+  , kind :: String
+  , settings :: String
+  , files :: Int
+  , secs :: Number
+  -- | Non-zero when what lands is one file of that many equal slices, and so
+  -- | needs `SETTINGS > SLICER` set to it by hand. Per slot rather than per
+  -- | card: the manifest puts the division on the bank.
+  , slots :: Int
+  , thereFiles :: Int
+  , therePlayable :: Int
+  , thereBytes :: Number
+  , thereNames :: Array String
+  }
+
+-- | **What a write to a particular card would do**, asked before doing it.
+-- |
+-- | Distinct from `CardView`'s `plan`, which dry-runs into a scratch directory
+-- | and so answers only whether the manifest is buildable. The question at the
+-- | Write button is the other one, and it has a different answer for every
+-- | card you might mount.
+type Preview =
+  { ok :: Boolean
+  -- | A sentence when the call or the compiler had something to say that is
+  -- | not a per-slot fact. Empty is the ordinary case.
+  , output :: String
+  , dest :: String
+  -- | Whether a write would go through **as asked**: the manifest is good and
+  -- | either nothing collides or replacing was chosen.
+  , wouldWrite :: Boolean
+  , mounted :: Boolean
+  -- | Why the card could not be read, when it could not. A card that is
+  -- | mounted and unreadable must never be shown as an empty one: an empty
+  -- | one says every letter is free.
+  , unreadable :: String
+  , problems :: Array String
+  , notes :: Array String
+  -- | The slots that are occupied and wanted. **Non-empty means a write
+  -- | without replacing refuses ALL of it** — not those slots only.
+  , collisions :: Array String
+  -- | The bank letters nothing is using, as one string.
+  , free :: String
+  , slots :: Array PreviewSlot
+  }
+
+-- | Ask what writing to this mounted card would do. Nothing is written.
+foreign import previewCard :: String -> Effect (Promise Preview)
 
 -- | **What one sample is and what it meant**, written beside the audio.
 -- |
