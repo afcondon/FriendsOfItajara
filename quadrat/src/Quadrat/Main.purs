@@ -496,6 +496,10 @@ data Action
   -- | centre rather than one field, so the root and the intent are written in
   -- | one act and a half-applied pair cannot exist.
   | DeclareCentre String Http.Centre
+  -- | **Say how a set's chords were played** — as blocks, or arpeggiated.
+  -- | Changes which of the two readings on disk is believed, and so changes
+  -- | the set's voicings, its export and its glyph.
+  | DeclareArp String Boolean
   -- | **Put a transferable line on the clipboard.** The text is already on
   -- | screen and selectable; this only saves the drag. Carries the string
   -- | rather than a pointer to what to render, so the button and the block
@@ -1108,6 +1112,13 @@ handleAction = case _ of
       -- old centre would leave every later transposition wrong with nothing
       -- on screen to explain it.
       Left e -> H.modify_ \st -> st { log = st.log <> [ "could not set the key centre: " <> show e ] }
+      Right v | not v.ok -> H.modify_ \st -> st { log = st.log <> [ v.output ] }
+      Right _ -> handleAction RefreshSets
+
+  DeclareArp nm b -> do
+    r <- H.liftAff (attempt (toAffE (Http.setArpeggiated nm b)))
+    case r of
+      Left e -> H.modify_ \st -> st { log = st.log <> [ "could not say how it was played: " <> show e ] }
       Right v | not v.ok -> H.modify_ \st -> st { log = st.log <> [ v.output ] }
       Right _ -> handleAction RefreshSets
 
@@ -2338,6 +2349,18 @@ centreSays c
               "major" -> ", meant major"
               "minor" -> ", meant minor"
               _ -> "; how far out a chord is needs the intent too")
+
+-- | **What the manner is doing to the reading**, in the set's own numbers.
+-- |
+-- | Said with the count because the count is the whole point: the difference
+-- | between nine voicings and sixty-four fragments is not a preference, and a
+-- | sentence without it would read as one.
+arpSays :: forall r. { arpeggiated :: Boolean, voicings :: Array (Array (Array Int)) | r } -> String
+arpSays r =
+  let n = Array.length (Array.filter (not <<< Array.null) (join r.voicings))
+  in if r.arpeggiated
+     then "read as " <> show n <> " chords, one per region \x2014 an arpeggio's notes are one voicing"
+     else "read as " <> show n <> " chords, as they were struck"
 
 -- | The centre as one word for a comment line, or empty when undeclared.
 -- | `"D minor"` when both are known, `"D"` when only the root is — never
@@ -5173,7 +5196,7 @@ render st =
       | Array.null (Array.filter (not <<< Array.null) (join r.voicings)) = HH.text ""
       | otherwise =
           HH.div [ HP.class_ (HH.ClassName "q-centre") ]
-            [ HH.div [ HP.class_ (HH.ClassName "q-factlab") ] [ HH.text "played in" ]
+            [ HH.div [ HP.class_ (HH.ClassName "q-factlab") ] [ HH.text "played" ]
             , HH.div [ HP.class_ (HH.ClassName "q-centrepick") ]
                 [ HH.select
                     [ HP.class_ (HH.ClassName "q-sel")
@@ -5208,9 +5231,26 @@ render st =
                         , { value: "minor", label: "meant minor" }
                         ]
                     )
+                -- | **How, not what.** The other two say where the material
+                -- | sits; this one says how to READ it, and it changes the
+                -- | staves above as soon as it is answered.
+                , HH.select
+                    [ HP.class_ (HH.ClassName "q-sel")
+                    , HP.title "an arpeggiated region is one chord, not one chord per note"
+                    , HE.onValueChange \v -> DeclareArp r.name (v == "arp")
+                    ]
+                    ( map
+                        (\o -> HH.option
+                          [ HP.value o.value
+                          , HP.selected (r.arpeggiated == (o.value == "arp")) ]
+                          [ HH.text o.label ])
+                        [ { value: "block", label: "as blocks" }
+                        , { value: "arp", label: "as arpeggios" }
+                        ]
+                    )
                 ]
             , HH.div [ HP.class_ (HH.ClassName "q-set-what") ]
-                [ HH.text (centreSays r.centre) ]
+                [ HH.text (centreSays r.centre <> " \x00b7 " <> arpSays r) ]
             ]
 
     -- | **A rendering of this set in somebody else's notation**, with the

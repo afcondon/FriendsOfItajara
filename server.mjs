@@ -411,21 +411,43 @@ function checkCentre(raw) {
 // Write the centre onto a stored set, in place. Only this field is touched:
 // a declaration made months after the recording must not rewrite anything the
 // recording measured.
-function setCentre(body) {
-  const name = safe(String(body?.name ?? ""));
-  const dir = path.join(SAMPLES, name);
-  const f = path.join(dir, SET_JSON);
-  if (!name || !fs.existsSync(f)) return { ok: false, output: `no set called ${name}` };
+// Open a stored set, let `amend` change the fields it owns, write it back.
+// Only what `amend` touches is touched: a declaration made months after the
+// recording must not rewrite anything the recording measured.
+function amendSet(name, amend) {
+  const nm = safe(String(name ?? ""));
+  const f = path.join(SAMPLES, nm, SET_JSON);
+  if (!nm || !fs.existsSync(f)) return { ok: false, output: `no set called ${nm}` };
   try {
-    const checked = checkCentre(body?.centre);
-    if (checked.bad) return { ok: false, output: checked.bad };
     const set = JSON.parse(fs.readFileSync(f, "utf8"));
-    set.centre = checked.centre;
+    const refused = amend(set);
+    if (refused) return { ok: false, output: refused };
     fs.writeFileSync(f, JSON.stringify(set, null, 2) + "\n");
-    return { ok: true, centre: set.centre };
+    return { ok: true, centre: readCentre(set.centre), arpeggiated: !!set.arpeggiated };
   } catch (e) {
-    return { ok: false, output: `could not write the centre: ${e.message}` };
+    return { ok: false, output: `could not write to ${nm}: ${e.message}` };
   }
+}
+
+function setCentre(body) {
+  return amendSet(body?.name, (set) => {
+    const checked = checkCentre(body?.centre);
+    if (checked.bad) return checked.bad;
+    set.centre = checked.centre;
+    return null;
+  });
+}
+
+// **How the chords were played** — as blocks, or arpeggiated. See `voicingsOf`:
+// it decides which of the two readings already on disk is the true one.
+function setArpeggiated(body) {
+  return amendSet(body?.name, (set) => {
+    if (typeof body?.arpeggiated !== "boolean") {
+      return `how a set was played is true or false, not ${JSON.stringify(body?.arpeggiated)}`;
+    }
+    set.arpeggiated = body.arpeggiated;
+    return null;
+  });
 }
 
 // **The chords a set was played as**, one entry per sample and in file order.
@@ -439,11 +461,31 @@ function setCentre(body) {
 // and two copies of a rule that decides an IDENTITY is two pictures for one
 // chord as soon as they drift.
 function voicingsOf(set) {
+  // **An arpeggio is one chord, and only the player can say so.**
+  //
+  // `struck` groups notes that arrive within 50 ms — right for a block chord,
+  // where a hand lands its notes 3 to 10 ms apart, and wrong for an arpeggio,
+  // where every note is its own strike. Measured on a real take (0913-211849):
+  // nine voicings of five and six notes came out as SIXTY-FOUR "chords" of one
+  // and two.
+  //
+  // Both readings are already on disk and neither is lost: `notes` is the
+  // region's union, which for an arpeggio IS the voicing. So this is only a
+  // question of which to believe, and it stays answerable after the fact.
+  //
+  // Declared rather than inferred, and the take above is why. "Every strike is
+  // a single note" looks like a reliable tell for an arpeggio and would have
+  // fired on NONE of those nine samples, because Progressions strikes the bass
+  // together with the first arpeggio note — so every region opens with a pair.
+  // It would also merge a melodic line, and merge two arpeggiated chords that
+  // landed in one region, which is the very case `struck` exists to keep apart.
+  const arp = !!set?.arpeggiated;
   return (set?.samples ?? []).map((s) => {
+    const flat = Array.isArray(s.notes) ? s.notes : [];
+    if (arp) return flat.length ? [flat] : [];
     const struck = (Array.isArray(s.struck) ? s.struck : [])
       .filter((c) => Array.isArray(c) && c.length);
     if (struck.length) return struck;
-    const flat = Array.isArray(s.notes) ? s.notes : [];
     return flat.length ? [flat] : [];
   });
 }
@@ -673,6 +715,8 @@ function storedSets() {
       // `readCentre` — on the listing because it is what makes a set
       // transposable, and that is a property you want to see before opening it.
       centre: readCentre(set?.centre),
+      // Declared: an arpeggiated take is one chord per region. See `voicingsOf`.
+      arpeggiated: !!set?.arpeggiated,
       // What it was listening to. Empty for every set written before this was
       // recorded, which is an honest "not known" rather than "nothing".
       notesFrom: set?.listened?.notesFrom ?? "",
@@ -1874,6 +1918,9 @@ const server = http.createServer(async (req, res) => {
     // Declare (or clear) a set's key centre. See `setCentre`.
     if (url.pathname === "/api/sets/centre" && req.method === "POST") {
       return json(res, 200, setCentre(await readBody(req)));
+    }
+    if (url.pathname === "/api/sets/arpeggiated" && req.method === "POST") {
+      return json(res, 200, setArpeggiated(await readBody(req)));
     }
     if (url.pathname === "/api/sets" && req.method === "GET") {
       return json(res, 200, { ok: true, sets: storedSets() });

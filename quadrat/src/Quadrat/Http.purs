@@ -21,6 +21,7 @@ module Quadrat.Http
   , SetRow
   , Centre
   , setCentre
+  , setArpeggiated
   , storedSets
   , SourceName
   , sourceLabels
@@ -386,6 +387,12 @@ type SetRow =
   -- | for reading how far out a chord is, since against an intended minor a
   -- | major I is further out than a minor chord of the same complexity.
   , centre :: Centre
+  -- | **Whether the chords were arpeggiated**, declared by whoever played
+  -- | them. An arpeggiated region is ONE chord: its notes arrive one at a
+  -- | time, so the 50 ms strike grouping reads each as its own chord — nine
+  -- | voicings came back as sixty-four on a real take. The flat union is the
+  -- | voicing in that case, and it is already on disk either way.
+  , arpeggiated :: Boolean
   -- | **Which MIDI port and channel the notes were taken from.** Empty and
   -- | zero for every set written before this was recorded, which is an honest
   -- | "not known" and not "nothing" — and zero as a CHANNEL means "all of
@@ -413,6 +420,11 @@ foreign import nameSource :: String -> String -> Effect (Promise Wrote)
 -- | declaration made months later must not rewrite what the recording
 -- | measured.
 foreign import setCentre :: String -> Centre -> Effect (Promise Wrote)
+
+-- | Say whether a set's chords were arpeggiated. See `SetRow.arpeggiated` —
+-- | it changes which of the two readings already on disk is believed, and so
+-- | changes what the set IS: its voicings, its export, and its glyph.
+foreign import setArpeggiated :: String -> Boolean -> Effect (Promise Wrote)
 
 foreign import storedSets :: Effect (Promise { ok :: Boolean, sets :: Array SetRow })
 

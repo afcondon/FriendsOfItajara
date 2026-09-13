@@ -180,6 +180,10 @@ export const storedSets = () =>
         root: Number(s.centre?.root ?? -1),
         tonality: String(s.centre?.tonality ?? ""),
       },
+      // Declared: an arpeggiated take is one chord per region. False from an
+      // older server, which is also the right default — block chords are what
+      // the strike grouping was built for.
+      arpeggiated: !!s.arpeggiated,
       notesFrom: String(s.notesFrom ?? ""),
       notesChan: Number(s.notesChan ?? 0),
     })),
@@ -233,6 +237,9 @@ export const deleteSets = (names) => () => post("/api/sets/delete", { names });
 
 export const setCentre = (name) => (centre) => () =>
   post("/api/sets/centre", { name, centre });
+
+export const setArpeggiated = (name) => (arpeggiated) => () =>
+  post("/api/sets/arpeggiated", { name, arpeggiated });
 
 export const loadSpec = (name) => () =>
   fetch("/api/sets/" + encodeURIComponent(name))
