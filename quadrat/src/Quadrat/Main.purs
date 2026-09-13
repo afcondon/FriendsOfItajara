@@ -77,6 +77,7 @@ import Data.Set as Set
 import Control.Promise (toAffE)
 import Quadrat.Audio as Audio
 import Quadrat.Http as Http
+import Quadrat.Stave as Stave
 import Quadrat.Wave as Wave
 import Quadrat.Kind (Close(..), Fold(..), Kind)
 import Quadrat.Kind as Kind
@@ -323,6 +324,10 @@ type State =
   , openSet :: Maybe String
   -- | Its detail, when it arrives. `Nothing` while loading.
   , openSetInfo :: Maybe Http.StoredSet
+  -- | **Which sample of the open set is being read**, by index. The voicing
+  -- | is drawn for this one: a chord set is twelve different chords and the
+  -- | question is always which.
+  , peekSample :: Int
   -- | **Stacked or sliced**, for a set placed from the Library.
   -- |
   -- | A placement decision, not a property of the cut: the audio is the same
@@ -433,6 +438,8 @@ data Action
   -- | The card, read. Carried as its own action because the read is a
   -- | subprocess and the modal opens before it answers.
   | Previewed Http.Preview
+  -- | Read this sample of the open set: draw its voicing, and sound it.
+  | PeekSample Int
   -- | Lay a placed set out as one sliced file, or as a stack of layers.
   | SetPlaceSliced Boolean
   -- | Arrange the ticked set into this many layers. See `Http.arrangementsOf`.
@@ -499,7 +506,7 @@ component = H.mkComponent
       , page: Bench, fill: Swept, pivot: Nothing
       , levels: [], modal: Nothing, kept: false, confirmKeep: false
       , picked: Set.empty, confirmDrop: false, confirmWrite: Nothing, preview: Nothing
-      , cardPeek: Nothing, openSet: Nothing, openSetInfo: Nothing
+      , cardPeek: Nothing, openSet: Nothing, openSetInfo: Nothing, peekSample: 0
       , placeSliced: false, placeLayers: 0, placeAppend: false, srcNames: []
       , heard: [], midiIn: [], midiOk: true }
   , render
@@ -983,7 +990,7 @@ handleAction = case _ of
     Audio.playEach [ "/api/set-audio?set=" <> nm <> "&i=" <> show i ] 1.0
 
   PeekSet v -> do
-    H.modify_ _ { openSet = v, openSetInfo = Nothing }
+    H.modify_ _ { openSet = v, openSetInfo = Nothing, peekSample = 0 }
     case v of
       Nothing -> pure unit
       Just nm -> do
@@ -1073,6 +1080,13 @@ handleAction = case _ of
           Right pv -> handleAction (Previewed pv)
 
   Previewed pv -> H.modify_ _ { preview = Just pv }
+
+  PeekSample i -> do
+    st <- H.get
+    H.modify_ _ { peekSample = i }
+    case st.openSet of
+      Nothing -> pure unit
+      Just nm -> handleAction (HearOne nm i)
 
   SetPlaceSliced b -> H.modify_ _ { placeSliced = b }
 
@@ -4943,7 +4957,8 @@ render st =
                       [ HH.text "done" ]
                   ]
               , HH.div [ HP.class_ (HH.ClassName "q-setpage") ]
-                  [ HH.div [ HP.class_ (HH.ClassName "q-setpic") ] [ samplePic r ]
+                  [ HH.div [ HP.class_ (HH.ClassName "q-setpic") ]
+                      [ samplePicPeek r, voicingPanel r ]
                   , HH.dl [ HP.class_ (HH.ClassName "q-facts") ]
                       ( fact "made" (String.take 10 r.made)
                       <> fact "from take" r.take
@@ -4952,7 +4967,7 @@ render st =
                             <> (if Array.null r.extent then ""
                                 else " on " <> joinWith " × " (map show r.extent)))
                       <> fact "lengths" (lengthsSays r)
-                      <> fact "notes from" (heardSays r)
+                      <> fact "notes from" (listenedSays r)
                       <> fact "moved" (joinWith ", " r.moved)
                       <> fact "encoding" r.encoding
                       <> fact "channels" (if r.stereo then "stereo — takes a voice pair"
@@ -4975,6 +4990,67 @@ render st =
               ]
           ]
     where
+    -- | The same picture, but its boxes read a sample rather than opening the
+    -- | page you are already on.
+    samplePicPeek r =
+      let
+        n = r.count
+        cols = case r.extent of
+          [ _, inner ] | inner > 0 -> inner
+          _ -> min 16 (max 1 n)
+        rows = max 1 ((n + cols - 1) / cols)
+      in
+        HH.div [ HP.class_ (HH.ClassName "q-spic") ]
+          (map
+            (\yy -> HH.div [ HP.class_ (HH.ClassName ("q-srow" <> if yy `mod` 2 == 1 then " is-odd" else "")) ]
+              (map
+                (\xx ->
+                  let i = yy * cols + xx in
+                  HH.div
+                    [ HP.class_ (HH.ClassName ("q-scell is-" <> sampleClass r i
+                        <> (if secsOf r i <= 0.0 then " is-unmeasured" else "")
+                        <> (if overScale (secsOf r i) then " is-over" else "")
+                        <> (if i == st.peekSample then " is-reading" else "")))
+                    , HP.attr (HH.AttrName "style")
+                        (widthOf (secsOf r i)
+                          <> fromMaybe "" (map (\s -> "; " <> s) (pitchTint (noteOf r i))))
+                    , HP.title (show (i + 1))
+                    , HE.onMouseEnter \_ -> PeekSample i
+                    ]
+                    [])
+                (Array.range 0 (min cols (n - yy * cols) - 1))))
+            (Array.range 0 (rows - 1)))
+
+    -- | **The voicing of the sample being read.**
+    -- |
+    -- | A count of notes is the one reading of a chord that carries no music:
+    -- | five could be a cluster or an open voicing two octaves wide, and
+    -- | which of those decides whether the sample is any use. So it is drawn
+    -- | on a stave, where the spacing between the noteheads IS the voicing.
+    -- |
+    -- | Two chords struck into one region stay two staves. Flattened they
+    -- | would be an eleven-note voicing, which is a different musical object
+    -- | and not the one that was played.
+    voicingPanel r = case st.openSetInfo of
+      Nothing -> HH.text ""
+      Just i -> case Array.index i.struck st.peekSample of
+        Just chords | not (Array.null (Array.filter (not <<< Array.null) chords)) ->
+          staveRow r (Array.filter (not <<< Array.null) chords)
+        -- A set stored before strikes were separated has the flat list only,
+        -- which is read as one chord — the same fallback `strikesIn` leaves.
+        _ -> case Array.index i.notes st.peekSample of
+          Just ns | not (Array.null ns) -> staveRow r [ ns ]
+          _ -> HH.text ""
+
+    staveRow r chords =
+      HH.div [ HP.class_ (HH.ClassName "q-voicing") ]
+        ( [ HH.div [ HP.class_ (HH.ClassName "q-factlab") ]
+              [ HH.text ("sample " <> show (st.peekSample + 1) <> " of " <> show r.count) ]
+          ]
+            <> [ HH.div [ HP.class_ (HH.ClassName "q-staves") ]
+                   (map Stave.grand chords) ]
+        )
+
     fact k v = if v == "" then [] else
       [ HH.dt_ [ HH.text k ], HH.dd_ [ HH.text v ] ]
     -- | **The lengths, in seconds, for sanity.** The shortest and the longest
@@ -4987,7 +5063,7 @@ render st =
     -- | "All channels" is worth naming rather than leaving blank: it is the
     -- | setting under which a sequencer sharing the port writes its own notes
     -- | into your chord, and it is the default.
-    heardSays r
+    listenedSays r
       | r.notesFrom == "" = if r.count == 0 then "" else "not recorded"
       | r.notesChan == 0 = r.notesFrom <> " \x00b7 every channel"
       | otherwise = r.notesFrom <> " \x00b7 channel " <> show r.notesChan

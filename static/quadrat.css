@@ -1312,3 +1312,19 @@ body {
   clip-path: polygon(0 0, calc(100% - 3px) 0, 100% 50%, calc(100% - 3px) 100%, 0 100%);
   opacity: .75;
 }
+
+/* ── A voicing, on a grand staff ─────────────────────────────────────────
+   A count of notes is the one reading of a chord that carries no music:
+   five could be a cluster or an open voicing two octaves wide, and which of
+   those decides whether the sample is any use. The spacing between the
+   noteheads IS the voicing, so it is drawn where a musician reads it. */
+.q-voicing { margin-top: 14px; }
+.q-staves { display: flex; align-items: flex-start; gap: 10px; flex-wrap: wrap; }
+.q-stave { overflow: visible; }
+.q-staveline { stroke: var(--rule); stroke-width: 1; }
+.q-staveledger { stroke: var(--muted); stroke-width: 1; }
+.q-stavehead { fill: var(--ink); }
+.q-stavesharp { fill: var(--ink); font-size: 8px; font-family: serif; }
+/* The sample being read. An outline, not a fill: the cell's own colour is
+   its pitch and must not be taken away to say "this one". */
+.q-scell.is-reading { box-shadow: 0 0 0 2px var(--ink); position: relative; z-index: 1; }
