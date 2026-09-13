@@ -1001,10 +1001,17 @@ function placeStoredSet(body) {
   return {
     ok: true,
     output: grid
+      // **The division it SETTLED on, not the one it proposed.** `placeOnCard`
+      // already returns that for exactly this reason — a set smaller than its
+      // bank's division adopts the bank's — and this said the proposal
+      // anyway: placing a 7-sample set into a bank cut into 12 reported "one
+      // file of 8 slices" while writing 12. The reply is the only account
+      // anyone gets of what happened, so it has to be an account of what
+      // happened.
       ? `${set} on voice ${Math.min(4, Math.max(1, Number(body.voice) || 1))} — `
           + (grid.layers.length === 1
-              ? `one file of ${grid.slots} slices`
-              : `${grid.layers.length} layers of ${grid.slots} slices`)
+              ? `one file of ${placed.slots || grid.slots} slices`
+              : `${grid.layers.length} layers of ${placed.slots || grid.slots} slices`)
           + (grid.regrouped ? ", regrouped — the layers carry positions, not values" : "")
       : askSliced
         ? `${set} on voice ${Math.min(4, Math.max(1, Number(body.voice) || 1))} — `
