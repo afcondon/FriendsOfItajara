@@ -29,6 +29,8 @@
 -- | pitch class a function rather than a judgement.
 module Quadrat.Stave
   ( grand
+  , grandIn
+  , spanOf
   , diatonic
   ) where
 
@@ -85,10 +87,31 @@ topD = fromMaybe 45 (Array.last trebleLines)
 botD :: Int
 botD = fromMaybe 25 (Array.head bassLines)
 
--- | **A voicing.** Empty draws nothing at all rather than an empty staff: a
--- | sample with no notes recorded is not a sample with no notes.
+-- | **The vertical extent a set of voicings needs**, so that a row of them
+-- | can share one.
+-- |
+-- | Drawn per-voicing, each stave sizes itself to its own notes — and then a
+-- | row of them does not line up, so a note that LOOKS higher than its
+-- | neighbour need not be. For a progression that is the whole comparison
+-- | being offered, so the range is computed once over everything and handed
+-- | to each.
+spanOf :: Array Int -> { lo :: Int, hi :: Int }
+spanOf notes =
+  let ds = Array.sort (map (_.d <<< diatonic) notes)
+  in { lo: min botD (fromMaybe botD (Array.head ds))
+     , hi: max topD (fromMaybe topD (Array.last ds))
+     }
+
+-- | **A voicing**, on its own extent. Empty draws nothing at all rather than
+-- | an empty staff: a sample with no notes recorded is not a sample with no
+-- | notes.
 grand :: forall w i. Array Int -> HH.HTML w i
-grand notes
+grand notes = grandIn (spanOf notes) notes
+
+-- | A voicing drawn on an extent chosen by the caller, so several can share
+-- | one and be compared.
+grandIn :: forall w i. { lo :: Int, hi :: Int } -> Array Int -> HH.HTML w i
+grandIn ext notes
   | Array.null notes = HH.text ""
   | otherwise =
       el "svg"
@@ -100,11 +123,11 @@ grand notes
         (staffLines <> ledgers <> heads)
   where
   ds = map diatonic (Array.sort notes)
-  -- How far outside the two staves this voicing reaches, so the picture grows
-  -- to hold it rather than clipping it. A chord that runs off the top of the
-  -- page is the one you most want to see the top of.
-  hiD = max topD (fromMaybe topD (Array.last (Array.sort (map _.d ds))))
-  loD = min botD (fromMaybe botD (Array.head (Array.sort (map _.d ds))))
+  -- The extent is given rather than derived, so a row of these lines up. It
+  -- is still widened here if a voicing somehow exceeds it: a chord that runs
+  -- off the top of the page is the one you most want to see the top of.
+  hiD = max ext.hi (fromMaybe ext.hi (Array.last (Array.sort (map _.d ds))))
+  loD = min ext.lo (fromMaybe ext.lo (Array.head (Array.sort (map _.d ds))))
   pad = 5.0
   height = Int.toNumber (hiD - loD) * step + pad * 2.0
   -- Room for an accidental, a notehead, and the second-offset a cluster needs.

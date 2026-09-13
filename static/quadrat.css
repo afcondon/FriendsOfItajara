@@ -1319,7 +1319,23 @@ body {
    those decides whether the sample is any use. The spacing between the
    noteheads IS the voicing, so it is drawn where a musician reads it. */
 .q-voicing { margin-top: 14px; }
-.q-staves { display: flex; align-items: flex-start; gap: 10px; flex-wrap: wrap; }
+/* **The whole set at once.** A chord set is not seven separate chords; it is
+   what you played in the order you played it, and the relation between one
+   voicing and the next is what you come back to a set for. Baseline-aligned
+   so the staves line up across the row — the staff lines are at the same
+   pitch in every cell, so a note higher in one really is a higher note. */
+.q-staves { display: flex; align-items: flex-end; gap: 2px; flex-wrap: wrap; }
+.q-stavecell {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  padding: 4px 2px 2px; border-radius: 3px; border: 1px solid transparent;
+}
+.q-stavecell:hover { background: #f4f6f9; }
+.q-stavecell.is-reading { border-color: var(--ink); }
+.q-staverow { display: flex; align-items: flex-end; gap: 1px; }
+.q-staveno {
+  font-size: 10px; color: var(--muted); font-variant-numeric: tabular-nums;
+}
+.q-stavecell.is-reading .q-staveno { color: var(--ink); }
 .q-stave { overflow: visible; }
 .q-staveline { stroke: var(--rule); stroke-width: 1; }
 .q-staveledger { stroke: var(--muted); stroke-width: 1; }

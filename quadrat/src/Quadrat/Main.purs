@@ -5021,35 +5021,68 @@ render st =
                 (Array.range 0 (min cols (n - yy * cols) - 1))))
             (Array.range 0 (rows - 1)))
 
-    -- | **The voicing of the sample being read.**
+    -- | **The whole set at once, as a progression.**
     -- |
     -- | A count of notes is the one reading of a chord that carries no music:
     -- | five could be a cluster or an open voicing two octaves wide, and
-    -- | which of those decides whether the sample is any use. So it is drawn
-    -- | on a stave, where the spacing between the noteheads IS the voicing.
+    -- | which of those decides whether the sample is any use. So they are
+    -- | drawn on staves, where the spacing between the noteheads IS the
+    -- | voicing.
     -- |
-    -- | Two chords struck into one region stay two staves. Flattened they
-    -- | would be an eleven-note voicing, which is a different musical object
-    -- | and not the one that was played.
+    -- | All of them rather than one on hover, because a chord set is not
+    -- | seven separate chords — it is what you played, in the order you
+    -- | played it, and the relation between one voicing and the next is the
+    -- | thing you go back to a set for. Hovering still sounds one and marks
+    -- | it in the picture above; it no longer decides what you can see.
     voicingPanel r = case st.openSetInfo of
       Nothing -> HH.text ""
-      Just i -> case Array.index i.struck st.peekSample of
-        Just chords | not (Array.null (Array.filter (not <<< Array.null) chords)) ->
-          staveRow r (Array.filter (not <<< Array.null) chords)
-        -- A set stored before strikes were separated has the flat list only,
-        -- which is read as one chord — the same fallback `strikesIn` leaves.
-        _ -> case Array.index i.notes st.peekSample of
-          Just ns | not (Array.null ns) -> staveRow r [ ns ]
-          _ -> HH.text ""
+      Just i ->
+        let
+          voices = Array.mapWithIndex (\k _ -> chordsAt i k) (Array.range 0 (r.count - 1))
+          -- One extent for the whole set, so the staff lines sit at the same
+          -- pitch in every cell. Without it each stave sizes itself and a
+          -- note that LOOKS higher than its neighbour need not be — which is
+          -- the one comparison a progression is drawn for.
+          ext = Stave.spanOf (join (join voices))
+        in
+          if Array.null (Array.filter (not <<< Array.null) voices) then HH.text "" else
+          HH.div [ HP.class_ (HH.ClassName "q-voicing") ]
+            [ HH.div [ HP.class_ (HH.ClassName "q-factlab") ]
+                [ HH.text (show (Array.length (Array.filter (not <<< Array.null) voices))
+                    <> " voicings, in the order they were played") ]
+            , HH.div [ HP.class_ (HH.ClassName "q-staves") ]
+                (Array.mapWithIndex (staveCell r ext) voices)
+            ]
 
-    staveRow r chords =
-      HH.div [ HP.class_ (HH.ClassName "q-voicing") ]
-        ( [ HH.div [ HP.class_ (HH.ClassName "q-factlab") ]
-              [ HH.text ("sample " <> show (st.peekSample + 1) <> " of " <> show r.count) ]
-          ]
-            <> [ HH.div [ HP.class_ (HH.ClassName "q-staves") ]
-                   (map Stave.grand chords) ]
-        )
+    -- | One sample's chords. `struck` keeps two chords played into one region
+    -- | as two, which is why `strikesIn` separated them: flattened, that pair
+    -- | is an eleven-note voicing, a different musical object from the two
+    -- | that were played. A set stored before strikes were separated has the
+    -- | flat list only and is read as one chord.
+    chordsAt i k =
+      let live = Array.filter (not <<< Array.null) in
+      case Array.index i.struck k of
+        Just chords | not (Array.null (live chords)) -> live chords
+        _ -> case Array.index i.notes k of
+          Just ns | not (Array.null ns) -> [ ns ]
+          _ -> []
+
+    staveCell r ext k chords
+      | Array.null chords = HH.text ""
+      | otherwise =
+          HH.div
+            [ HP.class_ (HH.ClassName ("q-stavecell"
+                <> if k == st.peekSample then " is-reading" else ""))
+            , HP.title ("sample " <> show (k + 1) <> " of " <> show r.count
+                <> (if Array.length chords > 1
+                      then " \x2014 " <> show (Array.length chords) <> " chords struck into one"
+                      else ""))
+            , HE.onMouseEnter \_ -> PeekSample k
+            ]
+            [ HH.div [ HP.class_ (HH.ClassName "q-staverow") ]
+                (map (Stave.grandIn ext) chords)
+            , HH.div [ HP.class_ (HH.ClassName "q-staveno") ] [ HH.text (show (k + 1)) ]
+            ]
 
     fact k v = if v == "" then [] else
       [ HH.dt_ [ HH.text k ], HH.dd_ [ HH.text v ] ]
