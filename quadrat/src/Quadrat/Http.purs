@@ -34,6 +34,8 @@ module Quadrat.Http
   , placeSet
   , Arrangement
   , arrangementsOf
+  , voiceRoom
+  , splitOver
   , slicerOffers
   , takePeaks
   , TakePeaks
@@ -47,7 +49,7 @@ module Quadrat.Http
 import Prelude
 
 import Data.Array as Array
-import Data.Maybe (Maybe(..))
+import Data.Maybe (Maybe(..), fromMaybe)
 
 import Control.Promise (Promise)
 import Data.Nullable (Nullable)
@@ -537,7 +539,8 @@ foreign import deleteSets :: Array String -> Effect (Promise Wrote)
 -- | to regroup and the only question is whether the files are joined.
 foreign import placeSet
   :: { set :: String, bank :: String, letter :: String, kit :: String, voice :: Int
-     , append :: Boolean, sliced :: Boolean, layerMode :: String, layers :: Int }
+     , append :: Boolean, sliced :: Boolean, layerMode :: String, layers :: Int
+     , voices :: Int }
   -> Effect (Promise Wrote)
 
 -- | **How a set of `n` samples can be arranged for the module**, and nothing
@@ -556,32 +559,78 @@ foreign import placeSet
 -- | Only the arrangements that waste nothing are offered. A layer of six in a
 -- | division of eight works — the last two are silent by construction — but
 -- | it is a thing to reach for deliberately, not one to be offered six of.
-type Arrangement = { layers :: Int, slices :: Int }
+-- | `voices` is how many of the module's four this occupies; `layers` is the
+-- | largest number of alternatives on any one of them, and `slices` the
+-- | division inside each (0 for none). The exact per-voice split is
+-- | `splitOver` — as even as it goes, and the evenness is musical rather than
+-- | tidy: in RANDOM layer mode each voice picks uniformly among its OWN
+-- | layers, so twelve-and-six would make each of the six twice as likely to
+-- | sound as each of the twelve.
+type Arrangement = { voices :: Int, layers :: Int, slices :: Int }
+
+-- | **How many voices there are to spread over.**
+-- |
+-- | A stereo sample plays its right channel on the next voice, so it consumes
+-- | a PAIR — which leaves two places to begin, not four. See `voicesFor` in
+-- | the page: the same fact, from the other side.
+voiceRoom :: Boolean -> Int
+voiceRoom stereo = if stereo then 2 else 4
+
+-- | `n` samples over `v` voices, as even as it goes: the remainder is spread
+-- | one each across the first voices rather than piled on the last.
+splitOver :: Int -> Int -> Array Int
+splitOver v n
+  | v <= 0 = []
+  | otherwise =
+      let base = n / v
+          extra = n `mod` v
+      in Array.mapWithIndex (\i b -> if i < extra then b + 1 else b) (Array.replicate v base)
 
 -- | The divisions `SETTINGS > SLICER` offers. Measured, not documented.
 slicerOffers :: Array Int
 slicerOffers = [ 8, 12, 16, 24, 32, 48, 64, 128 ]
 
-arrangementsOf :: Int -> Array Arrangement
-arrangementsOf n
-  | n <= 0 = []
+-- | **Every arrangement of `n` samples that wastes nothing**, across as many
+-- | voices as the material allows.
+-- |
+-- | The one-voice answers are as they always were: grids whose rows land on a
+-- | division the module offers, plus plain layers when the whole set fits
+-- | under the twelve-layer ceiling.
+-- |
+-- | What is new is the voice axis, and it is what makes a set of more than
+-- | twelve placeable at all. Eighteen stereo chords have NO one-voice answer —
+-- | eighteen is over the ceiling, and 18/1, /2, /3, /6 and /9 are none of them
+-- | divisions the module offers — so before this the set could not go on a
+-- | card by any route. Across two voices it is nine and nine.
+-- |
+-- | Multi-voice arrangements are plain layers only. A grid already fits one
+-- | voice by construction, and spreading one over several would mean two
+-- | pictures of the same set that nobody could hold in mind at once.
+arrangementsOf :: { count :: Int, stereo :: Boolean } -> Array Arrangement
+arrangementsOf o
+  | o.count <= 0 = []
   | otherwise =
       let
-        -- Every even grouping within the twelve-layer ceiling whose rows land
-        -- exactly on a division the module offers.
+        n = o.count
         grids = Array.mapMaybe
           (\l ->
             if n `mod` l /= 0 then Nothing
             else
               let per = n / l
-              in if Array.elem per slicerOffers then Just { layers: l, slices: per }
+              in if Array.elem per slicerOffers then Just { voices: 1, layers: l, slices: per }
                  else Nothing)
           (Array.range 1 12)
-        -- And the one arrangement that is not a grid: every sample its own
-        -- alternative, no positions at all. Only within the ceiling.
-        plain = if n <= 12 then [ { layers: n, slices: 0 } ] else []
+        -- Every sample its own alternative, over as few voices as will hold
+        -- it — one first, so the familiar answer stays the first answer.
+        stacks = Array.mapMaybe
+          (\v ->
+            let per = splitOver v n
+                widest = fromMaybe 0 (Array.head per)
+            in if widest > 12 || Array.any (_ < 1) per then Nothing
+               else Just { voices: v, layers: widest, slices: 0 })
+          (Array.range 1 (voiceRoom o.stereo))
       in
-        grids <> plain
+        grids <> stacks
 
 -- | One stored set's spec, raw. Polymorphic for the same reason `addToCard`
 -- | is: this module is the wire. `Quadrat.Sweep.adopt` is what makes a plan

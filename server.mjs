@@ -1061,6 +1061,52 @@ function placeOnCard({ set, bank: bankIn, letter: letterIn, kit: kitIn, voice: v
 // A grouping that is not the sweep's own loses the layer NAMES, and says so:
 // a layer stands for a value of the outer parameter, and four rows regrouped
 // into two stand for nothing anybody can name.
+
+// **`n` samples over `v` voices, as even as it goes.** The remainder is spread
+// one each across the first voices rather than piled on the last, and the
+// evenness is musical rather than tidy: in RANDOM layer mode each voice picks
+// uniformly among its OWN layers, so twelve-and-six would make each of the six
+// twice as likely to sound as each of the twelve.
+function splitOver(v, n) {
+  const base = Math.floor(n / v), extra = n % v;
+  return Array.from({ length: v }, (_, i) => base + (i < extra ? 1 : 0));
+}
+
+// **Which voices a set can begin on.** A stereo sample plays its right channel
+// on the next voice, so it consumes a PAIR — two places to start, not four.
+function voicesFrom(first, count, stereo) {
+  const step = stereo ? 2 : 1;
+  const out = [];
+  for (let i = 0; i < count; i++) out.push(first + i * step);
+  return out;
+}
+
+// **A stack of plain layers over one run of a set's samples**, shaped like a
+// grid's layers so `placeOnCard` needs to know nothing new: one layer per
+// sample, each naming its own file.
+//
+// This is what makes a set of more than twelve placeable at all. Eighteen
+// stereo chords have no single-voice answer — over the ceiling, and no
+// division the module offers divides them — so before this they could not go
+// on a card by any route.
+function stackOf(set, dir, samples, from, howMany) {
+  const run = samples.slice(from, from + howMany);
+  const layers = [];
+  for (let i = 0; i < run.length; i++) {
+    const c = run[i];
+    const secs = wavSecs(path.join(dir, c.file));
+    if (secs == null) return null;
+    layers.push({
+      set,
+      files: [ c.file ],
+      name: `l${from + i + 1}`,
+      slotSecs: Math.ceil(secs * 100) / 100,
+      velocity: Math.round(((i + 1) / run.length) * 127),
+    });
+  }
+  return layers.length ? layers : null;
+}
+
 function gridLayers(set, d, dir, askRows) {
   const ext = (d.spec && d.spec.extent) || [];
   const sm = d.samples || [];
@@ -1237,6 +1283,66 @@ function placeStoredSet(body) {
   // Plain layers is the one arrangement that is not a grid: every sample its
   // own layer, and no division at all. Asking for it is asking for no grid.
   const plainLayers = askLayers > 0 && askLayers === (d.samples || files).length;
+
+  // **Across more than one voice.**
+  //
+  // The module holds twelve layers a voice and four voices — two, for stereo,
+  // since a stereo sample claims the next one. A set larger than twelve has no
+  // single-voice answer, so it spreads: one kit, one bank, a run of the set on
+  // each voice, plain layers throughout.
+  //
+  // Each voice is written by its own `placeOnCard`, because a voice is what
+  // that function places and a kit slot is what it writes. They share the kit,
+  // so what comes back is one kit with two stacks in it.
+  const askVoices = Math.max(0, Number(body.voices) || 0);
+  if (askVoices > 1) {
+    const sm = d.samples || [];
+    if (!sm.length) {
+      return { ok: false, output: `${set} has no described samples to spread` };
+    }
+    const per = splitOver(askVoices, sm.length);
+    const firstVoice = Math.min(4, Math.max(1, Number(body.voice) || 1));
+    const seats = voicesFrom(firstVoice, askVoices, !!d.stereo);
+    const last = seats[seats.length - 1] + (d.stereo ? 1 : 0);
+    if (last > 4) {
+      return { ok: false, output:
+        `${set} wants ${askVoices}${d.stereo ? " stereo" : ""} voices from voice `
+        + `${firstVoice}, which runs past voice 4. Start it at voice 1.` };
+    }
+    let at = 0, wrote = [];
+    for (let i = 0; i < seats.length; i++) {
+      const layers = stackOf(set, dir, sm, at, per[i]);
+      if (!layers) return { ok: false, output:
+        `could not measure ${set}'s samples, so they cannot be laid out` };
+      const longest = Math.max(...layers.map((l) => l.slotSecs));
+      const one = placeOnCard({
+        set, grid: { layers, slots: 0 },
+        bank: body.bank, letter: body.letter, kit: body.kit, voice: seats[i],
+        append: false, layerMode: body.layerMode, kind: d.kind,
+        shape: { kind: d.kind || "", stereo: !!d.stereo, sliced: false,
+                 slots: 0, slotSecs: longest },
+      });
+      // A refusal part-way leaves the earlier voices written. Said plainly:
+      // the card is a real thing and half of an arrangement is on it.
+      if (!one.ok) {
+        return { ok: false, output: one.output
+          + (wrote.length ? ` — voice ${wrote.join(" and ")} ${wrote.length > 1 ? "were" : "was"} already written` : "") };
+      }
+      wrote.push(seats[i]);
+      at += per[i];
+    }
+    const even = per.every((x) => x === per[0]);
+    return {
+      ok: true,
+      output: `${set} (${sm.length} samples) across ${wrote.length}`
+        + `${d.stereo ? " stereo" : ""} voices — `
+        + (even ? `${per[0]} layers each on voice ${wrote.join(" and ")}`
+                : per.map((x, i) => `${x} on voice ${wrote[i]}`).join(", ")),
+      card: readCard(),
+      sets: sets(),
+    };
+  }
+
   const grid = plainLayers ? null : gridLayers(set, d, dir, askLayers || undefined);
   const placed = placeOnCard({
     set, grid,

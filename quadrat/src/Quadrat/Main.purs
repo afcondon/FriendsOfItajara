@@ -353,6 +353,9 @@ type State =
   -- | extent decides, which is the natural arrangement and what happened
   -- | before there was a way to say otherwise. The slices follow from it.
   , placeLayers :: Int
+  -- | **How many voices the chosen arrangement spreads over.** 0 is "let the
+  -- | set decide", which means one. See `Http.arrangementsOf`.
+  , placeVoices :: Int
   -- | Stand beside what is on the voice, or take its place. A voice holds a
   -- | stack, so the two things you might mean are opposites.
   , placeAppend :: Boolean
@@ -456,6 +459,11 @@ data Action
   | SetPlaceSliced Boolean
   -- | Arrange the ticked set into this many layers. See `Http.arrangementsOf`.
   | SetPlaceLayers Int
+  -- | **Pick a whole arrangement.** Voices and layers travel together: a
+  -- | layer count means nothing without the number of voices it is spread
+  -- | over, and setting one without the other is a state that cannot be
+  -- | placed.
+  | SetPlaceWay { voices :: Int, layers :: Int }
   | SetPlaceAppend Boolean
   | Play Int
   | HoverPlay Int
@@ -538,7 +546,8 @@ component = H.mkComponent
       , picked: Set.empty, confirmDrop: false, confirmWrite: Nothing, preview: Nothing
       , cardPeek: Nothing, openSet: Nothing, openSetInfo: Nothing, peekSample: 0
       , shownSecs: Nothing, audio: Nothing, audioBusy: false
-      , placeSliced: false, placeLayers: 0, placeAppend: false, srcNames: []
+      , placeSliced: false, placeLayers: 0, placeVoices: 0
+      , placeAppend: false, srcNames: []
       , heard: [], midiIn: [], midiOk: true }
   , render
   , eval: H.mkEval H.defaultEval { handleAction = handleAction, initialize = Just Init }
@@ -933,6 +942,13 @@ handleAction = case _ of
   -- | second recording rather than a projection.
   PlaceSet nm -> do
     st <- H.get
+    -- The arrangement this set will actually take, resolved against what the
+    -- module can hold. Falls back to the state's own numbers only if the set
+    -- is not in the list, which would mean placing something that is not here.
+    let chosenWay =
+          fromMaybe { voices: st.placeVoices, layers: st.placeLayers, slices: 0 }
+            (Array.find (\x -> x.name == nm) st.sets
+               >>= wayFor st.placeVoices st.placeLayers)
     H.modify_ _ { cardBusy = true }
     r <- H.liftAff (attempt (toAffE (Http.placeSet
           { set: nm
@@ -943,7 +959,10 @@ handleAction = case _ of
           , append: st.placeAppend
           , sliced: st.placeSliced
           , layerMode: st.layerMode
-          , layers: st.placeLayers })))
+          -- The arrangement resolved, not the raw state. See `wayFor`: zero
+          -- means "let the set decide", and for a set of more than twelve
+          -- what it decides is a shape the old default could not name.
+          , layers: chosenWay.layers, voices: chosenWay.voices })))
     case r of
       Left e -> H.modify_ (note (Aff.message e) <<< _ { cardBusy = false })
       Right w -> H.modify_ (note (lastLine w.output) <<< _ { cardBusy = false })
@@ -1161,7 +1180,9 @@ handleAction = case _ of
 
   SetPlaceSliced b -> H.modify_ _ { placeSliced = b }
 
-  SetPlaceLayers n -> H.modify_ _ { placeLayers = n }
+  SetPlaceLayers n -> H.modify_ _ { placeLayers = n, placeVoices = 1 }
+
+  SetPlaceWay w -> H.modify_ _ { placeLayers = w.layers, placeVoices = w.voices }
 
   SetPlaceAppend b -> H.modify_ _ { placeAppend = b }
 
@@ -2567,6 +2588,40 @@ rateSays st = do
   where
   khz n = fmt (Int.toNumber n / 1000.0) <> " kHz"
 
+
+
+-- | **The arrangement a placement will actually use**, which is not always the
+-- | one the state names.
+-- |
+-- | Zero means "let the set decide", and what the set decides used to be the
+-- | single-voice natural grouping — fine while every set had one. A set of
+-- | more than twelve has NO single-voice answer, so the default named a
+-- | shape that is not on offer, nothing was selected, and the placement went
+-- | out as zero voices: unplaceable, with a picker on screen showing the one
+-- | arrangement that would have worked.
+-- |
+-- | So the fallback is the first thing actually offered. A page cannot choose
+-- | an arrangement the module will not hold, and it should not be possible to
+-- | ask for one.
+wayFor
+  :: forall r
+   . Int -> Int
+  -> { count :: Int, stereo :: Boolean, extent :: Array Int | r }
+  -> Maybe Http.Arrangement
+wayFor voices layers r =
+  let
+    ways = Http.arrangementsOf { count: r.count, stereo: r.stereo }
+    natural = case r.extent of
+      [ outer, _ ] -> outer
+      _ -> 0
+    want = if voices == 0 then 1 else voices
+    asked = Array.find (\a -> a.layers == layers && a.voices == want) ways
+    nat = Array.find (\a -> a.voices == 1 && a.layers == natural) ways
+    fallback = Array.head ways
+  in
+    case (if voices > 0 || layers > 0 then asked else nat) of
+      Just a -> Just a
+      Nothing -> fallback
 
 -- | **Why nothing is arriving**, in the order the answers are worth reading.
 -- |
@@ -5190,11 +5245,20 @@ render st =
   arrangePicker =
     case Array.fromFoldable st.picked of
       [ one ] -> case Array.find (\r -> r.name == one) st.sets of
-        Just r | Array.length (Http.arrangementsOf r.count) > 1 ->
+        Just r | Array.length (waysFor r) > 1 ->
           HH.div [ HP.class_ (HH.ClassName "q-arrange") ]
             [ HH.span [ HP.class_ (HH.ClassName "q-arrangelab") ] [ HH.text "becomes" ]
             , HH.div [ HP.class_ (HH.ClassName "q-arrangeopts") ]
-                (map (opt r) (Http.arrangementsOf r.count))
+                (map (opt r) (waysFor r))
+            ]
+        -- | **One way, and it is not the obvious one.** A set of more than
+        -- | twelve has no single-voice answer at all, so the arrangement it
+        -- | gets is a real decision even when there is nothing to choose —
+        -- | and saying nothing would leave it looking like the default.
+        Just r | [ a ] <- waysFor r, a.voices > 1 ->
+          HH.div [ HP.class_ (HH.ClassName "q-arrange") ]
+            [ HH.span [ HP.class_ (HH.ClassName "q-arrangelab") ] [ HH.text "becomes" ]
+            , HH.div [ HP.class_ (HH.ClassName "q-arrangeopts") ] [ opt r a ]
             ]
         _ -> HH.text ""
       -- Several ticked, each its own kit: they need not share an arrangement
@@ -5208,29 +5272,49 @@ render st =
     natural r = case r.extent of
       [ outer, _ ] -> outer
       _ -> 0
+    waysFor r = Http.arrangementsOf { count: r.count, stereo: r.stereo }
     opt r a =
       HH.button
         [ HP.class_ (HH.ClassName ("q-arrangeopt"
             <> (if chosen r a then " is-on" else "")
-            <> (if a.layers == natural r then " is-natural" else "")))
-        , HP.title (says a <> (if a.layers == natural r
-                                 then " — how it was swept, so the layers keep \
+            <> (if a.voices == 1 && a.layers == natural r then " is-natural" else "")))
+        , HP.title (says r a <> (if a.voices > 1
+                                 then " \x2014 too many for one voice, so they spread \
+                                      \across the voices this set can reach"
+                                 else if a.layers == natural r
+                                 then " \x2014 how it was swept, so the layers keep \
                                       \their parameter values"
-                                 else " — regrouped, so the layers carry positions \
+                                 else " \x2014 regrouped, so the layers carry positions \
                                       \rather than values"))
-        , HE.onClick \_ -> SetPlaceLayers a.layers
+        , HE.onClick \_ -> SetPlaceWay { voices: a.voices, layers: a.layers }
         ]
-        [ voicePic { layers: a.layers, slices: a.slices, dim: false }
-        , HH.span [ HP.class_ (HH.ClassName "q-arrangesays") ] [ HH.text (says a) ]
+        -- One picture per voice: what a voice holds is what a voice holds,
+        -- and two of them side by side is the arrangement.
+        -- The voices side by side in a row of their own, because that IS the
+        -- arrangement: two stacks of nine beside each other is a different
+        -- object from one stack of eighteen, and stacked vertically they read
+        -- as the second thing.
+        [ HH.div [ HP.class_ (HH.ClassName "q-arrangevoices") ]
+            (map (\l -> voicePic { layers: l, slices: a.slices, dim: false })
+                 (Http.splitOver a.voices r.count))
+        , HH.span [ HP.class_ (HH.ClassName "q-arrangesays") ] [ HH.text (says r a) ]
         ]
     -- Zero is "let the extent decide", and the extent decides the natural
     -- one — so the natural option is what zero is showing.
-    chosen r a = if st.placeLayers == 0 then a.layers == natural r
-                 else st.placeLayers == a.layers
-    says a
+    chosen r a = case wayFor st.placeVoices st.placeLayers r of
+      Just w -> w.voices == a.voices && w.layers == a.layers && w.slices == a.slices
+      Nothing -> false
+    says r a
+      | a.voices > 1 =
+          let per = Http.splitOver a.voices r.count
+              same = Array.all (_ == a.layers) per
+          in (if same then show a.layers <> " layers each"
+              else joinWith " and " (map show per) <> " layers")
+             <> " on " <> show a.voices
+             <> (if r.stereo then " stereo voices" else " voices")
       | a.slices == 0 = show a.layers <> " layers"
       | a.layers == 1 = "1 file, " <> show a.slices <> " slices"
-      | otherwise = show a.layers <> " × " <> show a.slices
+      | otherwise = show a.layers <> " \x00d7 " <> show a.slices
 
   -- | **A set\'s own page.**
   -- |

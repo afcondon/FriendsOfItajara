@@ -1262,6 +1262,10 @@ body {
   color: var(--muted); padding-top: 6px; white-space: nowrap;
 }
 .q-arrangeopts { display: flex; flex-wrap: wrap; gap: 6px; }
+/* One picture per voice, side by side: two stacks of nine beside each other
+   is a different object from one stack of eighteen, and stacked vertically
+   they read as the second thing. */
+.q-arrangevoices { display: flex; align-items: flex-start; gap: 7px; }
 .q-arrangeopt {
   display: flex; flex-direction: column; align-items: center; gap: 5px;
   border: 1px solid var(--rule); background: #fff; border-radius: 3px;
