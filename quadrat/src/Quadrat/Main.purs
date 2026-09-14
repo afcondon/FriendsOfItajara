@@ -327,6 +327,10 @@ type State =
   -- | it is read once you have found one.
   , openSet :: Maybe String
   -- | Its detail, when it arrives. `Nothing` while loading.
+  -- | **The measured length of the take being DRAWN**, when it has been read
+  -- | off the file. See `heldSecs` — this is the field that keeps the
+  -- | envelope and the regions on one clock.
+  , shownSecs :: Maybe Number
   , openSetInfo :: Maybe Http.StoredSet
   -- | **Which sample of the open set is being read**, by index. The voicing
   -- | is drawn for this one: a chord set is twelve different chords and the
@@ -524,6 +528,7 @@ component = H.mkComponent
       , levels: [], modal: Nothing, kept: false, confirmKeep: false
       , picked: Set.empty, confirmDrop: false, confirmWrite: Nothing, preview: Nothing
       , cardPeek: Nothing, openSet: Nothing, openSetInfo: Nothing, peekSample: 0
+      , shownSecs: Nothing
       , placeSliced: false, placeLayers: 0, placeAppend: false, srcNames: []
       , heard: [], midiIn: [], midiOk: true }
   , render
@@ -797,7 +802,12 @@ handleAction = case _ of
     now <- H.get
     let had = maybe false _.holds (cap before)
         has = maybe false _.holds (cap now)
-    when (has && not had) (send (CapturePeaks buckets))
+    -- A NEW capture replaces whatever was being drawn, so the file measurement
+    -- from the last take has to go with it: the daemon's envelope is the right
+    -- one again until something is written. See `heldSecs`.
+    when (has && not had) do
+      H.modify_ _ { shownSecs = Nothing }
+      send (CapturePeaks buckets)
     -- **A capture that closed itself at its count.** One field, where the
     -- looper needed four read together — a loop that stopped recording could
     -- be armed, writing, sized or empty and only the combination said which.
@@ -984,6 +994,10 @@ handleAction = case _ of
                       , pivot = Nothing
                       , opened = Just { set: nm, take: v.take, secs: p.secs
                                      , notes: v.notes, struck: v.struck }
+                      -- `opened` already wins in `heldSecs`; cleared so that
+                      -- closing the set cannot fall back to a length measured
+                      -- for some earlier take.
+                      , shownSecs = Just p.secs
                       , peaks = Just
                           { loop: 0, frames: p.frames, from: 0, to: p.frames
                           , buckets: p.buckets, winIn: 0, winOut: 0, rot: 0
@@ -2074,6 +2088,41 @@ analyse write = do
                   -- All four spoken for, so the kit is full rather than the
                   -- voice taken, and the answer is a new kit.
                   Nothing -> s { kit = "", kitMine = false }
+              -- | **Draw the file the regions were found in, not the buffer
+              -- | they were not.**
+              -- |
+              -- | Up to here the envelope is the daemon's, which is the
+              -- | UNTRIMMED capture — right while recording, when there is no
+              -- | file yet and watching the level is the whole point, and
+              -- | wrong the moment a take has been written, because the take
+              -- | is trimmed to its first sound and the regions are in its
+              -- | time, not the capture's.
+              -- |
+              -- | So the picture is re-read off disk once there is a disk to
+              -- | read it off. The length comes from the SAME call as the
+              -- | envelope on purpose: an axis measured by one thing and a
+              -- | shape drawn by another is exactly the fault this replaces.
+              -- |
+              -- | A failure here is not worth stopping for — the divisions are
+              -- | good and the samples will cut correctly. But it is worth
+              -- | SAYING, because carrying on with the daemon's envelope is
+              -- | carrying on with the misalignment, and silence about it is
+              -- | what let it stand.
+              fp <- H.liftAff (attempt (toAffE (Http.takePeaks takeName buckets)))
+              case fp of
+                Right q | q.ok ->
+                  H.modify_ _
+                    { shownSecs = Just q.secs
+                    , peaks = Just
+                        { loop: 0, frames: q.frames, from: 0, to: q.frames
+                        , buckets: q.buckets, winIn: 0, winOut: 0, rot: 0
+                        , lo: q.lo, hi: q.hi }
+                    }
+                _ -> H.modify_ (note
+                  "the take divided, but its envelope could not be read back \
+                  \off disk — the bands are drawn on the capture the daemon \
+                  \holds, which is not trimmed, so they will sit left of the \
+                  \sound that made them")
               H.modify_ (note
                 (show n <> (if n == 1 then " division" else " divisions")
                   <> " over " <> fmt d.secs <> " s"
@@ -2497,16 +2546,37 @@ rateSays st = do
   where
   khz n = fmt (Int.toNumber n / 1000.0) <> " kHz"
 
--- | **How long the take on the bench is.**
+-- | **How long the take on the bench is** — and therefore the axis every band
+-- | is drawn against.
 -- |
--- | The daemon's capture, unless a stored set is open — in which case it is
--- | that set's take, whose length came off the file. One function, because the
--- | alternative is six sites that each decide for themselves and five of them
--- | being right.
+-- | Three sources, in order of how much they can be trusted, and the ORDER is
+-- | the whole point.
+-- |
+-- | A stored set's take, measured from the file. Then the take just written
+-- | and divided, measured from the same file the regions were found in. Only
+-- | then the daemon's capture, which is what is in memory and is the one
+-- | number that does NOT agree with the regions.
+-- |
+-- | ## Why the daemon's length is the wrong axis
+-- |
+-- | **The take file is trimmed to its first sound**, so it is shorter than the
+-- | capture that produced it — by however long you waited before playing.
+-- | `msm onset` finds the regions in the TRIMMED file, so every region is in
+-- | trimmed time; the daemon's peaks are the UNTRIMMED buffer. Drawing one on
+-- | the other puts every band that much to the left of the sound that caused
+-- | it, and the take reads as though each hit arrives late inside its own
+-- | region.
+-- |
+-- | Measured 2026-09-13 on the set kept as `faulty-hits`: a 9.22 s capture
+-- | became a 7.94 s take, and the three stabs — cut correctly, each file
+-- | peaking within 0.15 s of its own start — were drawn 1.28 s adrift. The
+-- | audio was right and the picture was wrong, which is the worst way round.
 heldSecs :: State -> Number
 heldSecs st = case st.opened of
   Just o -> o.secs
-  Nothing -> maybe 0.0 _.secs (cap st)
+  Nothing -> case st.shownSecs of
+    Just n -> n
+    Nothing -> maybe 0.0 _.secs (cap st)
 
 fmt :: Number -> String
 fmt n = show (Int.round (n * 100.0) # \k -> Int.toNumber k / 100.0)
@@ -4142,8 +4212,15 @@ render st =
                   -- | the length was never a control anyway — it is a fact
                   -- | about the thing drawn immediately above it, which is
                   -- | also where your eye already is while it is counting.
+                  -- | `heldSecs`, not the daemon's capture length. The
+                  -- | comment above is the specification — "a fact about the
+                  -- | thing drawn immediately above it" — and reading it off
+                  -- | the capture broke that as soon as the drawing moved to
+                  -- | the trimmed file. It is also the number that gave the
+                  -- | fault away: a 7.94 s take labelled 9.22 s, and the
+                  -- | difference was the trim.
                   , HH.div [ HP.class_ (HH.ClassName "q-taketime") ]
-                      [ HH.text (maybe "" (\c -> fmt c.secs <> " s") (cap st)) ]
+                      [ HH.text (let n = heldSecs st in if n > 0.0 then fmt n <> " s" else "") ]
                   ]
               _ -> HH.text ""
           -- The orphan "Divide it" is gone: the verb is in the control row,
