@@ -16,6 +16,7 @@ module Quadrat.Kind
   , closes
   , divides
   , material
+  , keyed
   , prompt
   , Fold(..)
   , foldsTo
@@ -122,6 +123,24 @@ material = case _ of
   Bars _ -> "break"
   Chromatic -> "hits"
   Longform -> "ambient"
+
+-- | **Whether this material has a key centre worth declaring.**
+-- |
+-- | The declaration is what makes a set transposable — intervals have to be
+-- | measured from something — so it is offered wherever it could be true and
+-- | withheld where it could not. A drum hit has no root, and a sentence that
+-- | asks for one is asking a question with no answer.
+-- |
+-- | Everything else is offered, including a bar and a longform take: a break
+-- | may well be tuneless, but "in G minor" is a sentence about a bar of music
+-- | and about a pad, and declaring it stays optional either way.
+keyed :: Kind -> Boolean
+keyed = case _ of
+  DrumHits -> false
+  ChordHits -> true
+  Bars _ -> true
+  Chromatic -> true
+  Longform -> true
 
 -- | **How many channels this material wants on the card.**
 -- |

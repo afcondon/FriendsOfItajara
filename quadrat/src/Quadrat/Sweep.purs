@@ -45,6 +45,9 @@ module Quadrat.Sweep
   , sayConflict
   , collapsed
   , pitched
+  , parseCentre
+  , centreValue
+  , centreChoices
   , fixPitch
   , sizeOfAxis
   , fingerprint
@@ -60,6 +63,7 @@ import Data.Int as Int
 import Data.Maybe (Maybe(..), fromMaybe, isJust, maybe)
 import Data.Number as Number
 import Data.String.Common (joinWith)
+import Data.String as String
 import Effect (Effect)
 import Quadrat.Pitch as Pitch
 import Quadrat.Curve (Curve(..), Shape(..), shapeName, shapeOf)
@@ -388,6 +392,29 @@ type Plan =
   -- | 42 notes spread from 0 to 123, arriving in bursts every fifty seconds or
   -- | so, against real chords of five to seven in a register you could sing.
   , notesChan :: Int
+  -- | **What made the sound** — free text, and empty for not said.
+  -- |
+  -- | `source` says which CABLE the audio came back on and this says what was
+  -- | playing into it, which are different questions with the same answer only
+  -- | by accident: "ipad" is a jack on the interface, and the thing worth
+  -- | knowing a year later is which instrument was open on it.
+  -- |
+  -- | Free text rather than a list, because the answer is a patch name on a
+  -- | device this page has never heard of. A list of things we already know
+  -- | about would exclude exactly the sounds worth recording.
+  , voice :: String
+  -- | **The key the material is in** — DECLARED, never inferred.
+  -- |
+  -- | Root is a pitch class 0..11, or -1 for "nobody has said"; tonality is
+  -- | `"major"`, `"minor"` or `""`. It is declared HERE, before the take, for
+  -- | the reason every other declaration on this page is: what a set was
+  -- | played in is not recoverable from the audio afterwards, and a set with
+  -- | no root cannot be transposed at all — intervals have to be measured from
+  -- | something.
+  -- |
+  -- | The Library can still declare it after the fact, for sets recorded
+  -- | before this existed. Saying it up front is the cheaper half.
+  , centre :: { root :: Int, tonality :: String }
   -- | **How long after setting the parameters before the trigger.**
   -- |
   -- | The one number here that can silently ruin a run: too short and the hit
@@ -443,6 +470,8 @@ emptyPlan =
   , source: ""
   , notesFrom: ""
   , notesChan: 0
+  , voice: ""
+  , centre: { root: -1, tonality: "" }
   , paced: []
   , pacedFor: ""
   , usePaced: false
@@ -510,6 +539,12 @@ data Msg
   | SetNotesFrom String
   -- | Which channel on it, or "0" for all. See `Plan.notesChan`.
   | SetNotesChan String
+  -- | What made the sound, free text. See `Plan.voice`.
+  | SetVoice String
+  -- | The declared key, as `"<root>:<tonality>"` — one control rather than
+  -- | two, because "G" and "minor" chosen separately can sit in a state that
+  -- | means nothing and reads as a half-filled form.
+  | SetCentre String
   | SetGate String
   | SetEs5 String
   | SetGateLevel String
@@ -619,6 +654,8 @@ applyMsg = case _ of
   SetSource v -> \p -> p { source = v }
   SetNotesFrom v -> \p -> p { notesFrom = v }
   SetNotesChan v -> \p -> p { notesChan = clamp 0 16 (fromMaybe 0 (Int.fromString v)) }
+  SetVoice v -> \p -> p { voice = v }
+  SetCentre v -> \p -> p { centre = parseCentre v }
   SetGate v -> onTrig \t -> t { gate = busOf v }
   SetEs5 v -> onTrig \t -> t { es5 = slotOf v }
   SetGateLevel v -> onTrig \t -> t { gateLevel = level t.gateLevel v }
@@ -781,6 +818,46 @@ type PlainParam =
   , off :: Boolean
   }
 
+-- | **A declared key, to and from the one string a select can carry.**
+-- |
+-- | `"7:minor"`, or `"-1:"` for a key nobody has said. Kept here beside the
+-- | field rather than at the view, so the two directions are written together
+-- | and cannot drift apart — a round trip that loses the tonality would read
+-- | as the user clearing it.
+parseCentre :: String -> { root :: Int, tonality :: String }
+parseCentre v =
+  case String.split (String.Pattern ":") v of
+    [ r, t ] ->
+      let n = fromMaybe (-1) (Int.fromString r)
+      in { root: if n < 0 || n > 11 then -1 else n
+         , tonality: if t == "major" || t == "minor" then t else ""
+         }
+    _ -> { root: -1, tonality: "" }
+
+centreValue :: { root :: Int, tonality :: String } -> String
+centreValue c = show c.root <> ":" <> c.tonality
+
+-- | **Every key that can be declared, in the order a musician reads them.**
+-- |
+-- | Root and tonality as ONE choice of twenty-five. Offered separately they
+-- | admit a state — a tonality with no root — that means nothing and that
+-- | nothing downstream can use, since transposition needs the root and the
+-- | intent only qualifies it.
+-- |
+-- | Root-only is deliberately absent here and still reachable from the
+-- | Library, where a set recorded before anyone was asked can say what is
+-- | known without inventing the rest.
+centreChoices :: Array { v :: String, t :: String }
+centreChoices =
+  Array.cons { v: "-1:", t: "an unsaid key" }
+    (do
+      pc <- Array.range 0 11
+      ton <- [ "major", "minor" ]
+      pure { v: show pc <> ":" <> ton, t: pcName pc <> " " <> ton })
+  where
+  pcName pc = fromMaybe "?" (Array.index names pc)
+  names = [ "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" ]
+
 type Plain =
   { encoding :: String
   , extent :: Array Int
@@ -799,6 +876,11 @@ type Plain =
   , notesFrom :: String
   -- | The channel on it, 0 for all. See `Plan.notesChan`.
   , notesChan :: Int
+  -- | What made the sound. See `Plan.voice`.
+  , voice :: String
+  -- | The declared key, flat. See `Plan.centre`.
+  , centreRoot :: Int
+  , centreTonality :: String
   , settleMs :: Int
   , spacingMs :: Int
   , guardMs :: Int
@@ -862,6 +944,9 @@ flatten p =
   , source: p.source
   , notesFrom: p.notesFrom
   , notesChan: p.notesChan
+  , voice: p.voice
+  , centreRoot: p.centre.root
+  , centreTonality: p.centre.tonality
   , settleMs: p.settleMs
   , spacingMs: p.spacingMs
   , guardMs: p.guardMs
@@ -973,6 +1058,16 @@ unflatten' p =
     , source: p.source
   , notesFrom: p.notesFrom
   , notesChan: p.notesChan
+    , voice: p.voice
+    -- Clamped on the way in, because a stored plan is a file and a file can
+    -- say 47. An out-of-range root reads as "not said" rather than as a
+    -- twelfth of an octave nobody can name.
+    , centre:
+        { root: if p.centreRoot < 0 || p.centreRoot > 11 then -1 else p.centreRoot
+        , tonality:
+            if p.centreTonality == "major" || p.centreTonality == "minor"
+            then p.centreTonality else ""
+        }
     , settleMs: clamp 0 5000 p.settleMs
     , spacingMs: clamp 50 20000 p.spacingMs
     , guardMs: clamp 0 2000 p.guardMs

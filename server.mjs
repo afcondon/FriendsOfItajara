@@ -701,6 +701,12 @@ function writeSet(dir, meta) {
   const given = Array.isArray(meta.samples) ? meta.samples : [];
   const samples = files.map((file, i) => ({ file, ...(given[i] || {}) }));
 
+  // What the set said about itself before this write, for the fields a
+  // re-write must not silently drop. Absent is the normal case.
+  let was = null;
+  try { was = JSON.parse(fs.readFileSync(path.join(dir, SET_JSON), "utf8")); }
+  catch { /* no description yet, or not readable — nothing to preserve */ }
+
   const set = {
     version: 1,
     name: meta.name,
@@ -729,7 +735,33 @@ function writeSet(dir, meta) {
       notesFrom: meta.listened?.notesFrom ?? "",
       notesChan: Number(meta.listened?.notesChan ?? 0),
       source: meta.listened?.source ?? "",
+      // **What PLAYED it**, which no set has ever recorded.
+      //
+      // `source` is the cable the audio came back on and this is the
+      // instrument at the far end of it — the same question only by accident,
+      // since "ipad" names a jack and what is worth knowing a year later is
+      // what was open on it. Free text, because a list would have to enumerate
+      // every synth this rig has never heard of, which is exactly the set of
+      // sounds worth recording.
+      //
+      // It is also what makes a library queryable: "every chord set from that
+      // patch, in G minor" is unanswerable today, and no amount of indexing
+      // fixes a field that was never captured.
+      voice: meta.listened?.voice ?? "",
     },
+    // **The key centre, declared with the set rather than onto it afterwards.**
+    //
+    // See `readCentre`. An undeclared centre leaves whatever is already on
+    // disk alone: the Library can declare one long after the cut, and a
+    // re-cut arriving with root -1 must not silently discard it. (`msm cut
+    // --overwrite` empties the directory first, so there is usually nothing
+    // to preserve — this is correct rather than load-bearing, and stays
+    // correct if that ever changes.)
+    centre: (() => {
+      const asked = readCentre(meta.centre);
+      if (asked.root >= 0) return asked;
+      return readCentre(was?.centre);
+    })(),
     schedule: Array.isArray(meta.schedule) ? meta.schedule : [],
     samples,
   };
@@ -827,6 +859,10 @@ function storedSets() {
       // recorded, which is an honest "not known" rather than "nothing".
       notesFrom: set?.listened?.notesFrom ?? "",
       notesChan: Number(set?.listened?.notesChan ?? 0),
+      // What played it. On the listing because it is the field a library is
+      // assembled ON — "every chord set from that patch" is a question about
+      // the list, not about one set.
+      voice: set?.listened?.voice ?? "",
     });
   }
   return out.sort((a, b) => String(b.made).localeCompare(String(a.made)));
@@ -1471,6 +1507,9 @@ async function addToCard(body) {
     sliced, slots, slotSecs,
     spec: body.spec ?? null,
     listened: body.listened ?? null,
+    // Declared in the sentence before the take. `writeSet` keeps whatever is
+    // already on disk when this says nothing.
+    centre: body.centre ?? null,
     schedule: body.schedule ?? [],
     samples: body.samples ?? [],
   });

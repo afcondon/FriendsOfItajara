@@ -1298,7 +1298,15 @@ handleAction = case _ of
                   { notesFrom: st.sweep.notesFrom
                   , notesChan: st.sweep.notesChan
                   , source: st.sweep.source
+                  -- What played it, which no set has ever recorded and which
+                  -- nothing can recover afterwards.
+                  , voice: st.sweep.voice
                   }
+              -- **The declared key, written with the set rather than onto it
+              -- afterwards.** An empty declaration does NOT clear one already
+              -- on disk: re-cutting an old take must not silently discard what
+              -- the Library was told about it later.
+              , centre: st.sweep.centre
               , schedule: st.schedule
               , samples: kept })))
         case r of
@@ -3191,22 +3199,27 @@ render st =
       , HH.p [ HP.class_ (HH.ClassName "q-sayline") ]
           ( case st.fill of
               Played ->
-                [ HH.text "Making ", slotKind
-                , HH.text " from ", slotSource, slotSourceName
-                , HH.text ", triggered by ", slotTrigger
-                , HH.text ", kept as ", slotName
-                , HH.text " for ", slotEncoding
-                , HH.text ". As many as you play."
-                ]
+                [ HH.text "Making ", slotKind ]
+                  <> keySays
+                  <> [ HH.text " from ", slotSource, slotSourceName
+                     , HH.text " playing ", slotVoice
+                     , HH.text ", triggered by ", slotTrigger
+                     , HH.text ", kept as ", slotName
+                     , HH.text " for ", slotEncoding
+                     , HH.text ". As many as you play."
+                     ]
               Swept ->
                 [ HH.text "Making ", slotExtent
                 , HH.text " ", slotPitched
                 , HH.text " ", slotKind
-                , HH.text " from ", slotSource, slotSourceName
-                , HH.text ", triggered by ", slotTrigger
-                , HH.text ", kept as ", slotName
-                , HH.text " for ", slotEncoding
                 ]
+                  <> keySays
+                  <> [ HH.text " from ", slotSource, slotSourceName
+                     , HH.text " playing ", slotVoice
+                     , HH.text ", triggered by ", slotTrigger
+                     , HH.text ", kept as ", slotName
+                     , HH.text " for ", slotEncoding
+                     ]
                   -- Named only when there IS one to name: "tuned by nothing"
                   -- is a clause about an absence, and an unpitched run is not
                   -- missing anything.
@@ -3616,6 +3629,41 @@ render st =
   slotEncoding =
     sel "q-slot" (Encoding.name st.sweep.encoding) (SweepMsg <<< Sweep.PickEncoding)
       (map (\e -> { v: Encoding.name e, t: Encoding.label e }) Encoding.all)
+
+  -- | **What made the sound**, in the sentence and before the take.
+  -- |
+  -- | `slotSource` names the cable; this names the instrument on the far end
+  -- | of it, and they are the same question only by accident — "ipad" is a
+  -- | jack, and what is worth knowing a year later is what was open on it.
+  -- |
+  -- | Free text, and empty is a blank to fill rather than a word: a list would
+  -- | have to enumerate every synth this page has never heard of, which is
+  -- | exactly the set of sounds worth recording. It is also the field that
+  -- | makes a library queryable at all — you cannot select on what was never
+  -- | captured, and nothing here has ever recorded the voice.
+  slotVoice =
+    HH.input
+      [ HP.class_ (HH.ClassName "q-slot is-name"), HP.type_ HP.InputText
+      , HP.value st.sweep.voice, HP.disabled (st.armed || writing)
+      , HP.placeholder "what played it"
+      , HP.title "the instrument or patch that made the sound \x2014 free text, \
+                 \because it is a name on a device this page has never heard of"
+      , HE.onValueInput (SweepMsg <<< Sweep.SetVoice)
+      ]
+
+  -- | **The key, declared before the take rather than recovered after it.**
+  -- |
+  -- | Root and intent as one choice, because a tonality with no root is a
+  -- | state that means nothing: transposition needs the root, and the intent
+  -- | only qualifies how far out a chord is. The Library keeps the finer
+  -- | control for sets recorded before anyone was asked.
+  slotCentre =
+    sel "q-slot" (Sweep.centreValue st.sweep.centre) (SweepMsg <<< Sweep.SetCentre)
+      Sweep.centreChoices
+
+  -- | Offered where it could be true. A drum hit has no root, and a sentence
+  -- | that asks for one is asking a question with no answer.
+  keySays = if Kind.keyed st.kind then [ HH.text " in ", slotCentre ] else []
 
   -- | The measured table, in small letters: which scheme turns notes into
   -- | volts. `— none —` is not a gap, it is the unpitched case said plainly.
@@ -5361,6 +5409,7 @@ render st =
                             <> (if Array.null r.extent then ""
                                 else " on " <> joinWith " × " (map show r.extent)))
                       <> fact "lengths" (lengthsSays r)
+                      <> fact "played by" r.voice
                       <> fact "notes from" (listenedSays r)
                       <> fact "moved" (joinWith ", " r.moved)
                       <> fact "encoding" r.encoding

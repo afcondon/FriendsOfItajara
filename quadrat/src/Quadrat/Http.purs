@@ -319,7 +319,18 @@ foreign import addToCard
      -- | regions holding 20 to 42 notes spanning 0 to 124, against real
      -- | voicings of five to seven, and nothing stored with them can say
      -- | which port or channel let that in.
-     , listened :: { notesFrom :: String, notesChan :: Int, source :: String }
+     -- | `voice` is what PLAYED it, free text — the counterpart to `source`,
+     -- | which is only the cable it came back on. Nothing has ever recorded
+     -- | it, and it is the field a queryable library turns on: you cannot
+     -- | select on what was never captured.
+     , listened ::
+         { notesFrom :: String, notesChan :: Int, source :: String
+         , voice :: String
+         }
+     -- | **The key, declared before the take.** An undeclared centre (root -1)
+     -- | leaves any centre already on disk alone — re-cutting an old take must
+     -- | not discard what the Library was told about it afterwards.
+     , centre :: Centre
      , schedule :: Array Number
      , samples :: Array Meant
      }
@@ -404,6 +415,14 @@ type SetRow =
   -- | into a chord.
   , notesFrom :: String
   , notesChan :: Int
+  -- | **What played it** — the instrument or patch, free text, empty for not
+  -- | said. The counterpart to the audio input: that is the cable, this is
+  -- | what was at the far end of it.
+  -- |
+  -- | On the listing because assembling a pack freely is a question about the
+  -- | LIST — "every chord set from that patch, in G minor" — and no index can
+  -- | answer it for sets that never recorded the answer.
+  , voice :: String
   }
 
 -- | **A name the owner chose, against the wire name the daemon uses.**
