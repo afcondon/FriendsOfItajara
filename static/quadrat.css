@@ -768,6 +768,18 @@ body {
 .q-meter.is-quiet .q-meterpic rect { fill: var(--rule); }
 .q-meter.is-quiet .q-meterword { color: var(--hot); font-weight: 600; }
 
+/* **The take's rebus**, under the report it is minted from. Small: it is a
+   thing you GLANCE at to see that two sets are the same music, and the words
+   under it are what you say out loud. */
+.q-benchmark {
+  margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--rule);
+  display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
+}
+.q-benchalias {
+  font-size: 12px; font-weight: 600; letter-spacing: .01em; color: var(--ink);
+}
+.q-benchsays { font-size: 11px; line-height: 1.45; color: var(--muted); }
+
 /* Two things pointed at one jack. Loud, and in the sentence, because both
    halves of this were already displayed correctly in two different panels and
    that cost a day. */
@@ -897,7 +909,8 @@ body {
 /* Cards in a line: the shape above, what it means below. Side by side they
    were two columns that had to stay aligned across every row, which fixed
    the height to the taller of them and let four parameters fill a page. */
-.q-curverow .q-curves { display: flex; flex-wrap: wrap; gap: 14px; }
+.q-curverow .q-sweep { width: fit-content; max-width: 100%; margin-inline: auto; }
+.q-curverow .q-curves { display: flex; flex-wrap: wrap; gap: 14px; justify-content: center; }
 .q-pcard { width: 232px; display: flex; flex-direction: column; gap: 6px; }
 .q-pcard .q-curvecard { width: 100%; }
 .q-pcard .q-curveparam { width: 100%; }
@@ -954,6 +967,7 @@ body {
    spans what it is dividing. */
 .q-actbar {
   display: flex; align-items: stretch; gap: 10px; flex-wrap: wrap;
+  justify-content: center;
   border-top: 1px solid var(--rule); padding-top: 14px; margin: 16px 0 8px;
 }
 .q-actbar .q-go {
@@ -971,7 +985,12 @@ body {
 /* Vertical padding would fight the stretch; the words centre themselves. */
 .q-actbar .q-big { padding: 0 26px; display: inline-flex; align-items: center; }
 .q-doors { display: flex; flex-wrap: wrap; gap: 10px; flex: 0 1 auto; }
-.q-doors .q-door { flex: 0 1 auto; min-width: 136px; max-width: 260px; justify-content: center; }
+.q-doors .q-door {
+  flex: 0 0 232px; width: 232px; justify-content: center;
+}
+/* A door's subtitle is the part that changes; it may wrap inside its lane,
+   never widen it. */
+.q-doors .q-doorsays { overflow-wrap: anywhere; }
 
 
 /* Record, play and stop are one family and belong in one row. The two

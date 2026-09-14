@@ -79,7 +79,7 @@ import Quadrat.Audio as Audio
 import Quadrat.Clip (copyText)
 import Quadrat.Http as Http
 import Quadrat.RebusView as RebusView
-import Quadrat.SetIdentity (markOf)
+import Quadrat.SetIdentity (chordGlyph, markOf)
 import Quadrat.Stave as Stave
 import Quadrat.Tidal as Tidal
 import Quadrat.Wave as Wave
@@ -3251,7 +3251,7 @@ render st =
                        \aggregate loses the reference rather than pointing it \
                        \somewhere wrong.") ]
           ]
-      , HH.div [ HP.class_ (HH.ClassName "q-heard") ] [ heardSays ]
+      , HH.div [ HP.class_ (HH.ClassName "q-heard") ] [ heardSays, benchMark ]
       ]
 
   -- | **Whether anything is listening, said before the take and not after it.**
@@ -3311,6 +3311,53 @@ render st =
                        _ -> ". " <> rangeSays <> tallySays)
           , HH.text chanSays
           ]
+
+  -- | **The take's own picture, as soon as there is one to draw.**
+  -- |
+  -- | Drawn HERE, in the margin the notes are reported in, because it is
+  -- | minted from exactly those notes: the column says what arrived and then
+  -- | shows what it came to. It is the same rebus the Library will draw and
+  -- | the same one Vetula draws for the same progression, which is the whole
+  -- | reason to put a picture on a set at all.
+  -- |
+  -- | **Only for a chord take, and only once divided.** Both halves are the
+  -- | identity rules rather than caution:
+  -- |
+  -- |   * A coloured rebus is a CONTENT identity and a chord set is the only
+  -- |     material whose content anybody else holds. Minting one for a drum
+  -- |     take would produce a picture that agrees with nothing, which is the
+  -- |     one thing an identity must not do — and the durable identity those
+  -- |     takes get instead is keyed on `made`, which does not exist until the
+  -- |     set is on disk. So they get no picture here, and that is honest.
+  -- |   * Before the division there are no regions, so there are no chords —
+  -- |     only a stream of notes and no statement about which belong together.
+  -- |
+  -- | Read as STRUCK, matching what the server will store: `arpeggiated` is
+  -- | declared afterwards in the Library, and when it is declared the picture
+  -- | changes. That is correct and is what a content identity is for.
+  benchMark = case benchChords of
+    [] -> HH.text ""
+    chords ->
+      let g = chordGlyph chords
+      in HH.div [ HP.class_ (HH.ClassName "q-benchmark") ]
+           [ RebusView.chip
+               { height: 21.0, mono: false
+               , title: g.alias <> " \x2014 these chords, wherever they are" }
+               g.icons
+           , HH.span [ HP.class_ (HH.ClassName "q-benchalias") ] [ HH.text g.alias ]
+           , HH.span [ HP.class_ (HH.ClassName "q-benchsays") ]
+               [ HH.text (show (Array.length chords)
+                   <> (if Array.length chords == 1 then " chord" else " chords")
+                   <> " \x2014 the same picture in Vetula") ]
+           ]
+
+  benchChords
+    | st.kind /= Kind.ChordHits = []
+    | otherwise = case takeZero st of
+        Nothing -> []
+        Just t0 ->
+          Array.filter (not <<< Array.null)
+            (join (map (strikesIn (believed st) t0) st.regions))
 
   -- | **The register they arrived in, always said.**
   -- |
