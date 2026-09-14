@@ -3213,22 +3213,32 @@ render st =
                   <> (if Sweep.pitched st.sweep
                         then [ HH.text ", tuned by ", slotCalib ] else [])
                   <> [ HH.text ", about ", HH.text runSecs, HH.text " to record." ] )
-      , clashSays
-      , collapseSays
-      , heardSays
-      -- | **A remembered input that is not on this rig.** Silently falling
-      -- | back to whatever is first is how the whole morning went to `board`;
-      -- | the fallback is still the right behaviour, and saying so is the
-      -- | other half of it.
-      , if not sourceLost then HH.text "" else
-          HH.p [ HP.class_ (HH.ClassName "q-clash is-soft") ]
-            [ HH.text ("this set was recorded from \x201c"
-                <> labelFor st st.sweep.source
-                <> "\x201d, which the rig is not offering — using \x201c"
-                <> labelFor st srcName <> "\x201d instead. Sources are named \
-                   \per interface and jack, so a renamed or re-ordered \
-                   \aggregate loses the reference rather than pointing it \
-                   \somewhere wrong.") ]
+      -- **The warnings under the sentence; the report beside it.**
+      --
+      -- These were siblings in what the CSS made a flex ROW, so a clash about
+      -- the input landed to the RIGHT of the claim it contradicts, and every
+      -- comment describing them as sitting "under the statement" was wrong
+      -- about the page. Grouped into the centre column here, and the MIDI
+      -- report given a wrapper of its own so the right margin holds it
+      -- whichever of its four shapes it takes.
+      , HH.div [ HP.class_ (HH.ClassName "q-saywarn") ]
+          [ clashSays
+          , collapseSays
+          -- | **A remembered input that is not on this rig.** Silently falling
+          -- | back to whatever is first is how the whole morning went to `board`;
+          -- | the fallback is still the right behaviour, and saying so is the
+          -- | other half of it.
+          , if not sourceLost then HH.text "" else
+              HH.p [ HP.class_ (HH.ClassName "q-clash is-soft") ]
+                [ HH.text ("this set was recorded from \x201c"
+                    <> labelFor st st.sweep.source
+                    <> "\x201d, which the rig is not offering — using \x201c"
+                    <> labelFor st srcName <> "\x201d instead. Sources are named \
+                       \per interface and jack, so a renamed or re-ordered \
+                       \aggregate loses the reference rather than pointing it \
+                       \somewhere wrong.") ]
+          ]
+      , HH.div [ HP.class_ (HH.ClassName "q-heard") ] [ heardSays ]
       ]
 
   -- | **Whether anything is listening, said before the take and not after it.**
@@ -5889,7 +5899,7 @@ render st =
   -- | One slot, both sides of it. DropSync's shape: what it is now above what
   -- | it becomes, and a line saying which of the two is at risk.
   previewSlot s =
-    HH.div [ HP.class_ (HH.ClassName ("q-slot is-" <> s.fate)) ]
+    HH.div [ HP.class_ (HH.ClassName ("q-wslot is-" <> s.fate)) ]
       [ HH.div [ HP.class_ (HH.ClassName "q-slotname") ]
           [ HH.strong_ [ HH.text s.slot ]
           , HH.span [ HP.class_ (HH.ClassName "q-fate") ] [ HH.text (fateSays s) ]
