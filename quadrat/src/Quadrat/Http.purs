@@ -22,6 +22,8 @@ module Quadrat.Http
   , Centre
   , setCentre
   , setArpeggiated
+  , AudioCheck
+  , audioCheck
   , storedSets
   , SourceName
   , sourceLabels
@@ -425,6 +427,27 @@ foreign import setCentre :: String -> Centre -> Effect (Promise Wrote)
 -- | it changes which of the two readings already on disk is believed, and so
 -- | changes what the set IS: its voicings, its export, and its glyph.
 foreign import setArpeggiated :: String -> Boolean -> Effect (Promise Wrote)
+
+-- | **Where every source lands, against the device as it stands right now.**
+-- |
+-- | `itajara sources` resolved against the daemon's OWN arguments, read off
+-- | the running process — because the fault this exists to catch is a channel
+-- | map that was right when the daemon started and is not right now.
+-- |
+-- | `gone` names members of an aggregate that CoreAudio cannot see today, whole
+-- | and untrimmed (they are UIDs, and every rule for shortening one is wrong
+-- | for some device). `unreachable` is the per-source verdict in English.
+-- | `text` is the tool's own report, shown as it prints it.
+type AudioCheck =
+  { ok :: Boolean
+  , running :: Boolean
+  , device :: String
+  , gone :: Array String
+  , unreachable :: Array { source :: String, says :: String }
+  , text :: String
+  }
+
+foreign import audioCheck :: Effect (Promise AudioCheck)
 
 foreign import storedSets :: Effect (Promise { ok :: Boolean, sets :: Array SetRow })
 

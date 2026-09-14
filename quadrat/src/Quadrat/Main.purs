@@ -331,6 +331,10 @@ type State =
   -- | off the file. See `heldSecs` — this is the field that keeps the
   -- | envelope and the regions on one clock.
   , shownSecs :: Maybe Number
+  -- | **The audio pre-flight**, when it has been asked for. See
+  -- | `Http.audioCheck` and `audioPanel`.
+  , audio :: Maybe Http.AudioCheck
+  , audioBusy :: Boolean
   , openSetInfo :: Maybe Http.StoredSet
   -- | **Which sample of the open set is being read**, by index. The voicing
   -- | is drawn for this one: a chord set is twelve different chords and the
@@ -504,6 +508,11 @@ data Action
   -- | Changes which of the two readings on disk is believed, and so changes
   -- | the set's voicings, its export and its glyph.
   | DeclareArp String Boolean
+  -- | **Ask where the inputs actually land**, and show it. Reads only: the
+  -- | tool it runs opens no stream and changes no sample rate, so it is safe
+  -- | beside a session in progress.
+  | CheckAudio
+  | CloseAudio
   -- | **Put a transferable line on the clipboard.** The text is already on
   -- | screen and selectable; this only saves the drag. Carries the string
   -- | rather than a pointer to what to render, so the button and the block
@@ -528,7 +537,7 @@ component = H.mkComponent
       , levels: [], modal: Nothing, kept: false, confirmKeep: false
       , picked: Set.empty, confirmDrop: false, confirmWrite: Nothing, preview: Nothing
       , cardPeek: Nothing, openSet: Nothing, openSetInfo: Nothing, peekSample: 0
-      , shownSecs: Nothing
+      , shownSecs: Nothing, audio: Nothing, audioBusy: false
       , placeSliced: false, placeLayers: 0, placeAppend: false, srcNames: []
       , heard: [], midiIn: [], midiOk: true }
   , render
@@ -1135,6 +1144,18 @@ handleAction = case _ of
       Left e -> H.modify_ \st -> st { log = st.log <> [ "could not say how it was played: " <> show e ] }
       Right v | not v.ok -> H.modify_ \st -> st { log = st.log <> [ v.output ] }
       Right _ -> handleAction RefreshSets
+
+  CheckAudio -> do
+    H.modify_ _ { audioBusy = true }
+    r <- H.liftAff (attempt (toAffE Http.audioCheck))
+    H.modify_ _ { audioBusy = false
+                , audio = case r of
+                    Right v -> Just v
+                    Left e -> Just { ok: false, running: false, device: ""
+                                   , gone: [], unreachable: []
+                                   , text: "could not run the check: " <> show e } }
+
+  CloseAudio -> H.modify_ _ { audio = Nothing }
 
   Copy s -> liftEffect (copyText s)
 
@@ -2546,6 +2567,93 @@ rateSays st = do
   where
   khz n = fmt (Int.toNumber n / 1000.0) <> " kHz"
 
+
+-- | **Why nothing is arriving**, in the order the answers are worth reading.
+-- |
+-- | An aggregate device is a fact about TODAY, not about its name. Power one
+-- | member down and CoreAudio does not fail — it hands back a smaller device,
+-- | the remaining channels renumber, and everything downstream goes on working
+-- | against numbers that now mean something else. Nothing errors. The meters
+-- | move or they do not, and a whole session records off the wrong input.
+-- |
+-- | Measured 2026-09-14: with the ES-9 switched off, `ES9 then A4C` went from
+-- | 24 inputs to 8. The daemon, started two days earlier, went on reading the
+-- | channels it resolved then — the three AUDIO4c sources pointed past the end
+-- | of the device and read digital silence, while `hits` and `modular`, named
+-- | for the ES-9, were quietly reading the AUDIO4c's first two inputs.
+-- |
+-- | ## The one judgement worth making automatically
+-- |
+-- | `itajara sources` resolves against the device as it stands; the daemon
+-- | reports what it BELIEVES it is holding. A source the daemon still calls
+-- | available while the device says its interface is gone is a stale map, and
+-- | that is a restart rather than a patching problem. Nothing else here is
+-- | inferred: the rest is the tool's own report, which already reads as
+-- | English.
+audioPanel :: forall m. State -> Http.AudioCheck -> H.ComponentHTML Action () m
+audioPanel st c =
+  HH.div [ HP.class_ (HH.ClassName "q-scrim") ]
+    [ HH.div [ HP.class_ (HH.ClassName "q-modal is-audio") ]
+        [ HH.div [ HP.class_ (HH.ClassName "q-modalhead") ]
+            [ HH.h2_ [ HH.text "where the sound comes in" ]
+            , HH.button
+                [ HP.class_ (HH.ClassName "q-plain"), HE.onClick \_ -> CloseAudio ]
+                [ HH.text "done" ]
+            ]
+        , HH.div [ HP.class_ (HH.ClassName "q-setpage") ]
+            ( verdict
+                <> [ HH.div [ HP.class_ (HH.ClassName "q-factlab") ]
+                       [ HH.text (if c.device == "" then "the report"
+                                  else c.device <> ", as it is right now") ]
+                   , HH.pre [ HP.class_ (HH.ClassName "q-audiotext") ] [ HH.text c.text ]
+                   ]
+            )
+        ]
+    ]
+  where
+  believes nm = case st.looper of
+    Nothing -> false
+    Just top -> Array.any (\src -> src.name == nm && src.available) top.sources
+
+  stale = Array.filter (\u -> believes u.source) c.unreachable
+
+  say k body = [ HH.div [ HP.class_ (HH.ClassName ("q-verdict is-" <> k)) ] body ]
+
+  verdict
+    | not c.running = say "warn" [ HH.text c.text ]
+    | not (Array.null stale) =
+        say "warn"
+          [ HH.strong_ [ HH.text "The looper is running on a stale channel map." ]
+          , HH.text (" It still believes "
+              <> joinWith ", " (map _.source stale)
+              <> " is available, but the device says otherwise \x2014 so it was \
+                 \started when that interface was present and has gone on \
+                 \reading the channels it worked out then. Those numbers now \
+                 \belong to something else, or to nothing. ")
+          , HH.strong_ [ HH.text "Restart the looper." ]
+          , HH.text " Switching the interface back on is not enough on its own."
+          ]
+    | not (Array.null c.gone) =
+        say "warn"
+          [ HH.strong_ [ HH.text "Part of the aggregate device is not there." ]
+          , HH.text " CoreAudio hands back a smaller device rather than failing, \
+                    \so the channels that are left have renumbered. The sources \
+                    \below are resolved against the device as it stands, which \
+                    \is what the looper will use from its next start."
+          ]
+    | Array.null c.unreachable =
+        say "ok"
+          [ HH.text "Every source resolves and the device is whole. If a meter \
+                    \is still silent the sound is not reaching the interface \x2014 \
+                    \check the patch, and which jack it is going into."
+          ]
+    | otherwise =
+        say "note"
+          [ HH.text ("Unreachable: "
+              <> joinWith ", " (map (\u -> u.source <> " (" <> u.says <> ")") c.unreachable)
+              <> ". Everything else resolves.")
+          ]
+
 -- | **How long the take on the bench is** — and therefore the axis every band
 -- | is drawn against.
 -- |
@@ -2593,6 +2701,11 @@ render st =
         , HH.span [ HP.class_ (HH.ClassName "q-sub") ] [ HH.text tagline ]
         , connection
         ]
+    -- | Outside the page switch on purpose. It is reached from the input
+    -- | meter, which is on the Bench, and it was first mounted inside the
+    -- | Library branch — so the state changed, the panel rendered, and it
+    -- | rendered on a page nobody was looking at.
+    , maybe (HH.text "") (audioPanel st) st.audio
     , if st.page == Bench then statement else HH.text ""
     , case st.page of
         -- | **A notebook spread: the method on the left, the results on the
@@ -3268,6 +3381,15 @@ render st =
             (Array.mapWithIndex bar padded)
         , HH.span [ HP.class_ (HH.ClassName "q-meterword") ]
             [ HH.text (if quiet then "silent" else fmt srcDb <> " dB") ]
+        -- | **Offered only when it would help.** A door that is always there
+        -- | is a door nobody reads; this one appears exactly when the input is
+        -- | silent, which is the moment the question gets asked out loud.
+        , if not quiet then HH.text "" else
+            HH.button
+              [ HP.class_ (HH.ClassName "q-whysilent")
+              , HP.title "where the inputs actually land, against the device as it is right now"
+              , HE.onClick \_ -> CheckAudio ]
+              [ HH.text (if st.audioBusy then "looking\x2026" else "why?") ]
         ]
 
   -- | One axis is a number you can say; two are a shape, and the shape belongs

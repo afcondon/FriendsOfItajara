@@ -128,6 +128,23 @@ body {
   border-radius: 3px; font: inherit; font-size: 12px; background: #fff; }
 .q-centre .q-set-what { font-size: 12px; }
 
+/* The pre-flight. A door that appears only when the input is silent, which is
+   the moment the question actually gets asked. */
+.q-whysilent { font: inherit; font-size: 11px; color: var(--muted); background: none;
+  border: 0; padding: 0 0 0 6px; cursor: pointer; border-bottom: 1px solid currentColor; }
+.q-whysilent:hover { color: var(--hot, var(--ink)); }
+.q-modal.is-audio { max-width: 620px; }
+.q-verdict { font-size: 13px; line-height: 1.55; padding: 10px 12px; border-radius: 4px;
+  margin-bottom: 14px; }
+.q-verdict.is-warn { background: #fdf3ef; border: 1px solid #e8c4b4; color: #7a3b20; }
+.q-verdict.is-note { background: #fbf8ee; border: 1px solid #e0d6b8; color: #6a5a22; }
+.q-verdict.is-ok   { background: #f1f6f1; border: 1px solid #cbdfcb; color: #2f5a32; }
+/* The tool's own report, monospaced and unwrapped: its columns are the
+   meaning, and re-flowing them would destroy the alignment that IS the table. */
+.q-audiotext { display: block; margin: 3px 0 0; font-size: 12px; line-height: 1.5;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--ink);
+  white-space: pre; overflow-x: auto; }
+
 .q-xfer { margin-top: 12px; }
 .q-xfer .q-factlab { display: flex; align-items: baseline; gap: 10px; margin-bottom: 2px; }
 .q-xfer .q-set-dirt { white-space: pre; overflow-x: auto; line-height: 1.5; }

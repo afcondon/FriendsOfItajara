@@ -241,6 +241,19 @@ export const setCentre = (name) => (centre) => () =>
 export const setArpeggiated = (name) => (arpeggiated) => () =>
   post("/api/sets/arpeggiated", { name, arpeggiated });
 
+export const audioCheck = () =>
+  fetch("/api/audio/check").then(j).then((d) => ({
+    ok: !!d.ok,
+    running: !!d.running,
+    device: String(d.device ?? ""),
+    gone: (d.gone ?? []).map(String),
+    unreachable: (d.unreachable ?? []).map((u) => ({
+      source: String(u.source ?? ""), says: String(u.says ?? ""),
+    })),
+    text: String(d.text ?? d.output ?? ""),
+  })).catch((e) => ({ ok: false, running: false, device: "", gone: [],
+                      unreachable: [], text: String(e.message ?? e) }));
+
 export const loadSpec = (name) => () =>
   fetch("/api/sets/" + encodeURIComponent(name))
     .then(j)

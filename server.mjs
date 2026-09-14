@@ -49,6 +49,10 @@ import { spawn } from "node:child_process";
 
 const PORT = Number(process.env.PORT || 3029);
 const MSM = process.env.MSM || "msm";
+// The looper binary, for the pre-flight only — never to start anything.
+// Beside us by the same sibling-repo convention the client packages use.
+const ITAJARA = process.env.ITAJARA
+  || path.resolve(process.cwd(), "../itajara/daemon/target/release/itajara");
 const STATIC = path.join(path.dirname(new URL(import.meta.url).pathname), "static");
 const TAKES = path.join(os.homedir(), ".itajara", "takes");
 
@@ -287,6 +291,108 @@ function takePeaks(name, buckets) {
     hi.push(Math.round(mx * 32768));
   }
   return { ok: true, secs: frames / rate, frames, buckets: n, lo, hi };
+}
+
+
+// ---------------------------------------------------------------------------
+// The audio pre-flight
+// ---------------------------------------------------------------------------
+
+// **What the daemon was actually started with.**
+//
+// Read off the running process rather than configured here, because the whole
+// fault this diagnoses is a map that was right when the daemon started and is
+// not right now. A second copy of the arguments could only ever agree with
+// what we WISH was running.
+function daemonArgs() {
+  return new Promise((resolve) => {
+    let out = "";
+    let child;
+    try { child = spawn("ps", ["-ax", "-o", "pid=,command="]); }
+    catch { return resolve(null); }
+    child.stdout.on("data", (c) => (out += c));
+    child.on("error", () => resolve(null));
+    child.on("close", () => {
+      const line = out.split("\n").find((l) => /itajara\s+loop\b/.test(l));
+      if (!line) return resolve(null);
+      const pid = Number(line.trim().split(/\s+/)[0]);
+      // `--device` takes a name with spaces in it ("ES9 then A4C"), so the
+      // arguments cannot be split on whitespace. Walk them instead: a value
+      // runs until the next token that begins `--`.
+      const toks = line.slice(line.indexOf("itajara")).trim().split(/\s+/).slice(1);
+      let device = "", sources = [], i = 0;
+      while (i < toks.length) {
+        const t = toks[i];
+        if (t === "--device" || t === "--source") {
+          const val = [];
+          i += 1;
+          while (i < toks.length && !toks[i].startsWith("--")) val.push(toks[i++]);
+          if (t === "--device") device = val.join(" ");
+          else if (val.length) sources.push(val.join(" "));
+        } else i += 1;
+      }
+      resolve(device ? { pid, device, sources } : null);
+    });
+  });
+}
+
+// **Where every source lands, right now**, against the device as it currently
+// stands — `itajara sources` opens nothing, starts no stream and changes no
+// sample rate, which is what makes it safe to run from a web request beside a
+// session in progress.
+//
+// The text is returned as the tool prints it rather than parsed into fields.
+// It already reads as English — "ES-9 is not switched on", "NOT THERE" — and a
+// parser over somebody else's layout is a second thing to keep in step for no
+// gain. The one machine-readable judgement below is a substring test, which is
+// honest about being one.
+function audioCheck() {
+  return new Promise(async (resolve) => {
+    const d = await daemonArgs();
+    if (!d) {
+      return resolve({ ok: false, running: false, output:
+        "the looper daemon is not running, so there is nothing to check its "
+        + "inputs against — start a session and try again" });
+    }
+    const args = ["sources", "--device", d.device];
+    for (const s of d.sources) args.push("--source", s);
+    let out = "", err = "", child;
+    try { child = spawn(ITAJARA, args); }
+    catch (e) {
+      return resolve({ ok: false, running: true, device: d.device,
+        output: `could not run the pre-flight (${ITAJARA}): ${e.message}` });
+    }
+    child.stdout.on("data", (c) => (out += c));
+    child.stderr.on("data", (c) => (err += c));
+    child.on("error", (e) => resolve({ ok: false, running: true, device: d.device,
+      output: `could not run the pre-flight: ${e.message}` }));
+    child.on("close", () => {
+      const text = (out + err).trim();
+      // A member of the aggregate that CoreAudio cannot see today. This is the
+      // whole of the automatic judgement — the rest is for a person to read.
+      // Kept WHOLE. A member reads as a CoreAudio UID
+      // ("AppleUSBAudioEngine:Expert Sleepers Ltd:ES-9:1100000:2,3") and every
+      // rule for trimming one to a friendly name is wrong for some device —
+      // splitting on the last colon yields "3". The page leads with the
+      // per-source sentences below, which are already English; this list only
+      // has to answer "is something missing", and it does.
+      const gone = text.split("\n")
+        .filter((l) => l.includes("NOT THERE"))
+        .map((l) => l.replace("NOT THERE", "").trim().replace(/^[—\-\s]+/, "").trim())
+        .filter(Boolean);
+      // A source the tool says is unreachable. Named so the page can hold them
+      // against what the DAEMON believes it is holding: a source the daemon
+      // still calls available while this says it is gone is a stale map, and
+      // that is a restart rather than a patching problem.
+      const unreachable = [];
+      for (const line of text.split("\n")) {
+        const m = line.trim().match(/^(\w[\w-]*)\s+\((.+)\)$/);
+        if (m && !/^in\s/.test(m[2])) unreachable.push({ source: m[1], says: m[2] });
+      }
+      resolve({ ok: true, running: true, pid: d.pid, device: d.device,
+                gone, unreachable, text });
+    });
+  });
 }
 
 // **Throw sets away.** The one destructive thing this server does to work you
@@ -1918,6 +2024,10 @@ const server = http.createServer(async (req, res) => {
     // Declare (or clear) a set's key centre. See `setCentre`.
     if (url.pathname === "/api/sets/centre" && req.method === "POST") {
       return json(res, 200, setCentre(await readBody(req)));
+    }
+    // The audio pre-flight. See `audioCheck` — reads, opens nothing.
+    if (url.pathname === "/api/audio/check" && req.method === "GET") {
+      return json(res, 200, await audioCheck());
     }
     if (url.pathname === "/api/sets/arpeggiated" && req.method === "POST") {
       return json(res, 200, setArpeggiated(await readBody(req)));
