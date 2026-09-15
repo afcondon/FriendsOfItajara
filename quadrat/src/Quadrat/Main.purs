@@ -963,6 +963,13 @@ handleAction = case _ of
               -- One step per chord. A run against four chords that fires three
               -- times is not a small inaccuracy; it is a different set.
               , extent = [ Array.length c.chords ]
+              -- **Half the cell**, which is a chord-shaped hold rather than a
+              -- drum's. Held for the whole cell there is no decay inside the
+              -- sample; held for ten milliseconds there is no tone. Half gives
+              -- attack, sustain and release with room for the tail — and it is
+              -- a starting point, not a rule: the number is right there in the
+              -- sentence to argue with.
+              , trigger = st.sweep.trigger { ms = max 200 (st.sweep.spacingMs / 2) }
               }
           }
 
@@ -1652,9 +1659,7 @@ handleAction = case _ of
       Just ns -> liftEffect $ for_ ns \n ->
         Rig.sendNote { port: st.sweep.port, channel: st.sweep.trigger.channel, note: n
                      , velocity: st.sweep.trigger.velocity
-                     , ms: case st.against >>= \c -> Array.index c.gates j of
-                             Just g | g > 0.0 -> Int.round g
-                             _ -> st.sweep.trigger.ms }
+                     , ms: st.sweep.trigger.ms }
       Nothing -> for_ st.sweep.trigger.note \n -> liftEffect $
         Rig.sendNote { port: st.sweep.port, channel: st.sweep.trigger.channel, note: n
                      , velocity: st.sweep.trigger.velocity, ms: st.sweep.trigger.ms }
@@ -1935,11 +1940,18 @@ runSweep = do
           then st.sweep { spacingMs = max st.sweep.spacingMs dryProbeMs, usePaced = false }
           else st.sweep
     declaredChord i = st.against >>= \c -> Array.index c.chords i
-    -- The declared hold, falling back to the trigger's own. A chord held for a
-    -- drum's ten milliseconds is the difference between a sample and silence.
-    declaredGate i = case st.against >>= \c -> Array.index c.gates i of
-      Just g | g > 0.0 -> Int.round g
-      _ -> p.trigger.ms
+    -- **The hold is the trigger's own, for chords as for drums.**
+    --
+    -- It read the clip's declared `gateMs` for a while, which was wrong twice
+    -- over: a MINTED clip's gate is invented rather than observed — 700 ms
+    -- because that is what the Rehearse pass auditions at, not because anybody
+    -- chose it — and how long to hold a chord is a decision about the SAMPLE,
+    -- not about the progression. The same chords want a different hold on a
+    -- plucked instrument and on a pad, and only the person listening can say.
+    --
+    -- So one number, in the Trigger door and in the sentence, seeded when a
+    -- progression is picked and editable after.
+    declaredGate _ = p.trigger.ms
 
   -- **Two silent no-ops, said out loud.**
   --
@@ -3531,8 +3543,9 @@ render st =
                   <> keySays
                   <> [ HH.text " from ", slotSource, slotSourceName
                      , HH.text " playing ", slotVoice
-                     , HH.text ", triggered by ", slotTrigger
-                     , HH.text ", kept as ", slotName
+                     , HH.text ", triggered by ", slotTrigger ]
+                  <> holdSays
+                  <> [ HH.text ", kept as ", slotName
                      , HH.text " for ", slotEncoding
                      , HH.text ". As many as you play."
                      ]
@@ -3544,8 +3557,9 @@ render st =
                   <> keySays
                   <> [ HH.text " from ", slotSource, slotSourceName
                      , HH.text " playing ", slotVoice
-                     , HH.text ", triggered by ", slotTrigger
-                     , HH.text ", kept as ", slotName
+                     , HH.text ", triggered by ", slotTrigger ]
+                  <> holdSays
+                  <> [ HH.text ", kept as ", slotName
                      , HH.text " for ", slotEncoding
                      ]
                   -- Named only when there IS one to name: "tuned by nothing"
@@ -3992,6 +4006,30 @@ render st =
         if String.contains (String.Pattern "FH-2") st.sweep.port then "fh2" else "midi"
     | Maybe.isJust st.sweep.trigger.es5 = "es5"
     | otherwise = "es9"
+
+  -- | **How long each chord is held.**
+  -- |
+  -- | In the sentence and not only behind the Trigger door, because it is
+  -- | dispositive about what comes back: the same chords held for a tenth of a
+  -- | second and for four seconds are a stab and a pad, and the difference is
+  -- | the whole sample. AC: "it's pretty dispositive as to what you're
+  -- | expecting to sample".
+  -- |
+  -- | Shown only when there are chords to hold. A drum's gate is a gate, it
+  -- | belongs with the other trigger plumbing, and a sentence that discussed it
+  -- | would be discussing the wiring.
+  slotHold =
+    HH.input
+      [ HP.class_ (HH.ClassName "q-slot is-num"), HP.type_ HP.InputNumber
+      , HP.value (show st.sweep.trigger.ms), HP.min 10.0, HP.max 30000.0
+      , HP.title "how long each chord is held before note-off — the rest of the \
+                 \cell is its decay"
+      , HE.onValueInput (SweepMsg <<< Sweep.SetHold)
+      ]
+
+  holdSays =
+    if Maybe.isNothing st.against then []
+    else [ HH.text ", holding each ", slotHold, HH.text " ms" ]
 
   slotName =
     HH.input
