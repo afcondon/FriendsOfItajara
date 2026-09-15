@@ -604,7 +604,7 @@ send v = do
 -- | join, a one-shot fired from a pad does not care. So the set records two
 -- | numbers and the page draws the comparison — the decision stays with whoever
 -- | is sampling, which is where it belongs.
-type Settled = { decay :: Number, floor :: Number }
+type Settled = { decay :: Number, floor :: Number, thr :: Number, peak :: Number }
 
 settledFor
   :: Socket.Peaks -> Number
@@ -634,6 +634,15 @@ settledFor pk total rs =
              (\i -> span * Int.toNumber (i + 1) / Int.toNumber m)
              (Array.findLastIndex (\v -> v > thr) inside)
          , floor: Int.toNumber quietest / scale
+         -- **The level this cell was called silent at**, and the loudest it
+         -- reached. A decay measured shorter than the eye reads on the same
+         -- waveform is a disagreement about the threshold, and the threshold
+         -- was the one number nobody could see. It is relative to the take's
+         -- own floor, so on a take that never goes quiet the floor is elevated
+         -- and the threshold rises with it — which truncates exactly the long
+         -- tails it matters for.
+         , thr: Int.toNumber thr / scale
+         , peak: Int.toNumber (fromMaybe 0 (Array.last (Array.sort inside))) / scale
          }
   in
     map one rs
@@ -2155,7 +2164,11 @@ runSweep = do
           else do
             let said = "dry run: paced " <> show (Array.length paced) <> " cells, "
                   <> fmt (Int.toNumber (Array.foldl (+) 0 paced) / 1000.0)
-                  <> " s in total"
+                  <> " s in total ["
+                  <> joinWith " " (map (\d -> fmt d.decay <> "s") ds)
+                  <> "], silence called at "
+                  <> fmt (100.0 * fromMaybe 0.0 (map _.thr (Array.head ds)))
+                  <> "% of the loudest bucket"
                   <> (if cut > 0
                         then " — but " <> show cut <> " were still sounding when \
                              \cut at " <> show (max st2.sweep.spacingMs dryProbeMs)
