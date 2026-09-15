@@ -1889,8 +1889,27 @@ runSweep = do
   -- the step loop is how a run ends up half against one thing and half against
   -- another.
   st <- H.get
-  let p = st.sweep
-      declaredChord i = st.against >>= \c -> Array.index c.chords i
+  let
+    -- **A dry run gives itself room.**
+    --
+    -- Its whole job is to find out how long a cell rings, and running it at the
+    -- performance spacing asks that question inside a window chosen before
+    -- anyone knew the answer — so a patch with a long tail comes back with
+    -- every cell "still sounding when cut", every decay a lower bound, and an
+    -- instruction to try again with a bigger number nobody has named. Measured
+    -- on a long-tailed pad: four of four cut at 2000 ms.
+    --
+    -- So the probe is generous and the performance spacing is left alone. It
+    -- costs wall-clock on a measurement you take rarely, which is the cheap
+    -- side of the trade: the expensive side is a set of samples each carrying
+    -- the front of the next one.
+    --
+    -- `usePaced` off as well: measuring against the last measurement would
+    -- converge on whatever it already believed.
+    p = if st.dry
+          then st.sweep { spacingMs = max st.sweep.spacingMs dryProbeMs, usePaced = false }
+          else st.sweep
+    declaredChord i = st.against >>= \c -> Array.index c.chords i
   -- | **Wait for the capture to be RUNNING, not for 400 ms.**
   -- |
   -- | `captureOn` asks; the daemon opens the stream and says so in a snapshot,
@@ -2088,8 +2107,10 @@ runSweep = do
                   <> " s in total"
                   <> (if cut > 0
                         then " — but " <> show cut <> " were still sounding when \
-                             \cut, so those are lower bounds: give the sweep \
-                             \more space and dry-run it again"
+                             \cut at " <> show (max st2.sweep.spacingMs dryProbeMs)
+                             <> " ms, so those are lower bounds. Raise spacing \
+                                \past " <> show (Array.foldl max 0 paced)
+                             <> " ms and measure again"
                         else "")
             H.modify_ \x -> note said x
               { dry = false
@@ -2195,11 +2216,29 @@ analyse write = do
             if Array.null st.schedule then 0.0
             else Int.toNumber
                    (Sweep.spacingAt st.sweep (Array.length st.schedule - 1)) / 1000.0
+          -- **A declared run that did not declare is not a detector run.**
+          --
+          -- `Schedule.slots` returns nothing from fewer than two marks and the
+          -- division quietly falls through to `msm`, which then finds whatever
+          -- a long tail looks like — measured here as 9 regions for a 4-chord
+          -- progression. Both paths produce samples and only the COUNT differs,
+          -- so the failure reads as a detector that needs tuning rather than a
+          -- schedule that never arrived.
+          --
+          -- Said out loud, with both numbers, because the fix differs
+          -- completely: a short schedule is a capture that was not running when
+          -- the hits went out, and no amount of gap-slider is going to help.
+          wantMarks = Array.length (Sweep.steps st.sweep)
           declared = Schedule.slots
                        (Int.toNumber st.sweep.leadMs / 1000.0)
                        (Int.toNumber st.sweep.guardMs / 1000.0)
                        lastGap
                        st.schedule
+      when (pageFires st && Array.length st.schedule < wantMarks) $
+        H.modify_ (note ("the schedule has " <> show (Array.length st.schedule)
+                          <> " of " <> show wantMarks <> " marks, so this take is being \
+                             \divided by EAR, not by its own boundaries \x2014 the capture \
+                             \was not running when the hits went out"))
       r <- H.liftAff (attempt (toAffE (Http.divisions
             { take: takeName
             , as: Kind.material st.kind
@@ -2564,6 +2603,12 @@ declaredRow st =
         -- where one you discover afterwards has already named a set wrong.
         [ HH.text (c.name <> "  " <> show (Array.length c.chords)
                     <> (if c.key == "" then "  ·  no key" else "  ·  " <> c.key)) ]
+
+-- | **How much room a dry run gives each cell**, whatever the performance
+-- | spacing is. Eight seconds clears a piano and most pads; anything longer is
+-- | a drone, which is a `Longform` take and not divided at all.
+dryProbeMs :: Int
+dryProbeMs = 8000
 
 -- | **Does the page do the striking?**
 -- |
