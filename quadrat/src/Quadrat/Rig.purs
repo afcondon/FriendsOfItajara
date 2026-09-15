@@ -31,6 +31,7 @@ module Quadrat.Rig
   , forgetHeard
   , sendCc
   , sendNote
+  , midiWhy
   , setCv
   , pulse
   , pulseAt
@@ -106,6 +107,8 @@ foreign import sendCc
 
 -- | Note on, and note off `ms` later — the page holds that timer, so a run that
 -- | is stopped mid-way still releases what it pressed.
+foreign import midiWhy :: Effect String
+
 foreign import sendNote
   :: { port :: String, channel :: Int, note :: Int, velocity :: Int, ms :: Int }
   -> Effect Unit

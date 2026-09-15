@@ -204,3 +204,16 @@ export const forgetHeard = () => {
 // anywhere says why. Distinguishing the two is the difference between "plug
 // something in" and "open this page by a different name".
 export const midiAvailable = () => !!navigator.requestMIDIAccess;
+
+// **Why the port list is empty**, which the list itself cannot say.
+//
+// "none yet" covers three different situations and the fix differs for each:
+// the browser has no Web MIDI at all (not a secure origin), the permission
+// prompt has not been answered, or permission is granted and there genuinely
+// are no outputs. A dropdown showing the same two words for all three is how
+// you end up looking for a text field that was never missing.
+export const midiWhy = () => {
+  if (!navigator.requestMIDIAccess) return "no Web MIDI on this origin";
+  if (!access) return asked ? "waiting for permission…" : "not asked yet";
+  return access.outputs.size === 0 ? "no MIDI outputs" : "";
+};

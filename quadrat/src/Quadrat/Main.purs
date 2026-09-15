@@ -224,6 +224,8 @@ type State =
   -- | interrupted by pressing anything.
   , sweepFork :: Maybe H.ForkId
   , midiPorts :: Array String
+  -- | Why that list is empty, when it is — see `Rig.midiWhy`.
+  , midiWhy :: String
   -- | Which parameter's values are open for editing point by point. UI state,
   -- | so it is here and not in the plan: a plan that remembered which drawer
   -- | was open would put that in the file it is saved to.
@@ -556,7 +558,7 @@ component = H.mkComponent
       , minGap: 300.0, divider: Divider.Attacks, equalN: 16, mine: false, kitMine: false, layerMode: ""
       , cardView: Nothing, bank: "WORKSHOP", letter: "", kit: "", voice: 1, cardBusy: false
       , sweep: Sweep.emptyPlan, sweepOpen: false, sweepAt: Nothing
-      , sweepFork: Nothing, midiPorts: [], swept: false, sweepEdit: Nothing
+      , sweepFork: Nothing, midiPorts: [], midiWhy: "", swept: false, sweepEdit: Nothing
       , schedule: [], sets: [], tables: [], tablesErr: "", overran: false
       , declared: [], against: Nothing
       , page: Bench, fill: Swept, pivot: Nothing
@@ -898,6 +900,8 @@ handleAction = case _ of
     st3 <- H.get
     when st3.sweepOpen do
       ps <- liftEffect Rig.ports
+      why <- liftEffect Rig.midiWhy
+      when (why /= st3.midiWhy) (H.modify_ _ { midiWhy = why })
       when (ps /= st3.midiPorts) do
         H.modify_ _ { midiPorts = ps }
         unless (Array.null ps) $ H.modify_
@@ -910,18 +914,32 @@ handleAction = case _ of
       -- a store that is down should not read as a page that is broken.
       Left _ -> H.modify_ _ { declared = [] }
 
+  -- **Take the progression as MATERIAL, not as a timetable.**
+  --
+  -- The first version set `schedule` from the clip's own onsets, on the theory
+  -- that Triggerfish would play and this page would only record. That was
+  -- wrong, and the error was instructive: a run's schedule is exact BECAUSE
+  -- this page issued every trigger. Hand the playing to another app and the two
+  -- have to agree about time across a browser, a MIDI stack and an audio
+  -- buffer — which is precisely the agreement `Quadrat.Schedule` exists to
+  -- avoid needing.
+  --
+  -- So the clip supplies the chords and the count; the run plays them and
+  -- builds its own schedule exactly as a sweep does. The declared onsets are
+  -- not used at all, which is the tell that this is the right way round.
   PlayAgainst c -> H.modify_ \st ->
     if map _.hash st.against == Just c.hash
-      then st { against = Nothing, schedule = [] }
+      then st { against = Nothing }
       else st
         { against = Just c
-        -- The onsets ARE the schedule. A take is armed on its first sound and
-        -- the first chord is at zero, so the two origins already agree; what is
-        -- left between them is `leadMs`, which the plan already carries.
-        , schedule = c.onsets
         , kind = Kind.ChordHits
         , divider = Divider.defaultFor Kind.ChordHits
-        , sweep = st.sweep { centre = fromMaybe st.sweep.centre (centreOfKey c.key) }
+        , sweep = st.sweep
+            { centre = fromMaybe st.sweep.centre (centreOfKey c.key)
+            -- One step per chord. A run against four chords that fires three
+            -- times is not a small inaccuracy; it is a different set.
+            , extent = [ Array.length c.chords ]
+            }
         }
 
   PickKindNamed v -> do
@@ -1845,8 +1863,13 @@ closeAfter st = case Kind.closes st.kind of
 -- | Forked, so Stop is a button rather than a wish.
 runSweep :: forall o m. MonadAff m => H.HalogenM State Action () o m Unit
 runSweep = do
+  -- The chords this run is playing, if it is playing a declared progression at
+  -- all. Read once: the list cannot change mid-run, and re-reading state inside
+  -- the step loop is how a run ends up half against one thing and half against
+  -- another.
   st <- H.get
   let p = st.sweep
+      declaredChord i = st.against >>= \c -> Array.index c.chords i
   -- | **Wait for the capture to be RUNNING, not for 400 ms.**
   -- |
   -- | `captureOn` asks; the daemon opens the stream and says so in a snapshot,
@@ -1943,9 +1966,24 @@ runSweep = do
     H.liftAff (delay (Milliseconds (max 0.0 (fireAt - tPre))))
     for_ p.trigger.es5 \b -> void $
       H.liftAff (attempt (toAffE (Rig.es5pulse { bit: b, ms: p.trigger.ms })))
-    when (p.port /= "") $ for_ p.trigger.note \n -> liftEffect $
-      Rig.sendNote { port: p.port, channel: p.trigger.channel, note: n
-                   , velocity: p.trigger.velocity, ms: p.trigger.ms }
+    -- **A declared progression plays its OWN chord here.**
+    --
+    -- The trigger's single `note` is right for a drum: one hit, one note. A
+    -- chord is several at once, and the chords are known — Triggerfish
+    -- published them. So when a run is against a declaration, this step sounds
+    -- that step's chord and the trigger note is not used.
+    --
+    -- Which is the whole reason to do it this way rather than have Triggerfish
+    -- play: a run's schedule is exact BECAUSE the page issued every trigger. Let
+    -- another app play and the two have to agree about time; play it here and
+    -- there is nothing to agree about.
+    when (p.port /= "") $ case declaredChord s.index of
+      Just ns -> liftEffect $ for_ ns \n ->
+        Rig.sendNote { port: p.port, channel: p.trigger.channel, note: n
+                     , velocity: p.trigger.velocity, ms: p.trigger.ms }
+      Nothing -> for_ p.trigger.note \n -> liftEffect $
+        Rig.sendNote { port: p.port, channel: p.trigger.channel, note: n
+                     , velocity: p.trigger.velocity, ms: p.trigger.ms }
     tFire <- liftEffect Rig.nowMs
     liftEffect $ Rig.mark
       { i: s.index + 1, inAt: tIn - t0, cv: tCv - tIn
@@ -2499,7 +2537,12 @@ declaredRow st =
                      <> " \x00b7 from " <> c.source
                      <> (if on then " \x00b7 click to put it down" else " \x00b7 click to play the next take against it"))
         , HE.onClick \_ -> PlayAgainst c ]
-        [ HH.text (c.name <> "  " <> show (Array.length c.chords)) ]
+        -- The KEY on the chip's face, not only in its tooltip. It is published
+        -- from the sending app's workspace key, which may be a default nobody
+        -- set — and a key you can see before recording is a key you can fix,
+        -- where one you discover afterwards has already named a set wrong.
+        [ HH.text (c.name <> "  " <> show (Array.length c.chords)
+                    <> (if c.key == "" then "  ·  no key" else "  ·  " <> c.key)) ]
 
 -- | **A declared key as a centre**, e.g. "F# Ionian" → root 6, major.
 -- |
@@ -3222,7 +3265,7 @@ render st =
 
 
   sweepHandlers =
-    { ports: st.midiPorts, open: st.sweepEdit, plan: st.sweep
+    { ports: st.midiPorts, portsWhy: st.midiWhy, open: st.sweepEdit, plan: st.sweep
     , msg: SweepMsg, openParam: OpenParam
     , openTrigger: OpenModal (Just TriggerModal)
     , openPitch: OpenModal (Just PitchModal)

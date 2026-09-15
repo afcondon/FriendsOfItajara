@@ -39,6 +39,10 @@ import Quadrat.Sweep (Msg(..), Plan, pacedStale, valuesFor)
 
 type Handlers act =
   { ports :: Array String
+  -- | Why `ports` is empty, when it is. "none yet" cannot distinguish a
+  -- | permission nobody answered from a machine with no outputs, and the fix
+  -- | differs for each.
+  , portsWhy :: String
   -- | Which parameter is open for point-by-point editing, if any.
   , open :: Maybe Int
   , plan :: Plan
@@ -984,7 +988,9 @@ part h which =
           , HH.select [ HE.onValueChange (h.msg <<< SetPort) ]
               (Array.cons
                 (HH.option [ HP.value "", HP.selected (p.port == "") ]
-                  [ HH.text (if Array.null h.ports then "none yet" else "none") ])
+                  [ HH.text (if Array.null h.ports
+                               then (if h.portsWhy == "" then "none yet" else h.portsWhy)
+                               else "none") ])
                 (map (\o -> HH.option
                         [ HP.value o, HP.selected (o == p.port) ] [ HH.text o ])
                    h.ports))
