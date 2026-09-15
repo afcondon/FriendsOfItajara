@@ -37,8 +37,10 @@ data Kind
   | ChordHits
   -- | A bar, or a count of them, at tempo.
   | Bars Int
-  -- | Twelve of something, pitched. **Not yet designed** — see `Quadrat.Card`
-  -- | for the question it turns on.
+  -- | Twelve of something, pitched. The question it used to turn on —
+  -- | whether pitch goes on layers or on slices — is settled, and `joins`
+  -- | below carries the answer: **slices, because the start point IS the
+  -- | pitch**. What is still unbuilt is the naming, not the shape.
   | Chromatic
   -- | One long take. A pad, a field recording, a drone.
   | Longform
@@ -94,8 +96,8 @@ blurb = case _ of
     "Starts on your first note and closes itself at the count. Kept whole — \
     \a groove cut into hits stops being a groove."
   Chromatic ->
-    "Twelve of something, pitched. How the pitches get their names is not \
-    \settled yet."
+    "Twelve of something, pitched. One joined file, addressed by start point \
+    \\x2014 how the pitches get their NAMES is what is not settled yet."
   Longform ->
     "Starts on your first sound and runs until you stop it. Nothing is divided."
   Phrase ->

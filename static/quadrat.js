@@ -10009,7 +10009,7 @@
       return "listening \u2014 the phrase plays once, at its own times";
     }
     ;
-    throw new Error("Failed pattern match at Quadrat.Kind (line 245, column 10 - line 252, column 66): " + [v.constructor.name]);
+    throw new Error("Failed pattern match at Quadrat.Kind (line 247, column 10 - line 254, column 66): " + [v.constructor.name]);
   };
   var name16 = function(v) {
     if (v instanceof DrumHits) {
@@ -10036,7 +10036,7 @@
       return "phrase";
     }
     ;
-    throw new Error("Failed pattern match at Quadrat.Kind (line 67, column 8 - line 73, column 21): " + [v.constructor.name]);
+    throw new Error("Failed pattern match at Quadrat.Kind (line 69, column 8 - line 75, column 21): " + [v.constructor.name]);
   };
   var material = function(v) {
     if (v instanceof DrumHits) {
@@ -10063,7 +10063,7 @@
       return "break";
     }
     ;
-    throw new Error("Failed pattern match at Quadrat.Kind (line 145, column 12 - line 153, column 20): " + [v.constructor.name]);
+    throw new Error("Failed pattern match at Quadrat.Kind (line 147, column 12 - line 155, column 20): " + [v.constructor.name]);
   };
   var label5 = function(v) {
     if (v instanceof DrumHits) {
@@ -10095,7 +10095,7 @@
       return "Phrase";
     }
     ;
-    throw new Error("Failed pattern match at Quadrat.Kind (line 76, column 9 - line 82, column 21): " + [v.constructor.name]);
+    throw new Error("Failed pattern match at Quadrat.Kind (line 78, column 9 - line 84, column 21): " + [v.constructor.name]);
   };
   var keyed3 = function(v) {
     if (v instanceof DrumHits) {
@@ -10122,7 +10122,7 @@
       return true;
     }
     ;
-    throw new Error("Failed pattern match at Quadrat.Kind (line 166, column 9 - line 172, column 17): " + [v.constructor.name]);
+    throw new Error("Failed pattern match at Quadrat.Kind (line 168, column 9 - line 174, column 17): " + [v.constructor.name]);
   };
   var joins = function(v) {
     if (v instanceof DrumHits) {
@@ -10149,7 +10149,7 @@
       return true;
     }
     ;
-    throw new Error("Failed pattern match at Quadrat.Kind (line 220, column 9 - line 241, column 17): " + [v.constructor.name]);
+    throw new Error("Failed pattern match at Quadrat.Kind (line 222, column 9 - line 243, column 17): " + [v.constructor.name]);
   };
   var foldsTo = function(v) {
     if (v instanceof DrumHits) {
@@ -10176,7 +10176,7 @@
       return ToStereo.value;
     }
     ;
-    throw new Error("Failed pattern match at Quadrat.Kind (line 187, column 11 - line 195, column 21): " + [v.constructor.name]);
+    throw new Error("Failed pattern match at Quadrat.Kind (line 189, column 11 - line 197, column 21): " + [v.constructor.name]);
   };
   var voicesOn = function(k) {
     var v = foldsTo(k);
@@ -10188,7 +10188,7 @@
       return 2;
     }
     ;
-    throw new Error("Failed pattern match at Quadrat.Kind (line 204, column 14 - line 206, column 16): " + [v.constructor.name]);
+    throw new Error("Failed pattern match at Quadrat.Kind (line 206, column 14 - line 208, column 16): " + [v.constructor.name]);
   };
   var closes = function(v) {
     if (v instanceof DrumHits) {
@@ -10215,7 +10215,7 @@
       return ByHand.value;
     }
     ;
-    throw new Error("Failed pattern match at Quadrat.Kind (line 117, column 10 - line 128, column 19): " + [v.constructor.name]);
+    throw new Error("Failed pattern match at Quadrat.Kind (line 119, column 10 - line 130, column 19): " + [v.constructor.name]);
   };
   var blurb = function(v) {
     if (v instanceof DrumHits) {
@@ -10231,7 +10231,7 @@
     }
     ;
     if (v instanceof Chromatic) {
-      return "Twelve of something, pitched. How the pitches get their names is not settled yet.";
+      return "Twelve of something, pitched. One joined file, addressed by start point \u2014 how the pitches get their NAMES is what is not settled yet.";
     }
     ;
     if (v instanceof Longform) {
@@ -10242,7 +10242,7 @@
       return "A phrase declared by Triggerfish, played once at its own times. Kept whole \u2014 its rhythm is the material, so there is nothing here to divide.";
     }
     ;
-    throw new Error("Failed pattern match at Quadrat.Kind (line 85, column 9 - line 103, column 72): " + [v.constructor.name]);
+    throw new Error("Failed pattern match at Quadrat.Kind (line 87, column 9 - line 105, column 72): " + [v.constructor.name]);
   };
   var all4 = /* @__PURE__ */ (function() {
     return [DrumHits.value, ChordHits.value, new Bars2(1), Chromatic.value, Longform.value, Phrase.value];
