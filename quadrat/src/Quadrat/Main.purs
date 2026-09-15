@@ -987,7 +987,11 @@ handleAction = case _ of
               -- closes. `Sweep` caps it at 20 s, which is a real ceiling on
               -- how long a phrase can be — said out loud in `runSweep` rather
               -- than silently truncating one.
-              , spacingMs = if isPhrase c then clamp 50 20000 (phraseMs c + 1500)
+              -- Just the phrase and room for its last note to finish. The
+              -- DECAY is no longer this number's business: the run waits for
+              -- the take to go quiet before it closes, however long that is,
+              -- so the cell has only to cover what is played.
+              , spacingMs = if isPhrase c then clamp 50 20000 (phraseMs c + 500)
                             else st.sweep.spacingMs
               -- **A measured pacing cannot be about THIS phrase.**
               --
@@ -2109,11 +2113,11 @@ runSweep = do
                  <> maybe "(none set)" show p.trigger.note
                  <> " \x2014 no progression picked, so these are not chords"))
   -- **A phrase longer than the cell is a phrase cut off.** `spacingMs` caps at
-  -- 20 s and the take closes an interval after its only step, so anything past
-  -- that would come back silently truncated — which looks exactly like a
-  -- recording that stopped early for some other reason.
+  -- 20 s, so anything past that would come back silently truncated — which
+  -- looks exactly like a recording that stopped early for some other reason.
+  -- (Its TAIL is safe whatever the length: that is waited out separately.)
   for_ st.against \c ->
-    when (isPhrase c && phraseMs c + 1500 > p.spacingMs) $
+    when (isPhrase c && phraseMs c + 500 > p.spacingMs) $
       H.modify_ (note ("this phrase runs " <> show (phraseMs c) <> " ms and the cell is "
                         <> show p.spacingMs <> " ms \x2014 the tail will be cut"))
   -- | **Wait for the capture to be RUNNING, not for 400 ms.**
@@ -2133,7 +2137,20 @@ runSweep = do
           H.liftAff (delay (Milliseconds 100.0))
           awaitOpen (n - 1)
   awaitOpen 100
-  H.liftAff (delay (Milliseconds 400.0))
+  -- **The floor, measured from this take's own head.**
+  --
+  -- The 400 ms of real silence `by attack` wants in front of the first onset
+  -- is also the only moment this run can see what its input sounds like with
+  -- nothing playing — which is what the end of the take has to be compared
+  -- against. Taken as the LOUDEST of the samples, not the mean: a floor set
+  -- below the room's own noise is a tail that never ends.
+  floorDb <- do
+    let sip n acc = do
+          H.liftAff (delay (Milliseconds 80.0))
+          stf <- H.get
+          let acc' = max acc (dbNow stf)
+          if n <= 1 then pure acc' else sip (n - 1) acc'
+    sip 5 (-120.0)
   -- The grid every step is timed against, fixed before the first one — and
   -- allowed to SLIP, never to be caught up. See `slipped`.
   anchor <- liftEffect (Ref.new 0.0)
@@ -2249,14 +2266,54 @@ runSweep = do
     now <- liftEffect Rig.nowMs
     let due = t0 + Int.toNumber (Sweep.startsAt p (s.index + 1))
     H.liftAff (delay (Milliseconds (max 0.0 (due - now))))
-  -- The last hit gets the same gap as the others and then a little more, so
-  -- that closing the take is never the thing that ends its decay. A final
-  -- sample that is short because the recording stopped is indistinguishable
-  -- from one that is short because the sound was.
-  H.liftAff (delay (Milliseconds 300.0))
+  -- **The take ends when the sound does, not 300 ms after the last trigger.**
+  --
+  -- That 300 ms was a guess at how long anything rings on past its gate, and
+  -- it was written to stop exactly the failure it still allowed: a final
+  -- sample short because the RECORDING stopped is indistinguishable from one
+  -- short because the sound did. A reverb tail goes straight through it — AC,
+  -- on the first phrase sampled this way: "it lost the reverb tail".
+  --
+  -- So the run listens instead. It knows what this input sounds like with
+  -- nothing playing, because it measured that at the head of the take, and it
+  -- waits for the level to come back to within `tailMarginDb` of it and stay
+  -- there. Stop still cuts it, and arming another take still replaces it —
+  -- which is the whole of what an open-ended take needs.
+  --
+  -- Every kind, not only a phrase: the last chord of a progression was being
+  -- cut by the same 300 ms, and a drum hit that is already quiet costs one
+  -- extra poll to find out.
+  -- **Say that it is still recording.** An open-ended wait and a hung run look
+  -- the same from outside, and the last thing the page said was that it was
+  -- playing — which by now it is not. Replaced by the result when it ends.
+  H.modify_ (note "the take is still open \x2014 recording the tail until it goes quiet")
+  tailStart <- liftEffect Rig.nowMs
+  let quietAt = floorDb + tailMarginDb
+      listen quietFor loudest = do
+        stq <- H.get
+        t <- liftEffect Rig.nowMs
+        let db = dbNow stq
+            waited = t - tailStart
+            quietFor' = if db <= quietAt then quietFor + 100.0 else 0.0
+        if quietFor' >= tailQuietMs || waited >= tailMaxMs
+          then pure { waited, loudest: max loudest db, hitCap: waited >= tailMaxMs }
+          else do
+            H.liftAff (delay (Milliseconds 100.0))
+            listen quietFor' (max loudest db)
+  tail <- listen 0.0 (-120.0)
   liftEffect Rig.dumpMarks
   restCv
-  H.modify_ (note ("swept " <> show (Encoding.total p.extent) <> " samples")
+  -- **Both numbers, in the line that survives.** A tail that ran eleven
+  -- seconds and one that hit the ceiling look identical from the outside, and
+  -- the fix for each is the opposite of the fix for the other. Said here
+  -- rather than a moment earlier because this note is the one that stays.
+  H.modify_ (note ("swept " <> show (Encoding.total p.extent) <> " samples \x00b7 tail ran "
+                     <> secs2 (tail.waited / 1000.0) <> " s, quiet below "
+                     <> secs2 quietAt <> " dB (floor " <> secs2 floorDb <> ")"
+                     <> (if tail.hitCap
+                           then " \x2014 CUT at the " <> secs2 (tailMaxMs / 1000.0)
+                                  <> " s ceiling, still at " <> secs2 tail.loudest <> " dB"
+                           else ""))
     <<< _ { sweepAt = Nothing, sweepFork = Nothing, sweepOpen = false, swept = true })
   -- **Keep the schedule, because it cannot be recomputed.** It is measured —
   -- the trigger times as they actually landed — and a reload that loses it
@@ -2387,7 +2444,16 @@ restCv = do
 -- | The chosen source's level as 0…1, from the daemon's own dB. -60 is the
 -- | floor: below it nothing is playing, and the sparkline says so by lying flat.
 levelNow :: State -> Number
-levelNow s =
+levelNow s = max 0.0 (min 1.0 ((dbNow s + 60.0) / 60.0))
+
+-- | **The chosen source's level in dB, unmapped and unclamped.**
+-- |
+-- | `levelNow` squashes it into 0…1 for a sparkline, which is right for a
+-- | picture and useless for a decision: the interesting part of a reverb tail
+-- | happens in the last few dB, where that mapping has almost no resolution
+-- | left. Anything deciding whether a sound has STOPPED wants the decibels.
+dbNow :: State -> Number
+dbNow s =
   let
     -- The same resolution `srcNow` does, and for the same reason: by name,
     -- falling back to the first available one. A meter reading a different
@@ -2397,9 +2463,8 @@ levelNow s =
         case Array.findIndex (\x -> x.name == s.sweep.source) t.sources of
           Just i -> Just (i + 1)
           Nothing -> map (_ + 1) (Array.findIndex _.available t.sources))
-    db = maybe (-120.0) _.db (s.looper >>= \t -> Array.index t.sources (ix - 1))
   in
-    max 0.0 (min 1.0 ((db + 60.0) / 60.0))
+    maybe (-120.0) _.db (s.looper >>= \t -> Array.index t.sources (ix - 1))
 
 analyse :: forall o m. MonadAff m => Boolean -> H.HalogenM State Action () o m Unit
 analyse write = do
@@ -2857,6 +2922,29 @@ declaredRow st =
 -- | a drone, which is a `Longform` take and not divided at all.
 dryProbeMs :: Int
 dryProbeMs = 8000
+
+-- | **How far above the take's own floor still counts as sounding**, in dB.
+-- |
+-- | Relative, never absolute, and the reason is on the bench: the ES-9's
+-- | inputs are DC-coupled, and a -0.0234 offset reads as -32.6 dBFS with
+-- | nothing plugged in at all. Any fixed threshold is either never reached on
+-- | that input or reached instantly on a quiet one. The floor is measured from
+-- | the head of this very take, so whatever the input's own idea of silence
+-- | is, the comparison is against that.
+tailMarginDb :: Number
+tailMarginDb = 6.0
+
+-- | How long it has to stay down before the tail is called over. Short enough
+-- | not to pad every take, long enough that a gap between two swells is not
+-- | mistaken for the end of one.
+tailQuietMs :: Number
+tailQuietMs = 1200.0
+
+-- | **A ceiling on waiting**, because a source that never goes quiet must not
+-- | turn every run into a stare. Reached rather than silently obeyed: the run
+-- | says so, with the numbers, exactly as the dry run does.
+tailMaxMs :: Number
+tailMaxMs = 30000.0
 
 -- | **Does the page do the striking?**
 -- |
