@@ -1331,12 +1331,38 @@ handleAction = case _ of
 
   SetPlaceAppend b -> H.modify_ _ { placeAppend = b }
 
+  -- | **Say what was written, in the words the module will show.**
+  -- |
+  -- | The compiler's last line is about its own work — files and bytes — and
+  -- | the question at this button is "is my thing on the card, and where". A
+  -- | write that succeeds and reports something that does not name a slot is a
+  -- | write you go and check, and checking means reading the card for a name
+  -- | you expect to see. AC did exactly that, four times, and each time the
+  -- | name on the card was another take's.
+  -- |
+  -- | The preview already knows: it was fetched to answer "what would this
+  -- | do", and the same list answers "what did it do" the moment the write
+  -- | comes back ok. Read before it is cleared, because clearing it first is
+  -- | how this ended up with nothing to say.
   WriteCard dest replace -> do
+    st0 <- H.get
+    let going = Array.filter (\sl -> sl.fate /= "keep" && sl.name /= "")
+                  (maybe [] _.slots st0.preview)
+        oneSlot sl = sl.slot <> " " <> sl.name <> " \x00b7 " <> show sl.files
+                       <> (if sl.files == 1 then " file" else " files")
+        said = joinWith ", " (map oneSlot going)
     H.modify_ _ { cardBusy = true, confirmWrite = Nothing, preview = Nothing }
     r <- H.liftAff (attempt (toAffE (Http.writeToCard dest replace)))
     case r of
       Left e -> H.modify_ (note (Aff.message e) <<< _ { cardBusy = false })
-      Right w -> H.modify_ (note (lastLine w.output) <<< _ { cardBusy = false })
+      -- Never "wrote" on a failure, and never a slot list the compiler did not
+      -- confirm: a confident sentence about the wrong outcome is the thing
+      -- this is here to stop.
+      Right w
+        | not w.ok -> H.modify_ (note (lastLine w.output) <<< _ { cardBusy = false })
+        | said == "" -> H.modify_ (note (lastLine w.output) <<< _ { cardBusy = false })
+        | otherwise -> H.modify_
+            (note ("wrote " <> said <> " to " <> dest) <<< _ { cardBusy = false })
     handleAction RefreshCard
   SetLayerMode m -> H.modify_ _ { layerMode = m }
   -- | `append` is the whole of the two-axis change at this end: the same set,
@@ -1482,20 +1508,35 @@ handleAction = case _ of
               , samples: kept })))
         case r of
           Left e -> H.modify_ (note (Aff.message e) <<< _ { cardBusy = false })
-          -- **A send establishes the kit, and later takes join it.**
+          -- **A send establishes the kit, and later takes join it** — but it
+          -- does not CLAIM the name.
           --
           -- The kit name used to follow the take name, so every take proposed
           -- a fresh kit and four takes meant for one voice became four kits on
           -- four voices. Adopting the name that was just used makes the kit a
-          -- place you are working, which is what a kit is; the free-voice
-          -- search and the add-as-layer verb are what keep that from
-          -- destroying anything, and they did not exist when the name was
-          -- first made to follow.
+          -- place you are working, which is what a kit is.
+          --
+          -- `kitMine` is a different question: **did a person type this?**
+          -- `arm` reads it to decide whether a new take keeps the kit or gets
+          -- a fresh one, so latching it here told `arm` that a name this code
+          -- had just invented was a name somebody chose. It then survived
+          -- every later take for ever.
+          --
+          -- Measured 2026-09-15: twenty-four chords from `…232247` were
+          -- written to bank Q under the name `…222133`, a four-sample set from
+          -- an hour earlier — the FILES were right and the LABEL was another
+          -- take's. AC looked at the card for the name he had recorded, did
+          -- not find it, and wrote the same kit four times over two banks.
+          -- Content and label disagreeing is the worst of both: the write
+          -- worked every time and looked every time as though it had not.
+          --
+          -- So the name still follows, and it is released when a new take is
+          -- armed. Keeping it across takes is one keystroke in the kit field —
+          -- deliberate, which is what it was pretending to be.
           Right w -> H.modify_ \s ->
             (note (lastLine w.output) s)
               { cardBusy = false
               , kit = if s.kit == "" then setName else s.kit
-              , kitMine = true
               , kept = true
               , confirmKeep = false
               }
