@@ -46,7 +46,7 @@ import Data.Array as Array
 import Data.Foldable (for_)
 import Data.Int as Int
 import Data.Either (Either(..), either)
-import Data.Maybe (Maybe(..), fromMaybe, maybe)
+import Data.Maybe (Maybe(..), fromMaybe, isJust, maybe)
 import Data.Maybe as Maybe
 import Data.Nullable as Nullable
 import Data.Number as Number
@@ -898,7 +898,9 @@ handleAction = case _ of
     -- asking is a permission prompt that may sit unanswered for as long as it
     -- likes, and this is how its answer arrives without anything waiting on it.
     st3 <- H.get
-    when st3.sweepOpen do
+    -- While any door that can send MIDI is open — the permission may be
+    -- answered at any moment and the list fills in when it is.
+    when (st3.sweepOpen || isJust st3.modal) do
       ps <- liftEffect Rig.ports
       why <- liftEffect Rig.midiWhy
       when (why /= st3.midiWhy) (H.modify_ _ { midiWhy = why })
@@ -1473,6 +1475,18 @@ handleAction = case _ of
           Just PitchModal -> ix
           _ -> st.sweepEdit
       }
+    -- **Asking for MIDI belongs to the door that offers it**, not to one
+    -- particular way of filling a set. It used to hang off `OpenSweep`, which
+    -- only runs for a SWEPT take — so a played run was shown a MIDI OUT
+    -- dropdown that could never be populated, while the run itself still sent
+    -- notes. `openMidi` is written never to block (the permission prompt lives
+    -- in browser chrome, where a page waiting on it just looks dead), so this
+    -- is safe from a handler.
+    when (isJust m) do
+      void $ H.liftAff (attempt (toAffE Rig.openMidi))
+      ps <- liftEffect Rig.ports
+      why <- liftEffect Rig.midiWhy
+      H.modify_ _ { midiPorts = ps, midiWhy = why }
 
   -- The statement's coarse toggle, saying the same thing as the card's third
   -- button and by the same means. "Pitched" on a pitch that is merely switched
@@ -1609,9 +1623,16 @@ handleAction = case _ of
       { bus: b, level: st.sweep.trigger.gateLevel, ms: st.sweep.trigger.ms })))
     for_ st.sweep.trigger.es5 \b -> void $
       H.liftAff (attempt (toAffE (Rig.es5pulse { bit: b, ms: st.sweep.trigger.ms })))
-    when (st.sweep.port /= "") $ for_ st.sweep.trigger.note \n -> liftEffect $
-      Rig.sendNote { port: st.sweep.port, channel: st.sweep.trigger.channel, note: n
-                   , velocity: st.sweep.trigger.velocity, ms: st.sweep.trigger.ms }
+    -- The declared chord for THIS cell, for the same reason the run plays it:
+    -- a preview that sounded the trigger note while the run sounds a chord
+    -- would be a preview of something else.
+    when (st.sweep.port /= "") $ case st.against >>= \c -> Array.index c.chords j of
+      Just ns -> liftEffect $ for_ ns \n ->
+        Rig.sendNote { port: st.sweep.port, channel: st.sweep.trigger.channel, note: n
+                     , velocity: st.sweep.trigger.velocity, ms: st.sweep.trigger.ms }
+      Nothing -> for_ st.sweep.trigger.note \n -> liftEffect $
+        Rig.sendNote { port: st.sweep.port, channel: st.sweep.trigger.channel, note: n
+                     , velocity: st.sweep.trigger.velocity, ms: st.sweep.trigger.ms }
   StopAudio -> do
     liftEffect Audio.stop
     H.modify_ _ { playing = Nothing }
