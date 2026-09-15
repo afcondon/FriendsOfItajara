@@ -1367,6 +1367,31 @@ handleAction = case _ of
           Nothing -> []
           Just pk -> settledFor pk (max 0.001 (heldSecs st))
                        (map (\r -> { start: r.start, end: r.end }) st.regions)
+        -- **Declared beats inferred, at the last step too.**
+        --
+        -- `strikesIn` listens: it takes the notes that arrived on MIDI IN and
+        -- aligns them to the regions by anchoring on the first one. That is
+        -- the right and only answer for a take played by hand, or by a black
+        -- box like Progressions — the chord that made the audio is not in the
+        -- audio, so you have to hear it.
+        --
+        -- A DECLARED run does not need to hear anything. This page chose the
+        -- chords, sent them, and knows which step each region belongs to.
+        -- Asking a listener instead was the whole principle abandoned one
+        -- line from the end: nothing echoes the iPad's MIDI back to the Mac,
+        -- so `believed` was empty, `takeZero` was Nothing, and every sample of
+        -- twenty-four named chords was stored as `notes: []`.
+        --
+        -- No alignment, no anchor, no tolerance window: the sample's index IS
+        -- the step's index, which is why the whole declared path exists.
+        strikesOf i r = case st.against of
+          Just c | pageFires st -> case Array.index c.chords i of
+            -- A phrase is one region holding every one of its chords; chord
+            -- hits are one region each. Both fall out of the same lookup.
+            _ | isPhrase c -> c.chords
+            Just ns -> [ ns ]
+            Nothing -> []
+          _ -> maybe [] (\t0 -> strikesIn (believed st) t0 r) (takeZero st)
         kept = Array.catMaybes
           (Array.mapWithIndex
             (\i r ->
@@ -1381,13 +1406,14 @@ handleAction = case _ of
                 , decay: maybe 0.0 _.decay (Array.index settles i)
                 , floor: maybe 0.0 _.floor (Array.index settles i)
                 , means: maybe [] _.means (Array.index runSteps i)
-                -- **What was played into it**, which for a hand-played chord
-                -- set is the material itself. Empty on a swept run, where the
-                -- pitch is in `means` because the run asked for it, and empty
-                -- when nothing was listening — which the page says out loud
-                -- before a take rather than after one.
-                , notes: maybe [] (\t0 -> notesIn (believed st) t0 r) (takeZero st)
-                , struck: maybe [] (\t0 -> strikesIn (believed st) t0 r) (takeZero st)
+                -- **What was played into it**, which for a chord set IS the
+                -- material — the chord that made the audio is not in the
+                -- audio, so if it is not recorded here it is gone.
+                --
+                -- Two ways of knowing, and the declared one wins where it
+                -- exists. See `declaredStrikes`.
+                , notes: Array.nub (Array.sort (join (strikesOf i r)))
+                , struck: strikesOf i r
                 })
             st.regions)
     if Array.null keptRegions
@@ -3935,13 +3961,19 @@ render st =
                    <> " \x2014 the same picture in Vetula") ]
            ]
 
+  -- **The same two ways of knowing as the set gets**, and in the same order.
+  -- A declared run shows the chords it played; a hand-played one shows what
+  -- was heard. They must agree, because this picture is the last chance to
+  -- notice that the thing about to be stored is wrong.
   benchChords
     | st.kind /= Kind.ChordHits = []
-    | otherwise = case takeZero st of
-        Nothing -> []
-        Just t0 ->
-          Array.filter (not <<< Array.null)
-            (join (map (strikesIn (believed st) t0) st.regions))
+    | otherwise = case st.against of
+        Just c | pageFires st -> Array.filter (not <<< Array.null) c.chords
+        _ -> case takeZero st of
+          Nothing -> []
+          Just t0 ->
+            Array.filter (not <<< Array.null)
+              (join (map (strikesIn (believed st) t0) st.regions))
 
   -- | **The register they arrived in, always said.**
   -- |
