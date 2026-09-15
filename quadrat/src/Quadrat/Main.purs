@@ -822,6 +822,11 @@ handleAction = case _ of
     -- array cannot grow without bound over a long session.
     H.modify_ \s0 ->
       s0 { levels = Array.takeEnd 40 (Array.snoc s0.levels (levelNow s0)) }
+    -- Re-read the declared list when the tab comes back, not on every tick:
+    -- it changes when somebody publishes in another window, and that is
+    -- exactly when you return to this one.
+    back <- liftEffect Declared.cameBack
+    when back (handleAction FetchDeclared)
     snap <- liftEffect Socket.latest
     pk <- liftEffect Socket.latestPeaks
     H.modify_ _ { looper = snap, peaks = pk }

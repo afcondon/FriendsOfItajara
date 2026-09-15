@@ -20,6 +20,7 @@
 module Quadrat.Declared
   ( Clip
   , fetchDeclared
+  , cameBack
   ) where
 
 import Prelude
@@ -58,3 +59,18 @@ fetchDeclared :: Aff (Array Clip)
 fetchDeclared = makeAff \cb -> do
   fetchDeclaredImpl (cb <<< Left) (cb <<< Right)
   pure nonCanceler
+
+-- | **Has the page come back to the foreground since this was last asked?**
+-- |
+-- | The publish happens in another window, so the list changes when a human
+-- | presses a button somewhere Quadrat cannot see. Asking the store on every
+-- | poll would be a request a second for an answer that rarely moves; asking
+-- | only at start-up means reloading to see what you just sent. Returning to
+-- | the tab is the one moment it is worth re-reading, and it is the moment you
+-- | are about to look.
+-- |
+-- | Reading CLEARS the latch, so one return is one fetch.
+foreign import cameBackImpl :: Effect Boolean
+
+cameBack :: Effect Boolean
+cameBack = cameBackImpl

@@ -89,3 +89,23 @@ export const fetchDeclaredImpl = (onError) => (onSuccess) => () => {
     .then((xs) => onSuccess(xs.filter(Boolean))())
     .catch((e) => onError(e instanceof Error ? e : new Error(String(e)))());
 };
+
+// **Has the page just come back to the foreground?** Latches on
+// `visibilitychange`, and the caller clears it by asking. A poll that asked the
+// store every tick would be a request a second for a list that changes when a
+// human presses a button in another window; a poll that never asks makes you
+// reload the page to see what you just published. Coming back to the tab is
+// exactly the moment the answer might have changed.
+let returned = false;
+if (typeof document !== "undefined") {
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) returned = true;
+  });
+  if (typeof window !== "undefined") window.addEventListener("focus", () => { returned = true; });
+}
+
+export const cameBackImpl = () => {
+  const r = returned;
+  returned = false;
+  return r;
+};
