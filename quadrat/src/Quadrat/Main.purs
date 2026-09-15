@@ -1946,9 +1946,21 @@ runSweep = do
   when (p.port == "" && (isJust p.trigger.note || isJust st.against)) $
     H.modify_ (note "no MIDI port chosen \x2014 this run will record silence. \
                      \Trigger \x203a midi out")
-  when (pageFires st && Maybe.isNothing st.against) $
-    H.modify_ (note "no progression picked, so this run plays the trigger note \
-                     \rather than chords \x2014 pick one in the declared row")
+
+  -- **What this run is about to play, said every time.**
+  --
+  -- Not a warning: a statement. The two cases sound completely different and
+  -- look identical from here — a run with no progression picked fires the
+  -- trigger's own note, which on the wire is one note-on where a chord would be
+  -- four, and reads as "the chords are not working" rather than "there are no
+  -- chords". A line naming which of the two is happening costs nothing and
+  -- ends the question.
+  H.modify_ (note (case st.against of
+    Just c -> "playing " <> show (Array.length c.chords) <> " chords from "
+                <> c.name <> " on " <> (if p.port == "" then "no port" else p.port)
+    Nothing -> "playing the trigger note "
+                 <> maybe "(none set)" show p.trigger.note
+                 <> " \x2014 no progression picked, so these are not chords"))
   -- | **Wait for the capture to be RUNNING, not for 400 ms.**
   -- |
   -- | `captureOn` asks; the daemon opens the stream and says so in a snapshot,
