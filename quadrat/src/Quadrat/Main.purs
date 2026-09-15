@@ -2565,6 +2565,21 @@ declaredRow st =
         [ HH.text (c.name <> "  " <> show (Array.length c.chords)
                     <> (if c.key == "" then "  ·  no key" else "  ·  " <> c.key)) ]
 
+-- | **Does the page do the striking?**
+-- |
+-- | `fill == Swept` used to answer this, and was right while there were only
+-- | two cases: a swept transect the page runs, and a take a human plays by
+-- | hand. A DECLARED progression is a third — played rather than swept, but
+-- | struck by this page, which issues every chord.
+-- |
+-- | Everything that turned on the old flag turns on this instead: whether
+-- | Record runs the schedule or merely arms, whether Measure is offered, and
+-- | whether the trigger door describes the rig as firing. Getting one of them
+-- | wrong is how a run that plays nothing still records eight seconds of
+-- | silence and looks like it worked.
+pageFires :: State -> Boolean
+pageFires st = st.fill == Swept || isJust st.against
+
 -- | **A declared key as a centre**, e.g. "F# Ionian" → root 6, major.
 -- |
 -- | Triggerfish writes a key as `<root> <mode>`, which is the sentence a
@@ -3127,7 +3142,16 @@ render st =
   measHave = not (Array.null st.sweep.paced)
   measStale = Sweep.pacedStale st.sweep
   measureWants = not measHave || measStale
-  canMeasure = st.sweepFork == Nothing && not st.busy && st.fill == Swept
+  -- **Measure needs the page to be doing the striking, not the fill to be
+  -- Swept.**
+  --
+  -- The two were the same thing until a progression could be declared: a
+  -- `Played` take was one a human played by hand, where there is nothing to
+  -- measure because nothing here fires. A declared run is played-but-struck-by
+  -- -the-page — the page issues every chord — and it is the case that needs
+  -- measuring most, since a chord rings far longer than the drum hit the
+  -- default spacing was chosen for.
+  canMeasure = st.sweepFork == Nothing && not st.busy && pageFires st
   measureSays
     | st.dry = "measuring\x2026"
     | not measHave = show st.sweep.spacingMs <> " ms flat \x2014 not measured"
@@ -3291,7 +3315,7 @@ render st =
     , openTrigger: OpenModal (Just TriggerModal)
     , openPitch: OpenModal (Just PitchModal)
     , tables: st.tables, tablesErr: st.tablesErr, pickPitch: PickPitch
-    , rigFires: st.fill == Swept, addPitch: AddPitch
+    , rigFires: pageFires st, addPitch: AddPitch
     }
 
   -- | **A modal, for the jobs that are consulted rarely and read never.**
@@ -3995,11 +4019,11 @@ render st =
               [ HH.button
                   [ HP.class_ (HH.ClassName "q-big is-rec")
                   , HP.disabled (st.looper == Nothing)
-                  , HP.title (if st.fill == Swept
+                  , HP.title (if pageFires st
                                 then "play the schedule and record the lot as one take"
                                 else "arm, and record what you play")
                   , HE.onClick \_ ->
-                      if st.fill == Swept then RunSweep srcNow else ArmOn srcNow
+                      if pageFires st then RunSweep srcNow else ArmOn srcNow
                   ]
                   [ HH.span [ HP.class_ (HH.ClassName "q-recdot") ] []
                   , HH.text "Record"
