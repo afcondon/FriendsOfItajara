@@ -217,3 +217,38 @@ export const midiWhy = () => {
   if (!access) return asked ? "waiting for permission…" : "not asked yet";
   return access.outputs.size === 0 ? "no MIDI outputs" : "";
 };
+
+// **A phrase on the MIDI subsystem's clock, not the page's.**
+//
+// `output.send(data, timestamp)` hands the bytes to the browser, which emits
+// them at that DOMHighResTimeStamp. The page can then be as late as it likes
+// without the phrase drifting — the same move `pulseAt` made for the gate, and
+// for the same measured reason: this page is a bad clock.
+//
+// Note-offs are scheduled the same way rather than held in `setTimeout`, so a
+// dense phrase does not accumulate a few hundred pending timers; `hushPort`
+// below is what makes that safe.
+export const sendPhrase = (m) => () => {
+  const out = find(m.port);
+  if (!out) return;
+  const ch = (m.channel - 1) & 0x0f;
+  const t0 = performance.now();
+  for (const n of m.notes) {
+    const on = t0 + Math.max(0, n.at);
+    out.send([0x90 | ch, n.note & 0x7f, n.velocity & 0x7f], on);
+    out.send([0x80 | ch, n.note & 0x7f, 0], on + Math.max(1, n.ms));
+  }
+};
+
+// Drop everything still pending, then end anything already sounding. Both
+// halves are needed: `clear()` cannot un-send a note-on that has already gone
+// out, and All Notes Off cannot stop one that has not.
+export const hushPort = (m) => () => {
+  const out = find(m.port);
+  if (!out) return;
+  const ch = (m.channel - 1) & 0x0f;
+  try {
+    if (typeof out.clear === "function") out.clear();
+  } catch (_) {}
+  out.send([0xb0 | ch, 123, 0]);
+};

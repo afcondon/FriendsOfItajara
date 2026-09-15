@@ -56,6 +56,10 @@ const chordsOf = (events) => {
       // trigger's hold does not. A drum's gate is a 10 ms blip and right for a
       // drum; a chord held for 10 ms on a sustained patch barely speaks.
       gate: Math.max.apply(null, byAt.get(at).map((e) => e.gateMs || 0)) || 0,
+      // The loudest voice of the group. A chord machine sends one velocity for
+      // all of them; a phrase's groups are mostly single notes, so this is that
+      // note's own.
+      vel: Math.max.apply(null, byAt.get(at).map((e) => e.vel || 0)) || 0,
     }));
 };
 
@@ -89,6 +93,7 @@ export const fetchDeclaredImpl = (onError) => (onSuccess) => () => {
               onsets: groups.map((g) => g.at),
               chords: groups.map((g) => g.notes),
               gates: groups.map((g) => g.gate),
+              vels: groups.map((g) => g.vel),
             };
           })
         )

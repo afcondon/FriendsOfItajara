@@ -5,7 +5,7 @@
 -- | matters afterwards follows from what the thing IS: how it is armed, when it
 -- | closes, whether it is divided, and what the divisions mean.
 -- |
--- | Five kinds, and the same taxonomy `msm`'s classifier reads a card with.
+-- | Six kinds, and the same taxonomy `msm`'s classifier reads a card with.
 module Quadrat.Kind
   ( Kind(..)
   , all
@@ -42,11 +42,26 @@ data Kind
   | Chromatic
   -- | One long take. A pad, a field recording, a drone.
   | Longform
+  -- | **A piece of music, played once.** A phrase declared by Triggerfish — a
+  -- | region marked in a Review window, or a tidal-style playback.
+  -- |
+  -- | Next to `Bars` in almost every respect, and distinct in the one that
+  -- | matters: a bar closes at a COUNT, which needs a tempo, and this closes at
+  -- | a LENGTH, which the declaration already knows to the millisecond. There
+  -- | may well be no Link clock at all, and `barFrames` of nothing is a count
+  -- | of nothing.
+  -- |
+  -- | Next to `ChordHits` in what it is made of, and opposite in what that
+  -- | means. Chord hits are ALTERNATIVES — four chords, four samples, and their
+  -- | spacing is the sampler's business, free to leave whatever room a decay
+  -- | wants. A phrase's spacing IS the material. Play it on a grid of the
+  -- | sampler's choosing and you have recorded a different piece.
+  | Phrase
 
 derive instance Eq Kind
 
 all :: Array Kind
-all = [ DrumHits, ChordHits, Bars 1, Chromatic, Longform ]
+all = [ DrumHits, ChordHits, Bars 1, Chromatic, Longform, Phrase ]
 
 name :: Kind -> String
 name = case _ of
@@ -55,6 +70,7 @@ name = case _ of
   Bars _ -> "bars"
   Chromatic -> "chromatic"
   Longform -> "longform"
+  Phrase -> "phrase"
 
 label :: Kind -> String
 label = case _ of
@@ -63,6 +79,7 @@ label = case _ of
   Bars n -> if n == 1 then "One bar" else show n <> " bars"
   Chromatic -> "Chromatic"
   Longform -> "Longform"
+  Phrase -> "Phrase"
 
 blurb :: Kind -> String
 blurb = case _ of
@@ -81,6 +98,9 @@ blurb = case _ of
     \settled yet."
   Longform ->
     "Starts on your first sound and runs until you stop it. Nothing is divided."
+  Phrase ->
+    "A phrase declared by Triggerfish, played once at its own times. Kept whole \
+    \— its rhythm is the material, so there is nothing here to divide."
 
 -- | **When a take ends.** Every kind starts the same way — armed, on the first
 -- | sound — because a countdown you have to play to is a worse instrument than
@@ -102,6 +122,10 @@ closes = case _ of
   -- bars. So it is by hand until something counts onsets live.
   Chromatic -> ByHand
   Longform -> ByHand
+  -- The run knows the length to the millisecond and stops; the take's own end
+  -- is then a fact rather than an estimate, which is what the last region
+  -- wants anyway.
+  Phrase -> ByHand
 
 -- | How the take is divided once it is closed, as `msm onset` names it.
 -- |
@@ -113,6 +137,7 @@ divides = case _ of
   ChordHits -> Just "chords"
   Bars _ -> Nothing
   Chromatic -> Just "hits"
+  Phrase -> Nothing
   Longform -> Nothing
 
 -- | What `msm` should be told the material is.
@@ -123,6 +148,9 @@ material = case _ of
   Bars _ -> "break"
   Chromatic -> "hits"
   Longform -> "ambient"
+  -- A phrase IS a break: one piece of played music, to be triggered and let
+  -- run. `ambient` would say it has no pulse, which is the one thing it has.
+  Phrase -> "break"
 
 -- | **Whether this material has a key centre worth declaring.**
 -- |
@@ -141,6 +169,7 @@ keyed = case _ of
   Bars _ -> true
   Chromatic -> true
   Longform -> true
+  Phrase -> true
 
 -- | **How many channels this material wants on the card.**
 -- |
@@ -162,6 +191,8 @@ foldsTo = case _ of
   Bars _ -> ToMono
   Chromatic -> ToMono
   Longform -> ToStereo
+  -- Same reason as a chord: a phrase from a softsynth is a voicing in a room.
+  Phrase -> ToStereo
 
 -- | **How many of a Rample's four voices one sample occupies.**
 -- |
@@ -204,6 +235,10 @@ joins = case _ of
   -- One take, kept whole — which the joiner would also do, but by a longer
   -- road and with a division nobody asked for.
   Longform -> false
+  -- **Undivided, and still joined.** Nothing here cuts it up — but the module
+  -- may, and a phrase under one start point is sliceable where a phrase spread
+  -- over layers is not. Same answer as `Bars`, for the same reason.
+  Phrase -> true
 
 -- | What to say while it is listening.
 prompt :: Kind -> String
@@ -214,3 +249,4 @@ prompt = case _ of
               <> show n <> (if n == 1 then " bar" else " bars")
   Chromatic -> "listening — twelve, in order"
   Longform -> "listening — starts on your first sound, stop when you are done"
+  Phrase -> "listening — the phrase plays once, at its own times"

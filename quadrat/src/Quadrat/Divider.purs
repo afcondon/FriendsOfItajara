@@ -25,7 +25,7 @@ module Quadrat.Divider
 
 import Prelude
 
-import Quadrat.Kind (Kind(Bars, Chromatic, ChordHits, DrumHits, Longform))
+import Quadrat.Kind (Kind(Bars, Chromatic, ChordHits, DrumHits, Longform, Phrase))
 
 data Divider
   -- | Spectral flux with a peak follower: where the signal changes fastest.
@@ -87,3 +87,6 @@ defaultFor = case _ of
   Bars _ -> Attacks
   Chromatic -> Attacks
   Longform -> Whole
+  -- Not a default that could go either way: a phrase cut into pieces stops
+  -- being a phrase, exactly as a bar cut into hits stops being a groove.
+  Phrase -> Whole

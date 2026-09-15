@@ -43,7 +43,11 @@ type Clip =
   { hash :: String
   , name :: String
   , source :: String      -- "vetula" | "odonus" | …
-  , kind :: String        -- what the publisher thinks it is: "chord-hits", …
+  -- | What the publisher says this IS, and therefore how it is played and
+  -- | divided: `"chord-hits"` are alternatives, one sample each, struck on the
+  -- | page's own even grid; `"phrase"` is a piece of music, played once at its
+  -- | own times and kept whole.
+  , kind :: String
   , rebus :: String
   , key :: String         -- e.g. "C Ionian"; "" when unknown
   , onsets :: Array Number
@@ -53,6 +57,11 @@ type Clip =
   -- | — where a chord wants holding. Carried per chord rather than once,
   -- | because nothing says a progression holds evenly.
   , gates :: Array Number
+  -- | How hard each was struck. A captured phrase's dynamics are part of the
+  -- | material for the same reason its rhythm is: play it all at one velocity
+  -- | and you have recorded a different piece. A minted progression's are
+  -- | uniform anyway, so nothing is lost by carrying it for both.
+  , vels :: Array Int
   }
 
 foreign import fetchDeclaredImpl

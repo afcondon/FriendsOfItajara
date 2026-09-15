@@ -948,28 +948,72 @@ handleAction = case _ of
   -- So the clip supplies the chords and the count; the run plays them and
   -- builds its own schedule exactly as a sweep does. The declared onsets are
   -- not used at all, which is the tell that this is the right way round.
+  --
+  -- ## A phrase is not chord hits, and the difference is the whole design
+  --
+  -- Chord hits are ALTERNATIVES: four chords, four samples, and the gap
+  -- between them belongs to the sampler — it is free to leave whatever room a
+  -- decay wants, because nothing musical depends on when the next one lands.
+  --
+  -- A phrase's timing IS the material. Space it on this page's even grid and
+  -- what comes back is a different piece of music. So a phrase is **one cell**
+  -- as long as the phrase, and the notes inside it are played at their own
+  -- declared offsets — which keeps the rule above intact, because this page is
+  -- still the thing issuing every one of them.
+  --
+  -- And one cell means nothing to divide. `Whole` rather than a detector: a
+  -- phrase cut at its loudest moments is not a phrase.
   PlayAgainst c -> do
     st0 <- H.get
     liftEffect (Declared.rememberPick (if map _.hash st0.against == Just c.hash then "" else c.hash))
     H.modify_ \st ->
       if map _.hash st.against == Just c.hash
         then st { against = Nothing }
-        else st
+        else
+          let k = if isPhrase c then Kind.Phrase else Kind.ChordHits
+          in st
           { against = Just c
-          , kind = Kind.ChordHits
-          , divider = Divider.defaultFor Kind.ChordHits
+          , kind = k
+          , divider = Divider.defaultFor k
           , sweep = st.sweep
               { centre = fromMaybe st.sweep.centre (centreOfKey c.key)
               -- One step per chord. A run against four chords that fires three
-              -- times is not a small inaccuracy; it is a different set.
-              , extent = [ Array.length c.chords ]
+              -- times is not a small inaccuracy; it is a different set. A
+              -- phrase is one, however many notes are in it.
+              , extent = [ if isPhrase c then 1 else Array.length c.chords ]
+              -- The cell has to hold the whole phrase and its last note's
+              -- decay, and for one cell the spacing IS the length of the take:
+              -- the run waits out the interval after its only step and then
+              -- closes. `Sweep` caps it at 20 s, which is a real ceiling on
+              -- how long a phrase can be — said out loud in `runSweep` rather
+              -- than silently truncating one.
+              , spacingMs = if isPhrase c then clamp 50 20000 (phraseMs c + 1500)
+                            else st.sweep.spacingMs
+              -- **A measured pacing cannot be about THIS phrase.**
+              --
+              -- `paced` is keyed on the plan's fingerprint, and the extent is
+              -- in it while the spacing is not — so every phrase, whatever its
+              -- length, fingerprints as `[1]` exactly like every other. A
+              -- twelve-second phrase would then be paced by the measurement
+              -- left behind by a three-second one, and the cell would close
+              -- nine seconds early with nothing anywhere saying why.
+              --
+              -- There is nothing for a measurement to add in any case: a
+              -- phrase's length is declared to the millisecond, which is
+              -- better than measured.
+              , usePaced = if isPhrase c then false else st.sweep.usePaced
               -- **Half the cell**, which is a chord-shaped hold rather than a
               -- drum's. Held for the whole cell there is no decay inside the
               -- sample; held for ten milliseconds there is no tone. Half gives
               -- attack, sustain and release with room for the tail — and it is
               -- a starting point, not a rule: the number is right there in the
               -- sentence to argue with.
-              , trigger = st.sweep.trigger { ms = max 200 (st.sweep.spacingMs / 2) }
+              --
+              -- A phrase does not get one: every note carries its own observed
+              -- gate, and overriding those with a single number would be
+              -- re-deciding something the performance already answered.
+              , trigger = if isPhrase c then st.sweep.trigger
+                          else st.sweep.trigger { ms = max 200 (st.sweep.spacingMs / 2) }
               }
           }
 
@@ -1779,6 +1823,11 @@ handleAction = case _ of
     st <- H.get
     for_ st.sweepFork H.kill
     restCv
+    -- **Killing the fiber does not un-send a phrase.** Its notes were handed to
+    -- the browser's MIDI scheduler up front, precisely so that this page's
+    -- lateness could not move them — which means the rest of them are still
+    -- coming after the fiber is gone. Stop has to reach into the scheduler.
+    hushPhrase st
     H.modify_ (note "sweep stopped" <<< _ { sweepFork = Nothing, sweepAt = Nothing })
     handleAction Close
   -- **Closing the take stops the rig too.** They are one act: a schedule
@@ -1787,6 +1836,7 @@ handleAction = case _ of
   Close -> do
     st <- H.get
     for_ st.sweepFork H.kill
+    hushPhrase st
     H.modify_ _ { sweepFork = Nothing, sweepAt = Nothing }
     for_ (cap st) \c ->
       if c.on
@@ -1890,6 +1940,68 @@ captureOn trimHead src = do
   H.modify_ (note (if trimHead then Kind.prompt st.kind else "recording — the run starts in a moment")
     <<< _ { armed = true, swept = false, schedule = [], overran = false })
 
+-- | Take back whatever of a phrase has not sounded yet, and silence what has.
+-- | A no-op unless a phrase is what is playing, and harmless either way.
+hushPhrase :: forall o m. MonadAff m => State -> H.HalogenM State Action () o m Unit
+hushPhrase st =
+  for_ st.against \c ->
+    when (isPhrase c && st.sweep.port /= "") $ liftEffect $
+      Rig.hushPort { port: st.sweep.port, channel: st.sweep.trigger.channel }
+
+-- | **Is this declaration a piece of music, or a set of alternatives?**
+-- |
+-- | One string comparison, in one place, because it decides four things at
+-- | once — the kind, the number of cells, the divider, and whether the notes
+-- | are played on this page's grid or on their own. Spread across four call
+-- | sites it would eventually disagree with itself.
+isPhrase :: Declared.Clip -> Boolean
+isPhrase c = c.kind == "phrase"
+-- | **How long a declared phrase runs**, in milliseconds: to the last onset
+-- | and then far enough for that note to finish. Not `lenMicros` — a clip's
+-- | loop length can run well past its last note, and recording the silence at
+-- | the end of a loop is recording nothing.
+phraseMs :: Declared.Clip -> Int
+phraseMs c =
+  Int.ceil (1000.0 * fromMaybe 0.0 (Array.last c.onsets)
+              + gateAt c (Array.length c.onsets - 1))
+
+-- | **How long note `i` is held, and never nothing.**
+-- |
+-- | A captured clip's gates are observed — the engine that played it held each
+-- | note that long — and that is the whole reason a phrase plays its own
+-- | rather than a hold chosen here. But a clip whose events carried no gate
+-- | reads back as `0`, and `0` is not a short note: `sendPhrase` floors it at
+-- | one millisecond, which on a percussive patch is a click and on anything
+-- | sustained is silence. That exact failure cost an afternoon already, from
+-- | the other end of the same wire.
+-- |
+-- | So a missing gate falls back to the gap to the next note, which is the
+-- | musical answer — hold it until the next thing happens — and to a plain
+-- | 300 ms for the last one, which has no next.
+gateAt :: Declared.Clip -> Int -> Number
+gateAt c i = case Array.index c.gates i of
+  Just g | g > 0.0 -> g
+  _ -> case Array.index c.onsets i, Array.index c.onsets (i + 1) of
+    Just a, Just b | b > a -> 1000.0 * (b - a)
+    _, _ -> 300.0
+
+-- | **The phrase as one scheduled burst.** Every note of every group, at its
+-- | own offset from the start of the cell, carrying the velocity and gate the
+-- | engine that played it actually used.
+phraseNotesOf
+  :: Declared.Clip
+  -> Array { note :: Int, velocity :: Int, at :: Number, ms :: Number }
+phraseNotesOf c =
+  Array.concat (Array.mapWithIndex grp c.chords)
+  where
+  grp i ns =
+    let at = 1000.0 * fromMaybe 0.0 (Array.index c.onsets i)
+        ms = gateAt c i
+        v = case Array.index c.vels i of
+              Just x | x > 0 -> x
+              _ -> 92
+    in map (\n -> { note: n, velocity: v, at, ms }) ns
+
 -- | **How many frames a take of this kind runs for**, or zero for by hand.
 -- |
 -- | The bar comes from the daemon's own `barFrames`, which is Link's where
@@ -1952,6 +2064,15 @@ runSweep = do
     -- So one number, in the Trigger door and in the sentence, seeded when a
     -- progression is picked and editable after.
     declaredGate _ = p.trigger.ms
+    -- **A phrase is not a chord, and does not go through `declaredChord`.**
+    --
+    -- Its notes are handed to the MIDI subsystem as one timestamped burst, so
+    -- the browser emits them at their own offsets however late this loop is —
+    -- the same reason the gate moved to `pulseAt`, and the same measurement
+    -- behind it.
+    phraseStream = case st.against of
+      Just c | isPhrase c -> Just (phraseNotesOf c)
+      _ -> Nothing
 
   -- **Two silent no-ops, said out loud.**
   --
@@ -1977,11 +2098,24 @@ runSweep = do
   -- chords". A line naming which of the two is happening costs nothing and
   -- ends the question.
   H.modify_ (note (case st.against of
+    Just c | isPhrase c ->
+      "playing the phrase " <> c.name <> " \x2014 "
+        <> show (Array.length (phraseNotesOf c)) <> " notes over "
+        <> show (Int.round (Int.toNumber (phraseMs c) / 100.0) / 10) <> " s, at its own times, on "
+        <> (if p.port == "" then "no port" else p.port)
     Just c -> "playing " <> show (Array.length c.chords) <> " chords from "
                 <> c.name <> " on " <> (if p.port == "" then "no port" else p.port)
     Nothing -> "playing the trigger note "
                  <> maybe "(none set)" show p.trigger.note
                  <> " \x2014 no progression picked, so these are not chords"))
+  -- **A phrase longer than the cell is a phrase cut off.** `spacingMs` caps at
+  -- 20 s and the take closes an interval after its only step, so anything past
+  -- that would come back silently truncated — which looks exactly like a
+  -- recording that stopped early for some other reason.
+  for_ st.against \c ->
+    when (isPhrase c && phraseMs c + 1500 > p.spacingMs) $
+      H.modify_ (note ("this phrase runs " <> show (phraseMs c) <> " ms and the cell is "
+                        <> show p.spacingMs <> " ms \x2014 the tail will be cut"))
   -- | **Wait for the capture to be RUNNING, not for 400 ms.**
   -- |
   -- | `captureOn` asks; the daemon opens the stream and says so in a snapshot,
@@ -2089,13 +2223,16 @@ runSweep = do
     -- play: a run's schedule is exact BECAUSE the page issued every trigger. Let
     -- another app play and the two have to agree about time; play it here and
     -- there is nothing to agree about.
-    when (p.port /= "") $ case declaredChord s.index of
-      Just ns -> liftEffect $ for_ ns \n ->
-        Rig.sendNote { port: p.port, channel: p.trigger.channel, note: n
-                     , velocity: p.trigger.velocity, ms: declaredGate s.index }
-      Nothing -> for_ p.trigger.note \n -> liftEffect $
-        Rig.sendNote { port: p.port, channel: p.trigger.channel, note: n
-                     , velocity: p.trigger.velocity, ms: p.trigger.ms }
+    when (p.port /= "") $ case phraseStream of
+      Just ns -> liftEffect $
+        Rig.sendPhrase { port: p.port, channel: p.trigger.channel, notes: ns }
+      Nothing -> case declaredChord s.index of
+        Just ns -> liftEffect $ for_ ns \n ->
+          Rig.sendNote { port: p.port, channel: p.trigger.channel, note: n
+                       , velocity: p.trigger.velocity, ms: declaredGate s.index }
+        Nothing -> for_ p.trigger.note \n -> liftEffect $
+          Rig.sendNote { port: p.port, channel: p.trigger.channel, note: n
+                       , velocity: p.trigger.velocity, ms: p.trigger.ms }
     tFire <- liftEffect Rig.nowMs
     liftEffect $ Rig.mark
       { i: s.index + 1, inAt: tIn - t0, cv: tCv - tIn
@@ -2328,7 +2465,12 @@ analyse write = do
                        (Int.toNumber st.sweep.guardMs / 1000.0)
                        lastGap
                        st.schedule
-      when (pageFires st && Array.length st.schedule < wantMarks) $
+      -- Not when nothing was going to be divided anyway: a phrase is one
+      -- region by design, and `Whole` ignores the schedule entirely. The
+      -- warning is about a division falling through to a detector, and there
+      -- is no division here to fall through.
+      when (pageFires st && st.divider /= Divider.Whole
+              && Array.length st.schedule < wantMarks) $
         H.modify_ (note ("the schedule has " <> show (Array.length st.schedule)
                           <> " of " <> show wantMarks <> " marks, so this take is being \
                              \divided by EAR, not by its own boundaries \x2014 the capture \
@@ -2673,7 +2815,7 @@ declaredRow st =
     ( [ HH.span [ HP.class_ (HH.ClassName "q-declared-label") ] [ HH.text "declared" ] ]
         <> (if Array.null st.declared
               then [ HH.span [ HP.class_ (HH.ClassName "q-declared-none") ]
-                       [ HH.text "nothing published \x2014 send a progression from Triggerfish" ] ]
+                       [ HH.text "nothing published \x2014 send a progression or a clip from Triggerfish" ] ]
               else map chip st.declared)
         <> [ HH.button
                [ HP.class_ (HH.ClassName "q-declared-refresh")
@@ -2684,9 +2826,21 @@ declaredRow st =
   where
   chip c =
     let on = map _.hash st.against == Just c.hash
+        -- **What it is, on its face.** The two kinds come back completely
+        -- different — four samples you can name, or one you cannot cut — and
+        -- the count means different things in each: chords to be struck one
+        -- each, or notes to be played in order. A bare number reads as chords
+        -- either way, which is the one thing it must not do.
+        says =
+          if isPhrase c
+            then "\x266a " <> show (Array.length (phraseNotesOf c)) <> " notes, whole"
+            else show (Array.length c.chords) <> " chords"
     in HH.button
         [ HP.class_ (HH.ClassName (if on then "q-declared-chip is-on" else "q-declared-chip"))
-        , HP.title (c.rebus <> " \x00b7 " <> show (Array.length c.chords) <> " chords"
+        , HP.title (c.rebus <> " \x00b7 " <> says
+                     <> (if isPhrase c
+                           then " \x00b7 played once over " <> secs2 (Int.toNumber (phraseMs c) / 1000.0) <> " s"
+                           else "")
                      <> (if c.key == "" then "" else " \x00b7 " <> c.key)
                      <> " \x00b7 from " <> c.source
                      <> (if on then " \x00b7 click to put it down" else " \x00b7 click to play the next take against it"))
@@ -2695,7 +2849,7 @@ declaredRow st =
         -- from the sending app's workspace key, which may be a default nobody
         -- set — and a key you can see before recording is a key you can fix,
         -- where one you discover afterwards has already named a set wrong.
-        [ HH.text (c.name <> "  " <> show (Array.length c.chords)
+        [ HH.text (c.name <> "  " <> says
                     <> (if c.key == "" then "  ·  no key" else "  ·  " <> c.key)) ]
 
 -- | **How much room a dry run gives each cell**, whatever the performance
@@ -4027,9 +4181,17 @@ render st =
       , HE.onValueInput (SweepMsg <<< Sweep.SetHold)
       ]
 
-  holdSays =
-    if Maybe.isNothing st.against then []
-    else [ HH.text ", holding each ", slotHold, HH.text " ms" ]
+  -- **A phrase has no hold to argue with.** Every note carries the gate the
+  -- engine that played it used, and offering one number over the top of them
+  -- would be re-deciding something the performance already answered. What is
+  -- dispositive there is a different fact — that it plays once, at its own
+  -- times — so that is what the sentence says instead.
+  holdSays = case st.against of
+    Nothing -> []
+    Just c | isPhrase c ->
+      [ HH.text (", played once at its own times over "
+                   <> show (Int.round (Int.toNumber (phraseMs c) / 100.0) / 10) <> " s") ]
+    Just _ -> [ HH.text ", holding each ", slotHold, HH.text " ms" ]
 
   slotName =
     HH.input

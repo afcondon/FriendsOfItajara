@@ -31,6 +31,8 @@ module Quadrat.Rig
   , forgetHeard
   , sendCc
   , sendNote
+  , sendPhrase
+  , hushPort
   , midiWhy
   , setCv
   , pulse
@@ -112,6 +114,40 @@ foreign import midiWhy :: Effect String
 foreign import sendNote
   :: { port :: String, channel :: Int, note :: Int, velocity :: Int, ms :: Int }
   -> Effect Unit
+
+-- | **A phrase, scheduled on the MIDI subsystem's own clock.**
+-- |
+-- | `sendNote` fires now and holds the note-off in a `setTimeout`, which is
+-- | right for a run's trigger: one note per step, and the step loop is already
+-- | pacing itself against an absolute grid.
+-- |
+-- | A phrase cannot be paced that way. Its notes are forty milliseconds apart
+-- | in places, and a page timer at that resolution is at the mercy of whatever
+-- | else the browser is doing — which is the same lesson the gate learned when
+-- | it moved to `pulseAt`: **the page is a bad clock, so take it out of the
+-- | path.** WebMIDI's `send` takes a timestamp and the browser schedules the
+-- | bytes itself, so every note leaves at the time it was written for however
+-- | late this call happens to be.
+-- |
+-- | `at` is milliseconds from the moment this is called; `ms` is the note's own
+-- | gate, which for a captured clip was OBSERVED — the engine that played it
+-- | held it that long — and so is the phrase and not a decision to be made
+-- | again here.
+foreign import sendPhrase
+  :: { port :: String
+     , channel :: Int
+     , notes :: Array { note :: Int, velocity :: Int, at :: Number, ms :: Number }
+     }
+  -> Effect Unit
+
+-- | **Take back everything scheduled, and silence what is sounding.**
+-- |
+-- | The price of scheduling ahead: a run stopped in the middle has already
+-- | handed the browser the rest of the phrase, and `setTimeout` note-offs are
+-- | not the only thing that would be left ringing. `clear()` drops the pending
+-- | messages and All Notes Off ends anything already down, so Stop is a button
+-- | rather than a wish here too.
+foreign import hushPort :: { port :: String, channel :: Int } -> Effect Unit
 
 type Sent = { ok :: Boolean, output :: String }
 
