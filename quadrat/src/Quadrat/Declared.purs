@@ -48,6 +48,11 @@ type Clip =
   , key :: String         -- e.g. "C Ionian"; "" when unknown
   , onsets :: Array Number
   , chords :: Array (Array Int)
+  -- | How long each chord is held, in ms, as the publisher declared it. A
+  -- | trigger's `ms` is a gate for a drum — ten milliseconds, and right for one
+  -- | — where a chord wants holding. Carried per chord rather than once,
+  -- | because nothing says a progression holds evenly.
+  , gates :: Array Number
   }
 
 foreign import fetchDeclaredImpl

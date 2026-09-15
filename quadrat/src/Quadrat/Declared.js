@@ -45,11 +45,18 @@ const chordsOf = (events) => {
   for (const e of events || []) {
     const k = e.fireUnixMicros;
     if (!byAt.has(k)) byAt.set(k, []);
-    byAt.get(k).push(e.pitch);
+    byAt.get(k).push(e);
   }
   return Array.from(byAt.keys())
     .sort((a, b) => a - b)
-    .map((at) => ({ at: at / 1000000.0, notes: byAt.get(at).slice().sort((a, b) => a - b) }));
+    .map((at) => ({
+      at: at / 1000000.0,
+      notes: byAt.get(at).map((e) => e.pitch).sort((a, b) => a - b),
+      // **How long the chord is HELD**, which the declaration knows and a
+      // trigger's hold does not. A drum's gate is a 10 ms blip and right for a
+      // drum; a chord held for 10 ms on a sustained patch barely speaks.
+      gate: Math.max.apply(null, byAt.get(at).map((e) => e.gateMs || 0)) || 0,
+    }));
 };
 
 export const fetchDeclaredImpl = (onError) => (onSuccess) => () => {
@@ -81,6 +88,7 @@ export const fetchDeclaredImpl = (onError) => (onSuccess) => () => {
               key: tag(label.tags, "key:") || clip.key || "",
               onsets: groups.map((g) => g.at),
               chords: groups.map((g) => g.notes),
+              gates: groups.map((g) => g.gate),
             };
           })
         )

@@ -1642,7 +1642,10 @@ handleAction = case _ of
     when (st.sweep.port /= "") $ case st.against >>= \c -> Array.index c.chords j of
       Just ns -> liftEffect $ for_ ns \n ->
         Rig.sendNote { port: st.sweep.port, channel: st.sweep.trigger.channel, note: n
-                     , velocity: st.sweep.trigger.velocity, ms: st.sweep.trigger.ms }
+                     , velocity: st.sweep.trigger.velocity
+                     , ms: case st.against >>= \c -> Array.index c.gates j of
+                             Just g | g > 0.0 -> Int.round g
+                             _ -> st.sweep.trigger.ms }
       Nothing -> for_ st.sweep.trigger.note \n -> liftEffect $
         Rig.sendNote { port: st.sweep.port, channel: st.sweep.trigger.channel, note: n
                      , velocity: st.sweep.trigger.velocity, ms: st.sweep.trigger.ms }
@@ -1923,6 +1926,11 @@ runSweep = do
           then st.sweep { spacingMs = max st.sweep.spacingMs dryProbeMs, usePaced = false }
           else st.sweep
     declaredChord i = st.against >>= \c -> Array.index c.chords i
+    -- The declared hold, falling back to the trigger's own. A chord held for a
+    -- drum's ten milliseconds is the difference between a sample and silence.
+    declaredGate i = case st.against >>= \c -> Array.index c.gates i of
+      Just g | g > 0.0 -> Int.round g
+      _ -> p.trigger.ms
 
   -- **Two silent no-ops, said out loud.**
   --
@@ -2051,7 +2059,7 @@ runSweep = do
     when (p.port /= "") $ case declaredChord s.index of
       Just ns -> liftEffect $ for_ ns \n ->
         Rig.sendNote { port: p.port, channel: p.trigger.channel, note: n
-                     , velocity: p.trigger.velocity, ms: p.trigger.ms }
+                     , velocity: p.trigger.velocity, ms: declaredGate s.index }
       Nothing -> for_ p.trigger.note \n -> liftEffect $
         Rig.sendNote { port: p.port, channel: p.trigger.channel, note: n
                      , velocity: p.trigger.velocity, ms: p.trigger.ms }
