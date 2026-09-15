@@ -2276,10 +2276,23 @@ analyse write = do
           -- how long it runs: its own spacing, which with measured pacing is
           -- the longest in the run exactly when the middle gap is least like
           -- it. Zero for a take played by hand, where `slots` falls back.
+          -- **The last region has no next hit to end it**, so its length comes
+          -- from a nominal gap — which makes it the one region that can be
+          -- wrong on its own. It was reading the PLAN's spacing while a dry run
+          -- deliberately spaces itself wider (see `dryProbeMs`), so cells one
+          -- to three came back right, bounded by the mark after them, and the
+          -- fourth was cut to a window the run never used. Then the real run
+          -- faithfully reproduced the short last cell, which is the measurement
+          -- working exactly as designed on a number that was wrong.
+          --
+          -- `takeIsDry` records which kind of run laid this take down, so the
+          -- gap asked for here is the gap that was actually left.
+          spacingUsed =
+            let nominal = Sweep.spacingAt st.sweep (Array.length st.schedule - 1)
+            in if st.takeIsDry then max nominal dryProbeMs else nominal
           lastGap =
             if Array.null st.schedule then 0.0
-            else Int.toNumber
-                   (Sweep.spacingAt st.sweep (Array.length st.schedule - 1)) / 1000.0
+            else Int.toNumber spacingUsed / 1000.0
           -- **A declared run that did not declare is not a detector run.**
           --
           -- `Schedule.slots` returns nothing from fewer than two marks and the
