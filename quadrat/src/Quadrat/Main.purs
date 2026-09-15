@@ -2276,23 +2276,28 @@ analyse write = do
           -- how long it runs: its own spacing, which with measured pacing is
           -- the longest in the run exactly when the middle gap is least like
           -- it. Zero for a take played by hand, where `slots` falls back.
-          -- **The last region has no next hit to end it**, so its length comes
-          -- from a nominal gap — which makes it the one region that can be
-          -- wrong on its own. It was reading the PLAN's spacing while a dry run
-          -- deliberately spaces itself wider (see `dryProbeMs`), so cells one
-          -- to three came back right, bounded by the mark after them, and the
-          -- fourth was cut to a window the run never used. Then the real run
-          -- faithfully reproduced the short last cell, which is the measurement
-          -- working exactly as designed on a number that was wrong.
+          -- **The last region runs to the end of the take.**
           --
-          -- `takeIsDry` records which kind of run laid this take down, so the
-          -- gap asked for here is the gap that was actually left.
-          spacingUsed =
-            let nominal = Sweep.spacingAt st.sweep (Array.length st.schedule - 1)
-            in if st.takeIsDry then max nominal dryProbeMs else nominal
+          -- Every other region is ended by the next hit; the last has nothing
+          -- after it, so its length used to come from a nominal gap — which
+          -- made it the one region that could be wrong on its own, and it was:
+          -- measured [6.88s 6.78s 7.15s 1.97s], the fourth cut to a window the
+          -- run never used. The real run then faithfully reproduced the short
+          -- fourth, which is the measurement working exactly as designed on a
+          -- number that was wrong.
+          --
+          -- A gap estimate was always the wrong shape of answer. Nothing
+          -- follows the last hit, so any nominal length throws away real audio
+          -- — and on a long pad that is precisely the tail you were measuring
+          -- for. The take's own end is a fact, and the recording stops when you
+          -- stop it. (AC: "it shouldn't ever need to, as it should eventually
+          -- detect silence" — so the far edge costs nothing when the decay
+          -- finishes first, and saves the tail when it does not.)
+          lastMark = fromMaybe 0.0 (Array.last st.schedule)
+          lead = Int.toNumber st.sweep.leadMs / 1000.0
           lastGap =
             if Array.null st.schedule then 0.0
-            else Int.toNumber spacingUsed / 1000.0
+            else max 0.0 (heldSecs st - (lastMark - lead))
           -- **A declared run that did not declare is not a detector run.**
           --
           -- `Schedule.slots` returns nothing from fewer than two marks and the

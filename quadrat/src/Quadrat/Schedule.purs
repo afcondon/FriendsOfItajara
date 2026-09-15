@@ -115,6 +115,11 @@ slots lead guard lastGap marks
         middle = case Array.index (Array.sort gaps) (Array.length gaps / 2) of
           Just g | g > 0.0 -> g
           _ -> 1.0
+        -- `lastGap` is now the distance from the last edge to the END of the
+        -- take, not a nominal spacing: nothing follows the last hit, so any
+        -- estimate of its length throws away real audio, and on a long decay
+        -- that is exactly the tail being measured for. `middle` remains the
+        -- fallback for a caller that cannot say how long the take was.
         tail = if lastGap > 0.0 then lastGap else middle
         ends = Array.snoc (Array.drop 1 edges)
                  (case Array.last edges of
