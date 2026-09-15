@@ -1499,3 +1499,33 @@ body {
    identity, which is coloured. Two rows of the same width meaning different
    kinds of thing is exactly the confusion identity exists to prevent. */
 .q-rebus.is-mono { color: var(--muted); }
+
+/* ── Declared progressions ──────────────────────────────────────────────
+   What Triggerfish has published for sampling. A quiet row: it is a source
+   you choose before a take, not a control you work during one. */
+.q-declared {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 6px 0 10px;
+}
+.q-declared-label {
+  font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: #8a8270; user-select: none;
+}
+.q-declared-none { font-size: 12px; color: #a8a090; font-style: italic; }
+.q-declared-chip {
+  font: inherit; font-size: 12px; cursor: pointer;
+  border: 1px solid #d8cfb8; background: #fbf8f0; color: #5a5446;
+  border-radius: 4px; padding: 3px 10px;
+}
+.q-declared-chip:hover { border-color: #b8975a; }
+/* Chosen: the next take divides at THIS progression's boundaries. Worth
+   shouting, because it changes what recording means. */
+.q-declared-chip.is-on {
+  border-color: #b8860b; background: #f6ecd2; color: #3a3428; font-weight: 600;
+}
+.q-declared-refresh {
+  font: inherit; font-size: 13px; line-height: 1; cursor: pointer;
+  border: 1px solid #e0d8c4; background: transparent; color: #a8a090;
+  border-radius: 4px; padding: 2px 7px;
+}
+.q-declared-refresh:hover { color: #5a5446; border-color: #c8bfa8; }

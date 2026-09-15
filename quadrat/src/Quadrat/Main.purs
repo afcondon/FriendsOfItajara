@@ -77,6 +77,7 @@ import Data.Set as Set
 import Control.Promise (toAffE)
 import Quadrat.Audio as Audio
 import Quadrat.Clip (copyText)
+import Quadrat.Declared as Declared
 import Quadrat.Http as Http
 import Quadrat.RebusView as RebusView
 import Quadrat.SetIdentity (chordGlyph, markOf)
@@ -239,6 +240,15 @@ type State =
   -- | `Quadrat.Schedule` for why that difference matters more at 192 hits
   -- | than at twelve.
   , schedule :: Array Number
+  -- | **Progressions declared by Triggerfish**, waiting to be sampled. Fetched
+  -- | from Amphora, which is how a clip crosses from a page on another port —
+  -- | localStorage cannot, being per-origin.
+  , declared :: Array Declared.Clip
+  -- | Which one the next take is being played against, if any. Holding the
+  -- | whole clip rather than its hash because the take needs its chords and its
+  -- | rebus at save time, and re-finding it in a list that may have been
+  -- | refetched since is a way to save a set against the wrong identity.
+  , against :: Maybe Declared.Clip
   -- | **The sets already on disk**, newest first. Read from the server rather
   -- | than remembered here: a set outlives the page by a long way, which is
   -- | the entire point of storing it.
@@ -408,6 +418,13 @@ data Action
   -- | strings. `Kind.Bars` keeps the bar count the page is holding, because
   -- | choosing "bars" is not a statement about how many.
   | PickKindNamed String
+  -- | Re-read what Triggerfish has published for sampling.
+  | FetchDeclared
+  -- | **Play the next take against this progression.** Its onsets become the
+  -- | schedule, which is the switch between dividing a take at its own declared
+  -- | boundaries and sending `msm` looking for them. Picking the one already
+  -- | chosen puts it down again.
+  | PlayAgainst Declared.Clip
   | PickKind Kind
   | SetBars String
   | SetName String
@@ -541,6 +558,7 @@ component = H.mkComponent
       , sweep: Sweep.emptyPlan, sweepOpen: false, sweepAt: Nothing
       , sweepFork: Nothing, midiPorts: [], swept: false, sweepEdit: Nothing
       , schedule: [], sets: [], tables: [], tablesErr: "", overran: false
+      , declared: [], against: Nothing
       , page: Bench, fill: Swept, pivot: Nothing
       , levels: [], modal: Nothing, kept: false, confirmKeep: false
       , picked: Set.empty, confirmDrop: false, confirmWrite: Nothing, preview: Nothing
@@ -741,6 +759,9 @@ handleAction = case _ of
                                         else "")))
   Init -> do
     n <- liftEffect (slugFor Kind.DrumHits)
+    -- What Triggerfish has published, read once at start. Cheap, and a page
+    -- that opens already knowing is a page you can record from immediately.
+    handleAction FetchDeclared
     -- The sweep plan as it was left. See `Quadrat.Sweep.restore` — a run,
     -- listen, bend, run again loop cannot survive a page that forgets between
     -- runs, and reloading to pick up a fix is exactly when it forgets.
@@ -876,6 +897,28 @@ handleAction = case _ of
         H.modify_ _ { midiPorts = ps }
         unless (Array.null ps) $ H.modify_
           (note (show (Array.length ps) <> " MIDI ports"))
+  FetchDeclared -> do
+    r <- H.liftAff (attempt Declared.fetchDeclared)
+    case r of
+      Right xs -> H.modify_ _ { declared = xs }
+      -- Never fatal: the page samples perfectly well with nothing declared, and
+      -- a store that is down should not read as a page that is broken.
+      Left _ -> H.modify_ _ { declared = [] }
+
+  PlayAgainst c -> H.modify_ \st ->
+    if map _.hash st.against == Just c.hash
+      then st { against = Nothing, schedule = [] }
+      else st
+        { against = Just c
+        -- The onsets ARE the schedule. A take is armed on its first sound and
+        -- the first chord is at zero, so the two origins already agree; what is
+        -- left between them is `leadMs`, which the plan already carries.
+        , schedule = c.onsets
+        , kind = Kind.ChordHits
+        , divider = Divider.defaultFor Kind.ChordHits
+        , sweep = st.sweep { centre = fromMaybe st.sweep.centre (centreOfKey c.key) }
+        }
+
   PickKindNamed v -> do
     st <- H.get
     for_ (Array.find (\k -> Kind.name k == v) (Kind.all))
@@ -2419,6 +2462,70 @@ secs2 d = show (Int.round (d * 100.0) / 100)
 -- | A MIDI note as a person would say it. Sharps rather than flats, because
 -- | the only thing naming them here is a tooltip and a consistent spelling
 -- | beats a correct enharmonic nobody asked for.
+-- | **What Triggerfish has published for sampling.**
+-- |
+-- | Not a MIDI route and not a file: the progressions are in Amphora, and the
+-- | page reads them there. Choosing one fills the schedule, which is the switch
+-- | between dividing a take at its own declared boundaries and sending `msm`
+-- | looking for them — so this row is the difference between sampling chords
+-- | you can name and sampling chords you have to identify afterwards.
+declaredRow :: forall m. State -> H.ComponentHTML Action () m
+declaredRow st =
+  HH.section
+    [ HP.class_ (HH.ClassName "q-declared") ]
+    ( [ HH.span [ HP.class_ (HH.ClassName "q-declared-label") ] [ HH.text "declared" ] ]
+        <> (if Array.null st.declared
+              then [ HH.span [ HP.class_ (HH.ClassName "q-declared-none") ]
+                       [ HH.text "nothing published \x2014 send a progression from Triggerfish" ] ]
+              else map chip st.declared)
+        <> [ HH.button
+               [ HP.class_ (HH.ClassName "q-declared-refresh")
+               , HP.title "re-read what Triggerfish has published"
+               , HE.onClick \_ -> FetchDeclared ]
+               [ HH.text "\x21bb" ] ]
+    )
+  where
+  chip c =
+    let on = map _.hash st.against == Just c.hash
+    in HH.button
+        [ HP.class_ (HH.ClassName (if on then "q-declared-chip is-on" else "q-declared-chip"))
+        , HP.title (c.rebus <> " \x00b7 " <> show (Array.length c.chords) <> " chords"
+                     <> (if c.key == "" then "" else " \x00b7 " <> c.key)
+                     <> " \x00b7 from " <> c.source
+                     <> (if on then " \x00b7 click to put it down" else " \x00b7 click to play the next take against it"))
+        , HE.onClick \_ -> PlayAgainst c ]
+        [ HH.text (c.name <> "  " <> show (Array.length c.chords)) ]
+
+-- | **A declared key as a centre**, e.g. "F# Ionian" → root 6, major.
+-- |
+-- | Triggerfish writes a key as `<root> <mode>`, which is the sentence a
+-- | musician would say; a centre here is a pitch class and a tonality, which is
+-- | what a transposition needs. The mode names that mean minor are listed rather
+-- | than inferred — Aeolian, Dorian and Phrygian all have a minor third and no
+-- | rule shorter than saying so would be honest about Locrian.
+-- |
+-- | `Nothing` when there is no key or the root will not parse, which leaves
+-- | whatever centre was already declared alone: a guess here is worse than a
+-- | gap, since every later transposition is measured from it.
+centreOfKey :: String -> Maybe { root :: Int, tonality :: String }
+centreOfKey txt = case String.split (String.Pattern " ") (String.trim txt) of
+  [ r ] -> map (\pc -> { root: pc, tonality: "major" }) (pcOfName r)
+  [ r, mode ] -> map (\pc -> { root: pc, tonality: tonalityOf mode }) (pcOfName r)
+  _ -> Nothing
+  where
+  tonalityOf m =
+    if Array.elem m [ "Aeolian", "Dorian", "Phrygian", "Locrian", "minor" ]
+      then "minor" else "major"
+
+-- | A pitch class from a note name, sharps or flats.
+pcOfName :: String -> Maybe Int
+pcOfName n = Array.findIndex (Array.elem n) spellings
+  where
+  spellings =
+    [ [ "C" ], [ "C#", "Db" ], [ "D" ], [ "D#", "Eb" ], [ "E" ], [ "F" ]
+    , [ "F#", "Gb" ], [ "G" ], [ "G#", "Ab" ], [ "A" ], [ "A#", "Bb" ], [ "B" ]
+    ]
+
 noteName :: Int -> String
 noteName n = fromMaybe "?" (Array.index names (n `mod` 12)) <> show ((n / 12) - 1)
   where
@@ -2820,6 +2927,7 @@ render st =
           HH.div_
             [ HH.section [ HP.class_ (HH.ClassName "q-hero") ]
                 [ HH.div [ HP.class_ (HH.ClassName "q-actbar") ] [ goRow, transport, doors ] ]
+            , declaredRow st
             , HH.section [ HP.class_ (HH.ClassName "q-curverow is-first") ]
                 [ SweepView.curves sweepHandlers ]
             , HH.section [ HP.class_ (HH.ClassName "q-hero is-take") ]
