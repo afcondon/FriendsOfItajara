@@ -109,3 +109,26 @@ export const cameBackImpl = () => {
   returned = false;
   return r;
 };
+
+// **The chosen progression, remembered across a reload.**
+//
+// `against` is page state and a reload drops it, which silently turns a
+// declared run back into a single-note one — and during development there are
+// a great many reloads. The hash alone: the clip itself is re-fetched, so this
+// is a pointer and never a stale copy.
+const PICK = "quadrat.declared.pick";
+
+export const rememberPick = (hash) => () => {
+  try {
+    if (hash) window.localStorage.setItem(PICK, hash);
+    else window.localStorage.removeItem(PICK);
+  } catch (e) {}
+};
+
+export const recallPick = () => {
+  try {
+    return window.localStorage.getItem(PICK) || "";
+  } catch (e) {
+    return "";
+  }
+};

@@ -911,7 +911,17 @@ handleAction = case _ of
   FetchDeclared -> do
     r <- H.liftAff (attempt Declared.fetchDeclared)
     case r of
-      Right xs -> H.modify_ _ { declared = xs }
+      Right xs -> do
+        -- Re-attach the remembered pick, if it is still published. By hash, so
+        -- a clip that changed under us re-reads its current chords rather than
+        -- running yesterday's.
+        want <- liftEffect Declared.recallPick
+        st <- H.get
+        let keep = case st.against of
+              Just c -> Array.find (\x -> x.hash == c.hash) xs
+              Nothing -> if want == "" then Nothing else Array.find (\x -> x.hash == want) xs
+        H.modify_ _ { declared = xs }
+        for_ keep \c -> when (map _.hash st.against /= Just c.hash) (handleAction (PlayAgainst c))
       -- Never fatal: the page samples perfectly well with nothing declared, and
       -- a store that is down should not read as a page that is broken.
       Left _ -> H.modify_ _ { declared = [] }
@@ -929,20 +939,23 @@ handleAction = case _ of
   -- So the clip supplies the chords and the count; the run plays them and
   -- builds its own schedule exactly as a sweep does. The declared onsets are
   -- not used at all, which is the tell that this is the right way round.
-  PlayAgainst c -> H.modify_ \st ->
-    if map _.hash st.against == Just c.hash
-      then st { against = Nothing }
-      else st
-        { against = Just c
-        , kind = Kind.ChordHits
-        , divider = Divider.defaultFor Kind.ChordHits
-        , sweep = st.sweep
-            { centre = fromMaybe st.sweep.centre (centreOfKey c.key)
-            -- One step per chord. A run against four chords that fires three
-            -- times is not a small inaccuracy; it is a different set.
-            , extent = [ Array.length c.chords ]
-            }
-        }
+  PlayAgainst c -> do
+    st0 <- H.get
+    liftEffect (Declared.rememberPick (if map _.hash st0.against == Just c.hash then "" else c.hash))
+    H.modify_ \st ->
+      if map _.hash st.against == Just c.hash
+        then st { against = Nothing }
+        else st
+          { against = Just c
+          , kind = Kind.ChordHits
+          , divider = Divider.defaultFor Kind.ChordHits
+          , sweep = st.sweep
+              { centre = fromMaybe st.sweep.centre (centreOfKey c.key)
+              -- One step per chord. A run against four chords that fires three
+              -- times is not a small inaccuracy; it is a different set.
+              , extent = [ Array.length c.chords ]
+              }
+          }
 
   PickKindNamed v -> do
     st <- H.get
@@ -1910,6 +1923,24 @@ runSweep = do
           then st.sweep { spacingMs = max st.sweep.spacingMs dryProbeMs, usePaced = false }
           else st.sweep
     declaredChord i = st.against >>= \c -> Array.index c.chords i
+
+  -- **Two silent no-ops, said out loud.**
+  --
+  -- `when (p.port /= "")` around every send means a run with no port chosen
+  -- does everything except make a sound: it opens the capture, paces itself,
+  -- marks its schedule and records the right number of seconds of silence.
+  -- Nothing anywhere says the one thing that went wrong.
+  --
+  -- And `against` is page state, so a reload — of which there are many while
+  -- this is being built — silently downgrades a declared progression to
+  -- whatever single note the trigger happens to carry. Both are worth a line
+  -- before a take rather than a puzzle after one.
+  when (p.port == "" && (isJust p.trigger.note || isJust st.against)) $
+    H.modify_ (note "no MIDI port chosen \x2014 this run will record silence. \
+                     \Trigger \x203a midi out")
+  when (pageFires st && Maybe.isNothing st.against) $
+    H.modify_ (note "no progression picked, so this run plays the trigger note \
+                     \rather than chords \x2014 pick one in the declared row")
   -- | **Wait for the capture to be RUNNING, not for 400 ms.**
   -- |
   -- | `captureOn` asks; the daemon opens the stream and says so in a snapshot,

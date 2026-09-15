@@ -21,6 +21,8 @@ module Quadrat.Declared
   ( Clip
   , fetchDeclared
   , cameBack
+  , rememberPick
+  , recallPick
   ) where
 
 import Prelude
@@ -74,3 +76,12 @@ foreign import cameBackImpl :: Effect Boolean
 
 cameBack :: Effect Boolean
 cameBack = cameBackImpl
+
+-- | **Remember which progression is picked**, by hash, across a reload.
+-- |
+-- | The hash only: the clip is re-fetched from the store, so this is a pointer
+-- | and can never be a stale copy of chords that have since changed. An empty
+-- | string forgets.
+foreign import rememberPick :: String -> Effect Unit
+
+foreign import recallPick :: Effect String
