@@ -1639,3 +1639,24 @@ body {
 .q-reel .q-reelsays { margin: 0 0 6px; font-size: 14px; }
 .q-reel .q-muted { margin: 0 0 8px; }
 .q-reel .q-send { margin-top: 12px; }
+
+/* The thirty-two reels. A reel is addressed by POSITION — mg1.wav through
+   mgw.wav, and the module reads nothing else — so the only question a write
+   can be asked is which one, and a taken slot is what the write destroys.
+   Same shape and same reason as the Rample's letter strip. */
+.q-reelslots { display: flex; flex-wrap: wrap; align-items: center; gap: 3px; margin: 14px 0 6px; }
+.q-reelslots .q-arm-label { margin-right: 7px; }
+.q-reelslot {
+  font: inherit; font-size: 11px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  min-width: 22px; padding: 3px 0; text-align: center;
+  border: 1px solid var(--rule); border-radius: 2px; background: #fff;
+  color: var(--muted); cursor: pointer;
+}
+.q-reelslot:hover { color: inherit; border-color: #999; }
+.q-reelslot.is-taken { background: #efeef6; color: #1a1a1a; border-color: #b9b5d4; }
+.q-reelslot.is-on { background: #1a1a1a; color: #fff; border-color: #1a1a1a; }
+.q-chip.is-arm.is-on { background: #1a1a1a; color: #fff; border-color: #1a1a1a; }
+.q-chip.is-go:disabled { opacity: 0.4; cursor: default; }
+.q-notyet ul { margin: 6px 0; padding-left: 18px; }
+.q-notyet li { margin: 0 0 2px; }

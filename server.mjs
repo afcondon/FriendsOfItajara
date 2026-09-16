@@ -478,6 +478,41 @@ function dropSets(names) {
 // the audio to save one splice out of ninety-nine.
 const REEL_MAX_SECS = 174;
 
+// **A reel's name is its slot.** `mg1.wav`..`mg9.wav`, then `mga.wav`..
+// `mgw.wav` — 32 of them, in the root, and the module reads NOTHING else.
+// Straight from the manual's File Naming Convention, and the reason the first
+// build of this was wrong: it wrote `<set>.wav`, which is a perfectly good
+// WAV that the Morphagene would never have shown.
+//
+// So a reel is placed at a POSITION, the way an Arbhar stick is, and the set
+// name cannot travel with it. That is a fact about the module, not a gap here:
+// see `a-reel-is-the-take-marked`.
+const REEL_SLOTS = 32;
+
+function reelName(slot) {
+  const n = Math.max(1, Math.min(REEL_SLOTS, Number(slot) || 1));
+  return "mg" + (n <= 9 ? String(n) : String.fromCharCode(97 + n - 10)) + ".wav";
+}
+
+// **What the module will and will not load**, checked against the file rather
+// than assumed from the profile.
+//
+// The manual is explicit and it is not a soft limit: *"each file must be 2.9
+// minutes or less and stereo in order for the Morphagene to recognize and
+// load the files"*. An over-long reel is not truncated, it is INVISIBLE —
+// which is the worst failure available, because the card write succeeds, the
+// module boots, and the reel simply is not there.
+function reelFits(f, secs) {
+  const why = [];
+  if (secs > REEL_MAX_SECS) why.push(`${secs.toFixed(1)}s is over the ${REEL_MAX_SECS}s ceiling`);
+  if (f) {
+    if (f.ch !== 2) why.push(`${f.ch === 1 ? "mono" : f.ch + " channels"}, and a reel must be stereo`);
+    if (f.rate !== 48000) why.push(`${f.rate} Hz, and a reel must be 48000`);
+    if (f.bits !== 32 || f.tag !== 3) why.push(`${f.bits}-bit tag ${f.tag}, and a reel must be 32-bit float`);
+  }
+  return why;
+}
+
 function reelOf(name) {
   const got = storedSet(name);
   if (!got.ok) return { ok: false, output: got.output };
@@ -485,19 +520,25 @@ function reelOf(name) {
   const takeDir = path.join(TAKES, safe(set.take || name));
   const wav = fs.existsSync(takeDir) ? firstWav(takeDir) : null;
   const starts = (set.samples ?? []).map((x) => Number(x.start) || 0);
-  const secs = wav ? (wavSecs(wav) ?? 0) : 0;
+  const f = wav ? wavFacts(wav) : null;
+  const secs = f ? f.secs : 0;
+  const why = wav ? reelFits(f, secs) : [];
   return {
     ok: !!wav && starts.length > 0,
     take: set.take || "",
-    // The reel is named for the SET, not for the take: the set is the thing
-    // that was kept and the thing whose name is on the card everywhere else.
-    file: `${name}.wav`,
     secs,
     starts,
     splices: starts.length + 1,
-    over: secs > REEL_MAX_SECS,
+    // The format, as read off the file. Said even when it is right, because
+    // "48 kHz · 32-bit float · stereo" is the whole reason no conversion step
+    // exists here and a reader should be able to check that claim.
+    format: f ? `${f.rate / 1000} kHz \u00b7 ${f.bits}-bit ${f.tag === 3 ? "float" : "int"} \u00b7 `
+                + (f.ch === 2 ? "stereo" : f.ch === 1 ? "mono" : f.ch + " ch") : "",
+    // Empty when the module will load it. Every reason it will not, otherwise.
+    refuses: why,
     max: REEL_MAX_SECS,
-    output: !wav ? `no take audio for ${name} — the capture it was cut from is gone`
+    slots: REEL_SLOTS,
+    output: !wav ? `no take audio for ${name} \u2014 the capture it was cut from is gone`
           : !starts.length ? `${name} has no regions to mark`
           : "",
   };
@@ -506,15 +547,16 @@ function reelOf(name) {
 // **Every mounted volume, and no claim about which is a Morphagene card.**
 //
 // There is nothing to sniff for. A Rample card announces itself with
-// `rample.bin` or a bank folder; a Morphagene card is a FAT32 volume with WAV
-// files in its root, which is also what a USB stick of samples is. So the page
-// offers the volumes and the person says which — and the page says that is
-// what it is doing, rather than inventing a confidence it does not have.
+// `rample.bin` or a bank folder; a Morphagene card is a FAT32 volume with
+// `mg*.wav` in its root — but so is a card that simply has not been written
+// yet, and so is a stick of samples. So the page offers the volumes and the
+// person says which.
 //
-// **The contents of a volume are never read here.** See the note above
-// `cards()`: a `readdirSync` of a removable volume blocks this process
-// forever when Bosun spawns it. Reading `/Volumes` itself is fine; reading
-// anything inside one is not.
+// **The contents of a volume are never read IN THIS PROCESS.** See the note
+// above `cards()`: a `readdirSync` of a removable volume blocks the event loop
+// forever when Bosun spawns this server. Reading `/Volumes` itself is fine;
+// reading inside one is not, so `reelsOn` shells out — which is the route that
+// note said to establish rather than assume.
 function volumes() {
   const vols = "/Volumes";
   if (!fs.existsSync(vols)) return [];
@@ -530,25 +572,53 @@ function volumes() {
     .filter((p) => { try { return fs.lstatSync(p).isDirectory() && !fs.lstatSync(p).isSymbolicLink(); } catch { return false; } });
 }
 
+// **Which reel slots a card already holds** — the blast radius, which is the
+// question a write has to answer before it is pressed. `a-card-write-deletes-
+// by-slot` is the same lesson from the Rample: a position decides what is
+// destroyed, so the positions have to be visible.
+//
+// A subprocess, not `fs.readdirSync`, for the reason above. Timed out, because
+// an unresponsive card must not take the page with it.
+function reelsOn(dest) {
+  return new Promise((resolve) => {
+    if (!volumes().includes(dest)) return resolve({ ok: false, reels: [], output: `${dest} is not a mounted volume` });
+    let out = "";
+    const child = spawn("/bin/ls", ["-1", dest]);
+    const done = setTimeout(() => { try { child.kill(); } catch {} resolve({ ok: false, reels: [], output: `${dest} did not answer` }); }, 5000);
+    child.stdout.on("data", (c) => (out += c));
+    child.on("error", (e) => { clearTimeout(done); resolve({ ok: false, reels: [], output: e.message }); });
+    child.on("close", () => {
+      clearTimeout(done);
+      const here = new Set(out.split("\n").map((x) => x.trim().toLowerCase()));
+      const reels = [];
+      for (let i = 1; i <= REEL_SLOTS; i++) if (here.has(reelName(i))) reels.push(i);
+      resolve({ ok: true, reels, output: "" });
+    });
+  });
+}
+
 async function writeReel(body) {
   const name = safe(String(body.set || ""));
   const dest = String(body.dest || "");
+  const slot = Math.max(1, Math.min(REEL_SLOTS, Number(body.slot) || 0));
   const r = reelOf(name);
   if (!r.ok) return { ok: false, output: r.output || `nothing to write for ${name}` };
   if (!volumes().includes(dest)) return { ok: false, output: `${dest} is not a mounted volume` };
+  if (!Number(body.slot)) return { ok: false, output: "say which reel it is \u2014 a reel is a position, not a name" };
 
   const takeDir = path.join(TAKES, safe(r.take || name));
   const src = firstWav(takeDir);
-  const out = path.join(dest, r.file);
+  const file = reelName(slot);
+  const out = path.join(dest, file);
   const times = r.starts.map((t) => t.toFixed(3)).join(",");
   const done = await run(["splice", src, "--times", times, "--output", out]);
-  // **Say where it went and what is in it**, from what was actually asked for
-  // — never a cheerful sentence assembled beside the act. The name a reel
-  // lands under is the whole question a person is looking down at the module
-  // to answer.
+  // **Say where it went and what is in it**, read from what was actually
+  // asked for and never assembled beside the act. The name a reel lands under
+  // is the whole question a person is looking down at the module to answer —
+  // and here it is a slot number, which nothing else on the card records.
   return done.ok
-    ? { ok: true, output: `wrote ${r.file} \u00b7 ${r.splices} splices \u00b7 ${r.secs.toFixed(1)}s to ${dest}`
-                          + (r.over ? ` \u2014 longer than the ${r.max}s a reel holds` : "") }
+    ? { ok: true, file, output: `wrote ${file} \u00b7 reel ${slot} \u00b7 ${r.splices} splices \u00b7 ${r.secs.toFixed(1)}s to ${dest}`
+                                + (r.refuses.length ? ` \u2014 but ${r.refuses.join("; ")}` : "") }
     : done;
 }
 
@@ -1397,6 +1467,33 @@ const SLICE_DIVISIONS = [8, 12, 16, 24, 32, 48, 64, 128];
 
 // Seconds of a WAV, from its header alone. Enough to size a slot, and it does
 // not read the audio to do it.
+// The header, as facts rather than as a duration. `wavSecs` is this with
+// everything but the length thrown away; a reel has to be checked against
+// three of the other fields, so they are kept.
+function wavFacts(file) {
+  try {
+    const fd = fs.openSync(file, "r");
+    const head = Buffer.alloc(4096);
+    const n = fs.readSync(fd, head, 0, 4096, 0);
+    fs.closeSync(fd);
+    if (head.slice(0, 4).toString() !== "RIFF") return null;
+    let off = 12, rate = 0, ch = 0, bits = 0, bytes = 0, tag = 0;
+    while (off + 8 <= n) {
+      const id = head.slice(off, off + 4).toString();
+      const size = head.readUInt32LE(off + 4);
+      if (id === "fmt ") {
+        tag = head.readUInt16LE(off + 8);
+        ch = head.readUInt16LE(off + 10);
+        rate = head.readUInt32LE(off + 12);
+        bits = head.readUInt16LE(off + 22);
+      } else if (id === "data") { bytes = size; break; }
+      off += 8 + size + (size & 1);
+    }
+    if (!rate || !ch || !bits || !bytes) return null;
+    return { rate, ch, bits, tag, secs: bytes / (rate * ch * (bits / 8)) };
+  } catch { return null; }
+}
+
 function wavSecs(file) {
   try {
     const fd = fs.openSync(file, "r");
@@ -2292,6 +2389,9 @@ const server = http.createServer(async (req, res) => {
     }
     if (url.pathname === "/api/reel" && req.method === "GET") {
       return json(res, 200, reelOf(safe(url.searchParams.get("set") || "")));
+    }
+    if (url.pathname === "/api/reel/on" && req.method === "GET") {
+      return json(res, 200, await reelsOn(String(url.searchParams.get("dest") || "")));
     }
     if (url.pathname === "/api/reel/write" && req.method === "POST") {
       return json(res, 200, await writeReel(await readBody(req)));

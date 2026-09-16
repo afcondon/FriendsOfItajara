@@ -339,31 +339,44 @@ export const reel = (set) => () =>
     .then((d) => ({
       ok: !!d.ok,
       take: String(d.take ?? ""),
-      file: String(d.file ?? ""),
       secs: Number(d.secs ?? 0),
       splices: Number(d.splices ?? 0),
-      // The marker positions themselves, so the page can DRAW the reel
-      // rather than say how many splices it has: a splice spans one marker
-      // to the next, so its length includes the gap that follows the sound,
-      // and that is exactly the thing a count cannot show.
+      // The marker positions themselves, so the page can DRAW the reel rather
+      // than say how many splices it has: a splice spans one marker to the
+      // next, so its length includes the gap that follows the sound, and that
+      // is exactly the thing a count cannot show.
       starts: (d.starts ?? []).map(Number).filter(Number.isFinite),
-      over: !!d.over,
+      format: String(d.format ?? ""),
+      // Every reason the module will not load it — empty when it will. NOT a
+      // boolean: "it will not load" is useless without which rule it broke.
+      refuses: (d.refuses ?? []).map(String),
       max: Number(d.max ?? 0),
+      slots: Number(d.slots ?? 0),
       output: String(d.output ?? ""),
     }))
-    .catch((e) => ({ ok: false, take: "", file: "", secs: 0, splices: 0, starts: [], over: false,
-                     max: 0, output: String(e.message ?? e) }));
+    .catch((e) => ({ ok: false, take: "", secs: 0, splices: 0, starts: [], format: "",
+                     refuses: [], max: 0, slots: 0, output: String(e.message ?? e) }));
 
 // Mounted volumes, and no claim about which is a Morphagene card — there is
 // nothing to sniff for. See `volumes` in server.mjs.
 export const volumes = () =>
   fetch("/api/volumes").then(j).then((d) => (d.volumes ?? []).map(String)).catch(() => []);
 
-export const writeReel = (set) => (dest) => () =>
+// Which reel slots a card already holds. The blast radius of a write, read by
+// a subprocess because this process may not enumerate a removable volume.
+export const reelsOn = (dest) => () =>
+  fetch("/api/reel/on?dest=" + encodeURIComponent(dest))
+    .then(j)
+    .then((d) => ({ ok: !!d.ok, reels: (d.reels ?? []).map(Number), output: String(d.output ?? "") }))
+    .catch((e) => ({ ok: false, reels: [], output: String(e.message ?? e) }));
+
+// A reel goes to a POSITION — mg1.wav..mgw.wav — and the set name cannot
+// travel with it. See `reelName` in server.mjs.
+export const writeReel = (set) => (dest) => (slot) => () =>
   fetch("/api/reel/write", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ set, dest }),
+    body: JSON.stringify({ set, dest, slot }),
   })
     .then(j)
     .then((d) => ({ ok: !!d.ok, output: String(d.output ?? "") }))

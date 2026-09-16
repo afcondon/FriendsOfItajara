@@ -320,6 +320,14 @@ type State =
   -- | Mounted volumes, for the reel to be written to. Not "cards": see
   -- | `Http.volumes` — a reel card cannot be told from a stick of samples.
   , volumes :: Array String
+  -- | The volume a reel is going to, and which of its 32 slots already hold
+  -- | one. Chosen before the slot, because the slots are a fact about a card.
+  , reelDest :: Maybe String
+  , reelTaken :: Array Int
+  -- | Which of the 32 reel positions this write takes. `0` is "not said", and
+  -- | it stays 0 until somebody says: a reel is addressed by position, and a
+  -- | default here would be a default about what to overwrite.
+  , reelSlot :: Int
   , reelBusy :: Boolean
   -- | **How the listing is ordered.** A control rather than a fact printed on
   -- | every row: see `Sort`.
@@ -450,6 +458,12 @@ data Sort = Newest | Oldest | Biggest | Alpha
 
 derive instance Eq Sort
 
+-- | `a` through `w` \x2014 the letters reels 10 to 32 wear. Twenty-three of them,
+-- | and the run stopping at `w` is the module's, not a typo: nine digits plus
+-- | twenty-three letters is the thirty-two reels a card holds.
+reelLetters :: Array String
+reelLetters = String.split (String.Pattern "") "abcdefghijklmnopqrstuvw"
+
 sortOf :: String -> Sort
 sortOf = case _ of
   "oldest" -> Oldest
@@ -518,7 +532,11 @@ data Action
   -- | volumes there are to write it to. One action because they are always
   -- | wanted together and neither is useful alone.
   | LookAtReel
-  | WriteReel String
+  -- | Point the reel at a volume, which reads what that card already holds.
+  | SetReelDest String
+  -- | Which of the 32 reel positions the write takes.
+  | SetReelSlot Int
+  | WriteReel
   | SetKit String
   | SetVoice String
   | SendToCard { place :: Boolean, append :: Boolean }
@@ -642,7 +660,8 @@ component = H.mkComponent
       , levels: [], modal: Nothing, kept: false, confirmKeep: false
       , picked: Set.empty, confirmDrop: false, confirmWrite: Nothing, preview: Nothing
       , dest: Dest.Rample, setQuery: "", onlyPicked: false, setSort: Newest
-      , reel: Nothing, volumes: [], reelBusy: false
+      , reel: Nothing, volumes: [], reelDest: Nothing, reelTaken: [], reelSlot: 0
+      , reelBusy: false
       , cardPeek: Nothing, openSet: Nothing, openSetInfo: Nothing, peekSample: 0
       , shownSecs: Nothing, audio: Nothing, audioBusy: false
       , placeSliced: false, placeLayers: 0, placeVoices: 0
@@ -1357,19 +1376,40 @@ handleAction = case _ of
       [ one ] -> Just <$> H.liftAff (toAffE (Http.reel one))
       _ -> pure Nothing
     H.modify_ _ { volumes = vols, reel = r }
+    -- A card that went away takes its slot listing with it, rather than
+    -- leaving the page showing what a different card held.
+    st1 <- H.get
+    case st1.reelDest of
+      Just d | Array.elem d vols -> handleAction (SetReelDest d)
+      _ -> H.modify_ _ { reelDest = Nothing, reelTaken = [] }
+
+  -- | **Choosing the card reads the card.** The slots a write can take are a
+  -- | fact about the card in the slot right now, not about the manifest \x2014 the
+  -- | same correction the Rample's write question had to make.
+  SetReelDest d -> do
+    H.modify_ _ { reelDest = Just d, reelTaken = [] }
+    on <- H.liftAff (toAffE (Http.reelsOn d))
+    H.modify_ _ { reelTaken = on.reels }
+    unless on.ok (H.modify_ (note on.output))
+
+  SetReelSlot n -> H.modify_ _ { reelSlot = n }
 
   -- | **The write says what landed, read from the answer and not from the
   -- | request.** The same rule the card write had to learn: a report assembled
   -- | beside the act is a report of what was asked for, which is exactly the
   -- | thing that is wrong when it is wrong.
-  WriteReel dest -> do
+  WriteReel -> do
     st0 <- H.get
-    case Array.fromFoldable st0.picked of
-      [ one ] -> do
+    case Array.fromFoldable st0.picked, st0.reelDest of
+      [ one ], Just dest | st0.reelSlot > 0 -> do
         H.modify_ _ { reelBusy = true }
-        done <- H.liftAff (toAffE (Http.writeReel one dest))
+        done <- H.liftAff (toAffE (Http.writeReel one dest st0.reelSlot))
         H.modify_ (note done.output <<< _ { reelBusy = false })
-      _ -> H.modify_ (note "tick exactly one set — a reel is one take")
+        -- What is on the card changed, so what the page says about it has to.
+        handleAction (SetReelDest dest)
+      [ _ ], Just _ -> H.modify_ (note "say which reel it is")
+      [ _ ], Nothing -> H.modify_ (note "say which card it goes to")
+      _, _ -> H.modify_ (note "tick exactly one set \x2014 a reel is one take")
   SetQuery v -> H.modify_ _ { setQuery = v }
   SetOnlyPicked v -> H.modify_ _ { onlyPicked = v }
   SetSort v -> H.modify_ _ { setSort = sortOf v }
@@ -5148,48 +5188,115 @@ render st =
         HH.div [ HP.class_ (HH.ClassName "q-transform q-reel") ]
           [ reelStrip rl
           , HH.p [ HP.class_ (HH.ClassName "q-reelsays") ]
-              [ HH.strong_ [ HH.text rl.file ]
-              , HH.text (" \x00b7 " <> show rl.splices <> " splices \x00b7 "
-                  <> secs2 rl.secs <> "s from " <> rl.take)
+              [ HH.strong_ [ HH.text (show rl.splices <> " splices") ]
+              , HH.text (" \x00b7 " <> secs2 rl.secs <> "s \x00b7 " <> rl.format
+                  <> " \x00b7 from " <> rl.take)
               ]
           -- | **Splice 1 is the lead-in, and the page says so.** The markers
           -- | go at each region's start, the first included, so N markers make
           -- | N+1 splices and progression k is splice k+1. Trimming the head
           -- | would save one splice out of ninety-nine and cost a re-encode of
           -- | the whole reel, so it is not done \x2014 and a thing not done has to
-          -- | be said, or it reads as an off-by-one on the module.
+          -- | be said, or it reads as an off-by-one at the module.
           , HH.p [ HP.class_ (HH.ClassName "q-muted") ]
               [ HH.text "splice 1 is the silence before the first one, so \
                         \region k is splice k+1" ]
-          , if not rl.over then HH.text "" else
-              HH.p [ HP.class_ (HH.ClassName "q-notyet") ]
-                [ HH.text (secs2 rl.secs <> "s is longer than the " <> show rl.max
-                    <> "s a reel holds \x2014 the file is written whole and the \
-                       \module takes what fits") ]
+          -- | **Not a warning \x2014 a refusal, and it is the module's.**
+          -- |
+          -- | *"each file must be 2.9 minutes or less and stereo in order for
+          -- | the Morphagene to recognize and load the files."* An over-long
+          -- | reel is not truncated; it is INVISIBLE. That is the worst
+          -- | failure available here: the write succeeds, the card mounts, the
+          -- | module boots, and the reel is not there \x2014 with nothing anywhere
+          -- | saying why. So it is said before the write, in the module's own
+          -- | terms, and the write is refused rather than left to look fine.
+          , if Array.null rl.refuses then HH.text "" else
+              HH.div [ HP.class_ (HH.ClassName "q-notyet") ]
+                [ HH.strong_ [ HH.text "the Morphagene will not load this reel" ]
+                , HH.ul_ (map (\w -> HH.li_ [ HH.text w ]) rl.refuses)
+                , HH.span [ HP.class_ (HH.ClassName "q-muted") ]
+                    [ HH.text "it is not truncated or converted \x2014 it simply does \
+                              \not appear in Reel mode" ]
+                ]
           , HH.div [ HP.class_ (HH.ClassName "q-send") ]
-              [ HH.span [ HP.class_ (HH.ClassName "q-arm-label") ] [ HH.text "Write to" ]
+              [ HH.span [ HP.class_ (HH.ClassName "q-arm-label") ] [ HH.text "Card" ]
               , if Array.null st.volumes
                   then HH.span [ HP.class_ (HH.ClassName "q-muted") ]
                          [ HH.text "no volume is mounted \x2014 mount the card, then \
                                    \press the tab again" ]
                   else HH.div [ HP.class_ (HH.ClassName "q-chips") ]
                          (map (\v -> HH.button
-                                 [ HP.class_ (HH.ClassName "q-chip is-arm")
-                                 , HP.disabled st.reelBusy
-                                 , HP.title ("write " <> rl.file <> " into the root of " <> v)
-                                 , HE.onClick \_ -> WriteReel v
+                                 [ HP.class_ (HH.ClassName ("q-chip is-arm"
+                                     <> (if st.reelDest == Just v then " is-on" else "")))
+                                 , HP.title ("read " <> v <> ", and say which reels it holds")
+                                 , HE.onClick \_ -> SetReelDest v
                                  ]
                                  [ HH.text v ]) st.volumes)
               ]
-          -- | **No volume is claimed to be a Morphagene card**, because nothing
-          -- | in one says so: a reel card is a FAT32 volume with WAVs in its
-          -- | root, which is also what a stick of samples is. The page offers
-          -- | the volumes and says that is what it is doing.
-          , if Array.null st.volumes then HH.text "" else
-              HH.p [ HP.class_ (HH.ClassName "q-muted") ]
-                [ HH.text "these are every mounted volume \x2014 nothing about a reel \
-                          \card distinguishes it, so the choice is yours" ]
+          , case st.reelDest of
+              Nothing -> HH.text ""
+              Just dest ->
+                HH.div_
+                  [ reelSlots rl
+                  , HH.div [ HP.class_ (HH.ClassName "q-send") ]
+                      [ HH.button
+                          [ HP.class_ (HH.ClassName "q-chip is-arm is-go")
+                          , HP.disabled (st.reelBusy || st.reelSlot <= 0
+                                          || not (Array.null rl.refuses))
+                          , HP.title (if st.reelSlot <= 0 then "pick a reel above"
+                                      else "write " <> reelFile st.reelSlot <> " into the \
+                                           \root of " <> dest)
+                          , HE.onClick \_ -> WriteReel
+                          ]
+                          [ HH.text (if st.reelSlot <= 0 then "pick a reel"
+                                     else (if Array.elem st.reelSlot st.reelTaken
+                                           then "Replace " else "Write ")
+                                          <> reelFile st.reelSlot <> " on " <> dest) ]
+                      ]
+                  -- | The module writes back to this card whenever you record
+                  -- | on it. Straight from the manual, and the one fact that
+                  -- | decides what happens to this reel AFTER it is loaded.
+                  , HH.p [ HP.class_ (HH.ClassName "q-muted") ]
+                      [ HH.text "the Morphagene stores its own recordings and splices \
+                                \back to the card, so take the card out once the reel \
+                                \is loaded if you want to keep it as written" ]
+                  ]
           ]
+
+  -- | **The thirty-two reels, and which are taken.**
+  -- |
+  -- | A reel is addressed by POSITION \x2014 `mg1.wav` through `mgw.wav`, and the
+  -- | module reads nothing else \x2014 so the set's name cannot travel onto the
+  -- | card with it, and the only question a write can be asked is *which
+  -- | one*. Same shape as the Rample's letter strip and for the same reason:
+  -- | the position decides what is destroyed, so the positions are drawn.
+  reelSlots rl =
+    HH.div [ HP.class_ (HH.ClassName "q-reelslots") ]
+      ( [ HH.span [ HP.class_ (HH.ClassName "q-arm-label") ] [ HH.text "Reel" ] ]
+          <> map one (Array.range 1 (max 1 rl.slots))
+      )
+    where
+    one n =
+      let taken = Array.elem n st.reelTaken
+      in HH.button
+           [ HP.class_ (HH.ClassName ("q-reelslot"
+               <> (if st.reelSlot == n then " is-on" else "")
+               <> (if taken then " is-taken" else "")))
+           , HP.title (reelFile n <> (if taken then " \x2014 a reel is already here; \
+                                                    \writing replaces it"
+                                      else " \x2014 free"))
+           , HE.onClick \_ -> SetReelSlot n
+           ]
+           [ HH.text (reelLabel n) ]
+
+  -- | `mg1`..`mg9`, then `mga`..`mgw`. The module's own naming, mirrored here
+  -- | so the page can say the filename before the write rather than after it.
+  -- | See `reelName` in server.mjs \x2014 the two have to agree, and the page is
+  -- | the one that has to SAY it.
+  reelLabel n
+    | n <= 9 = show n
+    | otherwise = fromMaybe "?" (Array.index reelLetters (n - 10))
+  reelFile n = "mg" <> reelLabel n <> ".wav"
 
   -- | **The reel, drawn.** One block per splice, as wide as the splice is
   -- | long, which is the one picture a count cannot give: a splice runs marker

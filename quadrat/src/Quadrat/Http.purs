@@ -47,6 +47,8 @@ module Quadrat.Http
   , Reel
   , reel
   , volumes
+  , ReelsOn
+  , reelsOn
   , writeReel
   ) where
 
@@ -682,15 +684,24 @@ foreign import writeToCard :: String -> Boolean -> Effect (Promise Wrote)
 type Reel =
   { ok :: Boolean
   , take :: String
-  , file :: String
   , secs :: Number
   , splices :: Int
   -- | Where the markers land, in seconds. The page draws the reel from these:
   -- | a splice runs from one marker to the next, so it carries the gap after
   -- | the sound as well as the sound.
   , starts :: Array Number
-  , over :: Boolean
+  -- | The take's format, READ OFF THE FILE. Said even when it is right,
+  -- | because it is the whole reason there is no conversion step here.
+  , format :: String
+  -- | **Every reason the module will not load this**, empty when it will.
+  -- |
+  -- | Not a boolean, because "it will not load" is useless without the rule it
+  -- | broke — and not a warning either: the manual says a reel over 2.9
+  -- | minutes or not stereo is not *truncated*, it is not RECOGNISED. The
+  -- | write succeeds, the module boots, and the reel is simply not there.
+  , refuses :: Array String
   , max :: Int
+  , slots :: Int
   , output :: String
   }
 
@@ -701,4 +712,12 @@ foreign import reel :: String -> Effect (Promise Reel)
 -- | the page offers the volumes and the person says which.
 foreign import volumes :: Effect (Promise (Array String))
 
-foreign import writeReel :: String -> String -> Effect (Promise Wrote)
+type ReelsOn = { ok :: Boolean, reels :: Array Int, output :: String }
+
+-- | Which reel slots a card already holds: the blast radius of a write.
+foreign import reelsOn :: String -> Effect (Promise ReelsOn)
+
+-- | Set, volume, slot. A reel is addressed by POSITION — `mg1.wav` through
+-- | `mgw.wav` — and the module reads nothing else, so the set's name cannot
+-- | travel onto the card with it.
+foreign import writeReel :: String -> String -> Int -> Effect (Promise Wrote)
