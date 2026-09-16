@@ -43,7 +43,7 @@ import Prelude
 
 import Control.Monad.Rec.Class (forever)
 import Data.Array as Array
-import Data.Foldable (for_)
+import Data.Foldable (for_, sum)
 import Data.Int as Int
 import Data.Either (Either(..), either)
 import Data.Maybe (Maybe(..), fromMaybe, isJust, maybe)
@@ -78,6 +78,7 @@ import Control.Promise (toAffE)
 import Quadrat.Audio as Audio
 import Quadrat.Clip (copyText)
 import Quadrat.Declared as Declared
+import Quadrat.Dest as Dest
 import Quadrat.Http as Http
 import Quadrat.RebusView as RebusView
 import Quadrat.SetIdentity (chordGlyph, markOf)
@@ -308,6 +309,26 @@ type State =
   -- | **Which stored sets are ticked**, by name rather than by index: the list
   -- | is re-fetched after every write and a position means nothing across that.
   , picked :: Set String
+  -- | **Which destination the right-hand pane is describing.** A tab, not a
+  -- | filter: see `Quadrat.Dest` — the shape of the destination decides the
+  -- | controls, so each one gets its own panel rather than a relabelled Rample.
+  , dest :: Dest.Dest
+  -- | **How the listing is ordered.** A control rather than a fact printed on
+  -- | every row: see `Sort`.
+  , setSort :: Sort
+  -- | **One box over everything the listing already knows.**
+  -- |
+  -- | The library is long and every name is a timestamp, so the list cannot be
+  -- | read; it can only be searched. Matched against name, kind, the parameters
+  -- | that moved, what played it, and the declared key — the five things a set
+  -- | is actually looked for BY. Free text over all of them rather than five
+  -- | controls, because a person searching does not know in advance which field
+  -- | holds the word they remember.
+  , setQuery :: String
+  -- | Narrow to what is ticked. The other half of filtering: once a pack has
+  -- | been assembled out of a hundred sets, the question stops being "which
+  -- | sets exist" and becomes "what have I got".
+  , onlyPicked :: Boolean
   -- | Deleting is the one thing here that destroys work, so it is asked.
   , confirmDrop :: Boolean
   -- | **The write question, held open against one card.**
@@ -407,6 +428,42 @@ data Modal = DivisionModal | TriggerModal | PitchModal | SaveModal
 
 derive instance Eq Modal
 
+-- | **How the listing is ordered.**
+-- |
+-- | A control, and its whole reason for existing is that the rows stopped
+-- | printing their date. Andrew, 2026-09-16: *"maybe just not show timestamp
+-- | at all (except in the detail modal) and instead give a sort by date
+-- | option"* — which is the right trade twice over. The date was three
+-- | near-identical strings per row answering a question nobody asks while
+-- | SCANNING (*when exactly was this?*) and failing to answer the one they do
+-- | (*which of these is the recent one?*). An ordering answers the second and
+-- | costs no ink at all.
+data Sort = Newest | Oldest | Biggest | Alpha
+
+derive instance Eq Sort
+
+sortOf :: String -> Sort
+sortOf = case _ of
+  "oldest" -> Oldest
+  "biggest" -> Biggest
+  "alpha" -> Alpha
+  _ -> Newest
+
+sortValue :: Sort -> String
+sortValue = case _ of
+  Newest -> "newest"
+  Oldest -> "oldest"
+  Biggest -> "biggest"
+  Alpha -> "alpha"
+
+sortChoices :: Array { value :: String, says :: String }
+sortChoices =
+  [ { value: "newest", says: "newest first" }
+  , { value: "oldest", says: "oldest first" }
+  , { value: "biggest", says: "most samples" }
+  , { value: "alpha", says: "by name" }
+  ]
+
 data Action
   -- | **Make this parameter a pitch**, or (with an empty label) stop it being
   -- | one. An Action rather than a `Sweep.Msg` because it has to FETCH the
@@ -442,6 +499,13 @@ data Action
   | RefreshCard
   | SetBank String
   | SetLetter String
+  -- | Which destination the right-hand pane describes. See `Quadrat.Dest`.
+  | SetDest Dest.Dest
+  -- | The library filter: free text over the listing, and the ticked-only
+  -- | narrowing beside it.
+  | SetQuery String
+  | SetOnlyPicked Boolean
+  | SetSort String
   | SetKit String
   | SetVoice String
   | SendToCard { place :: Boolean, append :: Boolean }
@@ -564,6 +628,7 @@ component = H.mkComponent
       , page: Bench, fill: Swept, pivot: Nothing
       , levels: [], modal: Nothing, kept: false, confirmKeep: false
       , picked: Set.empty, confirmDrop: false, confirmWrite: Nothing, preview: Nothing
+      , dest: Dest.Rample, setQuery: "", onlyPicked: false, setSort: Newest
       , cardPeek: Nothing, openSet: Nothing, openSetInfo: Nothing, peekSample: 0
       , shownSecs: Nothing, audio: Nothing, audioBusy: false
       , placeSliced: false, placeLayers: 0, placeVoices: 0
@@ -1262,6 +1327,10 @@ handleAction = case _ of
             handleAction (OpenSweep true)
   SetBank v -> H.modify_ _ { bank = v }
   SetLetter v -> H.modify_ _ { letter = v }
+  SetDest d -> H.modify_ _ { dest = d }
+  SetQuery v -> H.modify_ _ { setQuery = v }
+  SetOnlyPicked v -> H.modify_ _ { onlyPicked = v }
+  SetSort v -> H.modify_ _ { setSort = sortOf v }
   SetKit v -> H.modify_ _ { kit = v, kitMine = v /= "" }
   SetVoice v -> H.modify_ \s ->
     s { voice = onlyVoices s.kind (clamp 1 4 (fromMaybe s.voice (Int.fromString v))) }
@@ -3528,7 +3597,11 @@ render st =
           HH.div [ HP.class_ (HH.ClassName "q-panes") ]
             [ HH.div [ HP.class_ (HH.ClassName "q-pane is-library") ] [ setsView ]
             , HH.div [ HP.class_ (HH.ClassName "q-pane is-dest") ]
-                [ destHead, transformPanel, cardView ]
+                ( [ destHead ]
+                    <> case (Dest.factsOf st.dest).unbuilt of
+                         Nothing -> [ transformPanel, cardView ]
+                         Just why -> [ destSoon st.dest why ]
+                )
             , maybe (HH.text "") setModal st.openSet
             ]
     , HH.section [ HP.class_ (HH.ClassName "q-log") ]
@@ -4707,10 +4780,93 @@ render st =
                         <> show (Array.length (Array.filter _.runnable st.sets))
                         <> " re-runnable") ]
                 ]
+            , filterBar
             , pickedBar
             ]
-              <> map setRow st.sets
+              <> (if Array.null shownSets
+                    then [ HH.p [ HP.class_ (HH.ClassName "q-muted") ]
+                             [ HH.text "nothing here matches that" ] ]
+                    else map setRow shownSets)
           )
+
+  -- | **The list is long, every name is a timestamp, and it can only grow.**
+  -- |
+  -- | So the library stops being something you read and becomes something you
+  -- | search. One box over everything the listing already carries — name, kind,
+  -- | the parameters that moved, what played it, the declared key — because a
+  -- | person looking for a set does not know in advance which of those fields
+  -- | holds the word they remember, and five controls would make them choose
+  -- | before they can look.
+  -- |
+  -- | Every term must match, so terms narrow: `chord g minor` is the three of
+  -- | them together and not any of them.
+  -- |
+  -- | Beside it, the other half of filtering, and the half that is not a
+  -- | search at all: **narrow to what is ticked**. Assembling a pack out of a
+  -- | hundred sets turns the question from "which sets exist" into "what have
+  -- | I got", and no text can ask that.
+  filterBar =
+    HH.div [ HP.class_ (HH.ClassName "q-setfilter") ]
+      [ HH.input
+          [ HP.class_ (HH.ClassName "q-setq")
+          , HP.type_ HP.InputSearch
+          , HP.value st.setQuery
+          , HP.placeholder "find \x2014 name, kind, parameter, instrument, key"
+          , HP.title "matches the set name, the kind of take, the parameters that \
+                     \moved, what played it, and the declared key. Several words \
+                     \narrow: each one has to match."
+          , HE.onValueInput SetQuery
+          ]
+      , HH.button
+          [ HP.class_ (HH.ClassName ("q-chip is-only"
+              <> (if st.onlyPicked then " is-on" else "")))
+          , HP.title (if Set.isEmpty st.picked
+                      then "nothing is ticked yet"
+                      else "show only the " <> show (Set.size st.picked) <> " ticked")
+          , HP.disabled (Set.isEmpty st.picked)
+          , HE.onClick \_ -> SetOnlyPicked (not st.onlyPicked)
+          ]
+          [ HH.text ("ticked" <> (if Set.isEmpty st.picked then "" else " " <> show (Set.size st.picked))) ]
+      , HH.label [ HP.class_ (HH.ClassName "q-field is-tight q-setsort") ]
+          [ HH.span_ [ HH.text "order" ]
+          , HH.select [ HE.onValueChange SetSort ]
+              (map (\o -> HH.option
+                      [ HP.value o.value, HP.selected (o.value == sortValue st.setSort) ]
+                      [ HH.text o.says ])
+                  sortChoices)
+          ]
+      , if Array.length shownSets == Array.length st.sets then HH.text "" else
+          HH.span [ HP.class_ (HH.ClassName "q-muted") ]
+            [ HH.text ("showing " <> show (Array.length shownSets)
+                <> " of " <> show (Array.length st.sets)) ]
+      ]
+
+  shownSets = ordered (Array.filter
+      (\r -> (not st.onlyPicked || Set.member r.name st.picked) && matches r)
+      st.sets)
+    where
+    -- `made` is an ISO instant, so a string comparison IS the chronology and
+    -- no date parsing is needed to get the order right.
+    ordered = case st.setSort of
+      Newest -> Array.sortBy (\a b -> compare b.made a.made)
+      Oldest -> Array.sortBy (\a b -> compare a.made b.made)
+      Biggest -> Array.sortBy (\a b -> compare b.count a.count)
+      Alpha -> Array.sortBy (\a b -> compare (String.toLower (labelOf a))
+                                             (String.toLower (labelOf b)))
+    terms = Array.filter (_ /= "") (String.split (String.Pattern " ")
+              (String.toLower (String.trim st.setQuery)))
+    matches r = Array.all (\t -> String.contains (String.Pattern t) (hay r)) terms
+    -- Everything the row already knows, lowered once per set per keystroke.
+    -- Deliberately NOT the sample-level fields: `notes` and `secs` are
+    -- hundreds of numbers each and matching "60" against them would return
+    -- most of the library while looking like a search.
+    hay r = String.toLower (joinWith " "
+      ( [ r.name, r.kind, r.voice, r.made, r.take
+        , if r.stereo then "stereo" else "mono"
+        , if r.runnable then "re-runnable runnable" else ""
+        , if r.centre.root < 0 then "" else pcName r.centre.root
+        , r.centre.tonality
+        ] <> r.moved <> [ r.encoding ]))
 
   -- | What already sits at the address the Library is pointing at. Named by
   -- | the letter, because that is what the module shows and what a write
@@ -4869,12 +5025,51 @@ render st =
   destHead =
     HH.div [ HP.class_ (HH.ClassName "q-desthead") ]
       [ HH.div [ HP.class_ (HH.ClassName "q-sechead") ]
-          [ HH.h2_ [ HH.text "Destination" ]
-          , HH.span [ HP.class_ (HH.ClassName "q-muted") ]
-              [ HH.text "Squarp Rample \x2014 banks of kits, 4 voices, 12 layers each, \
-                        \one SLICER for the whole card" ]
-          ]
+          [ HH.h2_ [ HH.text "Destination" ] ]
+      , HH.div [ HP.class_ (HH.ClassName "q-desttabs") ]
+          (map destTab Dest.all)
+      , HH.p [ HP.class_ (HH.ClassName "q-muted q-destshape") ]
+          [ HH.text (let f = Dest.factsOf st.dest
+                     in f.maker <> " " <> f.name <> " \x2014 " <> f.shape) ]
       ]
+
+  destTab d =
+    let f = Dest.factsOf d
+    in HH.button
+         [ HP.class_ (HH.ClassName ("q-desttab is-" <> Dest.slug d
+             <> (if d == st.dest then " is-on" else "")
+             <> (case f.unbuilt of
+                   Nothing -> ""
+                   Just _ -> " is-unbuilt")))
+         , HP.title (f.shape <> (case f.unbuilt of
+                                   Nothing -> ""
+                                   Just _ -> " \x2014 nothing here writes it yet"))
+         , HE.onClick \_ -> SetDest d
+         ]
+         [ HH.text f.name ]
+
+  -- | **A destination this page cannot write, saying so and saying what it
+  -- | knows.**
+  -- |
+  -- | The temptation is to leave the Rample\'s controls under the new heading
+  -- | and let the letters and voices mean whatever they mean there. That is
+  -- | the exact failure this project keeps meeting \x2014 the act succeeds and the
+  -- | report of it is wrong \x2014 and it would be worse here, because the write
+  -- | would go through and land on a card in the module\'s own layout.
+  -- |
+  -- | What IS worth showing is the module\'s own arithmetic, because it is the
+  -- | half of the decision that does not need any machinery: whether the set
+  -- | you have ticked can fit at all, and what it would become if it did.
+  destSoon d why =
+    let f = Dest.factsOf d
+    in HH.div [ HP.class_ (HH.ClassName "q-destsoon") ]
+         [ HH.p [ HP.class_ (HH.ClassName "q-destsuits") ]
+             [ HH.strong_ [ HH.text "suits" ], HH.text (" " <> f.suits) ]
+         , HH.ul [ HP.class_ (HH.ClassName "q-destimposes") ]
+             (map (\i -> HH.li_ [ HH.text i ]) f.imposes)
+         , HH.p [ HP.class_ (HH.ClassName "q-muted") ] [ HH.text ("format: " <> f.format) ]
+         , HH.p [ HP.class_ (HH.ClassName "q-notyet") ] [ HH.text why ]
+         ]
 
   -- | **The transform, between the two places.**
   -- |
@@ -4999,6 +5194,49 @@ render st =
   -- | about what moved, a line of code to type — and forcing them into
   -- | columns of one width made every one of them cramped. A ruled entry with
   -- | its own internal alignment reads the way a notebook page does.
+  -- | **What a set is called, when its name is a timestamp.**
+  -- |
+  -- | Most names here are minted \x2014 `chord-hits-0915-232247` \x2014 and a column
+  -- | of them is a column of near-identical strings that has to be READ
+  -- | character by character. The rebus already solved this: it is a picture
+  -- | WITH WORDS, and the words are sayable and typeable. So the minted name
+  -- | steps aside for the alias, and a name somebody actually chose is kept,
+  -- | because that is the one case where the string carries meaning.
+  labelOf r
+    | minted r.name = (markOf r).glyph.alias
+    | otherwise = r.name
+
+  -- | `<anything>-MMDD-HHMMSS` \x2014 the shape this page mints. Read off the
+  -- | TAIL rather than the head, so a take of a kind that does not exist yet
+  -- | still reads as minted.
+  minted nm =
+    case Array.take 2 (Array.reverse (String.split (String.Pattern "-") nm)) of
+      [ hms, md ] -> digitsOfLength 6 hms && digitsOfLength 4 md
+      _ -> false
+
+  digitsOfLength n t =
+    String.length t == n
+      && Array.all (\c -> c >= "0" && c <= "9")
+           (String.split (String.Pattern "") t)
+
+  -- Labels are compared against what is ON SCREEN, not against the whole
+  -- library: a collision you cannot see cannot mislead you, and naming every
+  -- row against sets the filter has hidden would put the timestamps straight
+  -- back.
+  ambiguous r =
+    Array.length (Array.filter (\x -> labelOf x == labelOf r) shownSets) > 1
+
+  -- | **Only the part that differs.** Two sets wearing one rebus are two takes
+  -- | of the same progression, so their names share everything but the last
+  -- | two segments \x2014 and printing `chord-hits-0915-` twice, ellipsed at the
+  -- | exact character where they diverge, is the worst of both: the ink of a
+  -- | timestamp with none of its information.
+  tiebreak r
+    | minted r.name =
+        joinWith "-" (Array.reverse
+          (Array.take 2 (Array.reverse (String.split (String.Pattern "-") r.name))))
+    | otherwise = r.name
+
   setRow r =
     HH.article [ HP.class_ (HH.ClassName ("q-set"
         <> if Set.member r.name st.picked then " is-picked" else "")) ]
@@ -5025,11 +5263,25 @@ render st =
                      { height: 15.0, mono: m.mono
                      , title: m.glyph.alias <> " \x2014 " <> m.says }
                      m.glyph.icons
-              , HH.span [ HP.class_ (HH.ClassName "q-set-nametext") ] [ HH.text r.name ]
+              , HH.span [ HP.class_ (HH.ClassName "q-set-nametext") ]
+                  [ HH.text (labelOf r) ]
+              -- | **The timestamp comes back exactly where it is load-bearing
+              -- | and nowhere else.**
+              -- |
+              -- | A rebus is a CONTENT identity for a chord set, so two takes
+              -- | of the same progression wear the same pair of icons on
+              -- | purpose \x2014 that agreement is the whole point of drawing
+              -- | them. It also means the picture cannot tell those two rows
+              -- | apart, and a row that silently looks like its neighbour is
+              -- | the failure this project keeps meeting. So when a label is
+              -- | shared by more than one row now on screen, THOSE rows say
+              -- | which they are, and the rest stay clean.
+              , if not (ambiguous r) then HH.text "" else
+                  HH.span [ HP.class_ (HH.ClassName "q-set-disamb")
+                          , HP.title "another set on screen wears the same picture \
+                                     \and words, so this one says its own name" ]
+                    [ HH.text (tiebreak r) ]
               ]
-          , HH.div [ HP.class_ (HH.ClassName "q-set-when") ]
-              [ HH.text (String.take 10 r.made
-                  <> (if r.take == "" then "" else " · from " <> r.take)) ]
           ]
       -- **The samples themselves, before the count of them.** A number and a
       -- shape are two readings of one fact and the shape is the faster, so
@@ -6088,9 +6340,26 @@ render st =
         -- arrangement: two stacks of nine beside each other is a different
         -- object from one stack of eighteen, and stacked vertically they read
         -- as the second thing.
+        -- | **What a voice holds is layers, and `splitOver` counts SAMPLES.**
+        -- |
+        -- | Which is the same number only when there are no slices, and the
+        -- | one option where it was true \x2014 the plain stack \x2014 was the one
+        -- | that looked right. Every grid drew `min 12 samples` rows of
+        -- | `slices` columns: twenty-four samples as "1 file, 24 slices" came
+        -- | out as twelve rows of twenty-four, 288 boxes for a set of 24.
+        -- | Andrew, 2026-09-16: *"there are many more than 24 little squares
+        -- | in each of them but we only have 24 samples so what is one meant
+        -- | to read into it?"* \x2014 nothing, and that is the answer: the
+        -- | picture is the whole argument for this control, so a picture that
+        -- | is not of the material is worse than no picture.
         [ HH.div [ HP.class_ (HH.ClassName "q-arrangevoices") ]
-            (map (\l -> voicePic { layers: l, slices: a.slices, dim: false })
-                 (Http.splitOver a.voices r.count))
+            (Array.mapWithIndex
+              (\vi n -> voicePicFrom
+                          { layers: if a.slices <= 0 then n else max 1 (n / a.slices)
+                          , slices: a.slices, dim: false }
+                          [ r.name ]
+                          (sum (Array.take vi (Http.splitOver a.voices r.count))))
+              (Http.splitOver a.voices r.count))
         , HH.span [ HP.class_ (HH.ClassName "q-arrangesays") ] [ HH.text (says r a) ]
         ]
     -- Zero is "let the extent decide", and the extent decides the natural
@@ -6138,7 +6407,15 @@ render st =
                   [ HH.div [ HP.class_ (HH.ClassName "q-setpic") ]
                       [ samplePicPeek r, voicingPanel r ]
                   , HH.dl [ HP.class_ (HH.ClassName "q-facts") ]
-                      ( fact "made" (String.take 10 r.made)
+                      -- | The whole instant, and the only place it is
+                      -- | printed now that the listing shows a name instead
+                      -- | of a date. Marked UTC, because `made` is and the
+                      -- | minted name is local \x2014 they differ by the offset
+                      -- | and an unlabelled pair of times that disagree is
+                      -- | worse than one time.
+                      ( fact "made" (String.take 10 r.made
+                          <> " \x00b7 " <> String.take 5 (String.drop 11 r.made)
+                          <> " UTC")
                       <> fact "from take" r.take
                       <> fact "samples"
                           (show r.count
@@ -6531,6 +6808,14 @@ render st =
   -- | ink: the comparison is the whole point of showing it.
   voicePic o = voicePicOf o []
 
+  -- | The same picture, starting `skip` samples into the material.
+  -- |
+  -- | Which a one-voice picture never needed and a several-voice one cannot do
+  -- | without: voice 3 holds the second half of the set, and drawing it from
+  -- | sample zero would show the same twelve boxes twice and call it an
+  -- | arrangement.
+  voicePicFrom o from skip = voicePicSkip o skip from
+
   -- | **The same picture, made of the same samples.**
   -- |
   -- | `from` is the sets this voice is built out of, in order, so the card
@@ -6543,7 +6828,9 @@ render st =
   -- | With no sets named it falls back to plain cells, which is right for a
   -- | slot already on the card: those files were written by somebody else and
   -- | nothing here knows what is in them.
-  voicePicOf o from =
+  voicePicOf o from = voicePicSkip o 0 from
+
+  voicePicSkip o skip from =
     HH.div
       [ HP.class_ (HH.ClassName ("q-vpic" <> if o.dim then " is-dim" else ""))
       , HP.title (show o.layers <> " layer" <> (if o.layers == 1 then "" else "s")
@@ -6556,7 +6843,7 @@ render st =
     cols = max 1 o.slices
     -- Every sample of every set named, end to end — which is the order the
     -- arrangement lays them out in, layer by layer.
-    pool = do
+    pool = Array.drop skip do
       nm <- from
       r <- Array.filter (\x -> x.name == nm) st.sets
       Array.range 0 (r.count - 1) <#> \i -> { r, i }

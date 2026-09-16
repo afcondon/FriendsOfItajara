@@ -1199,11 +1199,15 @@ body {
    no second direction to choose. The rule between the panes is the whole
    frame: what happens between them is said in words, not in chevrons.
 
-   The library gets the extra width. It is the artefact — long names, a date,
-   a sentence, a line of pattern code — where the card is a table of five
-   short columns that is finished at any width. */
+   The DESTINATION gets the extra width now, which is the reverse of how this
+   started. The library was given it as the artefact — long names, a date, a
+   sentence — but once the rows became pictures the list stopped needing prose
+   width, and a filter box means the length of the list is no longer the thing
+   that has to fit. The destination went the other way: it is four tabs of four
+   different geometries, and a Rample voice drawn twelve-by-twenty-four needs
+   room that a column of names does not. */
 .q-panes {
-  display: grid; grid-template-columns: minmax(420px, 3fr) minmax(360px, 2fr);
+  display: grid; grid-template-columns: minmax(340px, 9fr) minmax(400px, 11fr);
   gap: 0 32px; align-items: start;
 }
 .q-pane.is-dest { border-left: 1px solid var(--rule); padding-left: 32px; }
@@ -1529,3 +1533,90 @@ body {
   border-radius: 4px; padding: 2px 7px;
 }
 .q-declared-refresh:hover { color: #5a5446; border-color: #c8bfa8; }
+
+
+/* ── The library filter ──────────────────────────────────────────────────
+   One box over every field the listing already carries, because a person
+   looking for a set does not know which field holds the word they remember.
+   Beside it the half that is not a search: narrow to what is ticked. */
+.q-setfilter {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin: 0 0 10px;
+}
+.q-setq {
+  flex: 1 1 200px; min-width: 0;
+  font: inherit; font-size: 13px; padding: 5px 9px;
+  border: 1px solid var(--rule); border-radius: 3px; background: #fff;
+  color: inherit;
+}
+.q-setq:focus { outline: none; border-color: #444; }
+.q-chip.is-only { white-space: nowrap; }
+.q-chip.is-only.is-on { background: #1a1a1a; color: #fff; border-color: #1a1a1a; }
+.q-chip.is-only:disabled { opacity: 0.4; cursor: default; }
+
+/* ── The destination tabs ────────────────────────────────────────────────
+   Tabs and not a dropdown: a dropdown says "the same panel, filtered", and
+   what these are is four different panels. A layer is not a splice is not a
+   position, and the thing that must not be shared between them is where a
+   second set goes.
+
+   An unbuilt tab is drawn lighter and keeps its label. It is reachable
+   because what it holds — what the module imposes — is worth reading before
+   any of it can be written. */
+.q-desttabs {
+  display: flex; gap: 0; margin: 2px 0 8px;
+  border-bottom: 1px solid var(--rule);
+}
+.q-desttab {
+  font: inherit; font-size: 13px; letter-spacing: 0.01em;
+  padding: 6px 14px; margin-bottom: -1px;
+  background: transparent; border: 0; border-bottom: 2px solid transparent;
+  color: var(--muted); cursor: pointer;
+}
+.q-desttab:hover { color: inherit; }
+.q-desttab.is-on { color: inherit; border-bottom-color: #1a1a1a; font-weight: 600; }
+.q-desttab.is-unbuilt { font-style: italic; }
+.q-desttab.is-unbuilt.is-on { border-bottom-color: var(--muted); }
+.q-destshape { margin: 0 0 4px; max-width: 60ch; }
+
+/* What a destination with no machinery has to say: the module's own
+   arithmetic, which needs no machinery to be useful, and a plain statement
+   that nothing here writes it. */
+.q-destsoon { margin-top: 18px; }
+.q-destsuits { margin: 0 0 12px; font-size: 14px; }
+.q-destimposes { margin: 0 0 12px; padding-left: 18px; font-size: 13px; line-height: 1.55; }
+.q-destimposes li { margin: 0 0 3px; }
+.q-notyet {
+  margin: 14px 0 0; padding: 10px 12px; font-size: 13px; line-height: 1.5;
+  border: 1px solid var(--rule); border-left: 3px solid var(--muted);
+  border-radius: 3px; background: #fafafa; max-width: 62ch;
+}
+
+/* The name is a timestamp and the tail of it is the part that distinguishes
+   two takes of one morning, so the name must not be what gives way when the
+   column narrows. The picture gives way instead — it scrolls rather than
+   truncating, because a picture with cells cut off would be a wrong COUNT,
+   and the count is the one thing it is for. */
+/* Labels are short words now, not timestamps, so the name no longer needs to
+   wrap to survive a narrow column — it holds its line and the TIEBREAK gives
+   way instead, which is the right order: the label is what you read. */
+.q-pane.is-library .q-set-nametext { flex: 0 0 auto; white-space: nowrap; }
+.q-pane.is-library .q-set-n { min-width: 0; max-width: 100%; overflow-x: auto; }
+
+/* The listing shows a name, not a date: minted names are timestamps and a
+   column of them has to be read character by character, where the rebus
+   alias can be taken in at a glance and said aloud. The date became the
+   `order` control instead, and the full instant lives on the set's own page.
+
+   `q-set-disamb` is the exception that keeps it honest. A chord set's rebus
+   is a CONTENT identity, so two takes of one progression wear the same
+   picture on purpose — and when both are on screen, both say their own
+   name. Small and muted: it is a tiebreak, not the label. */
+.q-set-disamb {
+  font-size: 11px; font-weight: 400; color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+.q-setsort { flex: 0 0 auto; }
+.q-setsort select { font-size: 12px; }
