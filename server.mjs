@@ -190,7 +190,28 @@ function layerSource(st, l) {
   const srcs = (l.files && l.files.length)
     ? l.files.map((f) => q(`samples/${l.set}/${f}`))
     : [q(glob)];
-  if (!st.sliced) return srcs.length === 1 ? srcs[0] : `[${srcs.join(", ")}]`;
+  if (!st.sliced) {
+    // **An unsliced layer used to be a bare path, and a path says nothing.**
+    //
+    // The meaning fields below were only ever reachable through the `concat`
+    // form, so a stack of twelve WHOLE chord samples — the shape a chord set
+    // takes, and the one that was written to Q0 — recorded which file sat on
+    // which layer and never which chord it was. The index could then say how
+    // to SELECT layer 7 and not what layer 7 sounds, which is half an
+    // instrument: enough to play the card, not enough to play FROM it.
+    //
+    // `msm`'s `file` form is the same single file with room to say so. Still a
+    // bare path when there is nothing to say, because a manifest is read by
+    // people too and `{ file = "x.wav" }` is worse than `"x.wav"`.
+    if (srcs.length !== 1 || (!l.notes && l.velocity == null)) {
+      return srcs.length === 1 ? srcs[0] : `[${srcs.join(", ")}]`;
+    }
+    const bits = [`file = ${srcs[0]}`];
+    if (l.notes && l.notes.length) bits.push(`notes = [${l.notes.join(", ")}]`);
+    if (l.velocity != null) bits.push(`velocity = ${l.velocity}`);
+    if (l.name) bits.push(`name = ${q(l.name)}`);
+    return `{ ${bits.join(", ")} }`;
+  }
   const slot = l.slotSecs != null ? l.slotSecs : st.slotSecs;
   const bits = [`concat = [${srcs.join(", ")}]`, `slot = ${Number(slot).toFixed(4)}`];
   if (st.slots) bits.push(`slots = ${st.slots}`);
@@ -200,6 +221,12 @@ function layerSource(st, l) {
   // indistinguishable from a field recording by any amount of analysis.
   if (l.velocity != null) bits.push(`velocity = ${l.velocity}`);
   if (l.pitch != null) bits.push(`pitch = ${l.pitch}`);
+  // A join whose slots are chords: one array per slot, in slot order. The
+  // other way a chord set lands, and not expressible as `pitches`, which is
+  // one name per slot and so cannot hold four notes.
+  if (l.slotNotes && l.slotNotes.length) {
+    bits.push(`slot_notes = [${l.slotNotes.map((ns) => `[${ns.join(", ")}]`).join(", ")}]`);
+  }
   return `{ ${bits.join(", ")} }`;
 }
 
@@ -1029,7 +1056,20 @@ function placeOnCard({ set, bank: bankIn, letter: letterIn, kit: kitIn, voice: v
     // wants it.
     kit.voices[at] = { layers: grid.layers, ...shape };
   } else {
-    kit.voices[at] = { layers: [{ set }], ...shape };
+    // One layer that is the whole set. When it is SLICED its slots are the
+    // set's own samples in order, so the same chords belong on it — by the
+    // same rule as a grid's rows, and absent unless every one is known.
+    const one = { set };
+    if (sliced) {
+      // Read here rather than taken from a caller: three callers reach this
+      // and only some of them have the set open, and a field that arrives on
+      // two paths out of three is a field you cannot trust at the far end.
+      const sm = (storedSet(set) || {}).samples || [];
+      if (sm.length && sm.every((x) => x.notes && x.notes.length)) {
+        one.slotNotes = sm.map((x) => x.notes.slice());
+      }
+    }
+    kit.voices[at] = { layers: [ one ], ...shape };
   }
 
   // **Softest first, spread across the range.**
@@ -1138,6 +1178,12 @@ function stackOf(set, dir, samples, from, howMany) {
       name: `l${from + i + 1}`,
       slotSecs: Math.ceil(secs * 100) / 100,
       velocity: Math.round(((i + 1) / run.length) * 127),
+      // **What this layer IS, carried from the set.** The sample already
+      // records the chord that made it — declared by whatever played it, not
+      // guessed from the audio — and this is the one step where that either
+      // travels onto the card or is lost. Absolute MIDI, no name: naming is
+      // a theory question and belongs to whoever reads the index.
+      notes: (c.notes && c.notes.length) ? c.notes.slice() : undefined,
     });
   }
   return layers.length ? layers : null;
@@ -1220,6 +1266,14 @@ function gridOf(set, d, dir, rows, cols, swept) {
       name: label.slice(0, 20),
       slotSecs: Math.ceil(longest * 100) / 100,
       velocity: Math.round(((r + 1) / rows) * 127),
+      // **What each slot of this join sounds.** Only when every cell knows —
+      // a half-filled array would be worse than none, since a consumer
+      // indexing by slot has no way to tell a missing entry from an empty
+      // chord. Absent for a swept set, whose slots are parameter values and
+      // whose pitches, if any, are in `means`.
+      slotNotes: cells.every((c) => c.notes && c.notes.length)
+        ? cells.map((c) => c.notes.slice())
+        : undefined,
     });
   }
   // Distinct, because the name is most of the filename and two layers sharing
