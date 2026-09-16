@@ -1582,7 +1582,7 @@ body {
 /* What a destination with no machinery has to say: the module's own
    arithmetic, which needs no machinery to be useful, and a plain statement
    that nothing here writes it. */
-.q-destsoon { margin-top: 18px; }
+.q-destsoon, .q-destknows { margin-top: 18px; }
 .q-destsuits { margin: 0 0 12px; font-size: 14px; }
 .q-destimposes { margin: 0 0 12px; padding-left: 18px; font-size: 13px; line-height: 1.55; }
 .q-destimposes li { margin: 0 0 3px; }
@@ -1620,3 +1620,22 @@ body {
 }
 .q-setsort { flex: 0 0 auto; }
 .q-setsort select { font-size: 12px; }
+
+/* ── The Morphagene reel ─────────────────────────────────────────────────
+   One block per splice, as wide as the splice is long. The count is the one
+   thing a number already gives; what it cannot give is that a splice runs
+   MARKER TO MARKER, so it carries the silence after its sound — which is why
+   uneven progressions show up here as uneven blocks and nowhere else. */
+.q-reelstrip {
+  display: flex; gap: 1px; height: 34px; margin: 2px 0 12px;
+  border: 1px solid var(--rule); border-radius: 2px; overflow: hidden;
+  background: var(--rule);
+}
+.q-reelsplice { background: #8d86c9; min-width: 1px; }
+/* The lead-in is not a progression; it is what is there before the first one
+   starts, and drawing it the same colour would make the reel look one splice
+   longer than it plays. */
+.q-reelsplice.is-lead { background: #d8d6e8; }
+.q-reel .q-reelsays { margin: 0 0 6px; font-size: 14px; }
+.q-reel .q-muted { margin: 0 0 8px; }
+.q-reel .q-send { margin-top: 12px; }

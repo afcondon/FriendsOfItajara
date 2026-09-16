@@ -453,6 +453,105 @@ function dropSets(names) {
   };
 }
 
+// ===========================================================================
+// The Morphagene reel.
+//
+// **A reel is the TAKE, marked — not the samples, glued.**
+//
+// A Rample kit is made of the cut files, because a Rample plays files. A
+// Morphagene plays one continuous recording and divides it by cue points
+// inside the audio, so the right source is the capture Quadrat already has
+// and the right operation is to annotate it. Re-concatenating the cut samples
+// would work and would be wrong twice: it would butt-join at every boundary
+// (the gaps between progressions ARE the material on a reel) and it would
+// re-encode audio that is already exactly what the module wants.
+//
+// Which it is, measured: `capture-00.wav` is 48 kHz, 32-bit float, stereo,
+// format tag 3 — the Morphagene reel format, with nothing to convert. The
+// whole placement is therefore a copy plus a `cue ` chunk, and `msm splice`
+// is already that command.
+//
+// **Where the markers go.** One at each region's start, the first included.
+// N markers make N+1 splices, so splice 1 is the lead-in before the first
+// progression and splice k+1 is progression k. Said plainly on the page
+// rather than tidied away, because trimming the head would mean re-encoding
+// the audio to save one splice out of ninety-nine.
+const REEL_MAX_SECS = 174;
+
+function reelOf(name) {
+  const got = storedSet(name);
+  if (!got.ok) return { ok: false, output: got.output };
+  const set = got.set;
+  const takeDir = path.join(TAKES, safe(set.take || name));
+  const wav = fs.existsSync(takeDir) ? firstWav(takeDir) : null;
+  const starts = (set.samples ?? []).map((x) => Number(x.start) || 0);
+  const secs = wav ? (wavSecs(wav) ?? 0) : 0;
+  return {
+    ok: !!wav && starts.length > 0,
+    take: set.take || "",
+    // The reel is named for the SET, not for the take: the set is the thing
+    // that was kept and the thing whose name is on the card everywhere else.
+    file: `${name}.wav`,
+    secs,
+    starts,
+    splices: starts.length + 1,
+    over: secs > REEL_MAX_SECS,
+    max: REEL_MAX_SECS,
+    output: !wav ? `no take audio for ${name} — the capture it was cut from is gone`
+          : !starts.length ? `${name} has no regions to mark`
+          : "",
+  };
+}
+
+// **Every mounted volume, and no claim about which is a Morphagene card.**
+//
+// There is nothing to sniff for. A Rample card announces itself with
+// `rample.bin` or a bank folder; a Morphagene card is a FAT32 volume with WAV
+// files in its root, which is also what a USB stick of samples is. So the page
+// offers the volumes and the person says which — and the page says that is
+// what it is doing, rather than inventing a confidence it does not have.
+//
+// **The contents of a volume are never read here.** See the note above
+// `cards()`: a `readdirSync` of a removable volume blocks this process
+// forever when Bosun spawns it. Reading `/Volumes` itself is fine; reading
+// anything inside one is not.
+function volumes() {
+  const vols = "/Volumes";
+  if (!fs.existsSync(vols)) return [];
+  return fs.readdirSync(vols)
+    // Two names in `/Volumes` are never a card: `Data`, the firmlink to the
+    // boot volume's writable half, and the bare UUID macOS mounts a recovery
+    // or update snapshot under. Both are always present and neither can be
+    // chosen for anything, so leaving them in would mean the list is mostly
+    // wrong on a machine with no card in it — which is most of the time.
+    .filter((n) => !n.startsWith(".") && n !== "Data"
+                   && !/^[0-9A-F]{8}(-[0-9A-F]{4}){3}-[0-9A-F]{12}$/i.test(n))
+    .map((n) => path.join(vols, n))
+    .filter((p) => { try { return fs.lstatSync(p).isDirectory() && !fs.lstatSync(p).isSymbolicLink(); } catch { return false; } });
+}
+
+async function writeReel(body) {
+  const name = safe(String(body.set || ""));
+  const dest = String(body.dest || "");
+  const r = reelOf(name);
+  if (!r.ok) return { ok: false, output: r.output || `nothing to write for ${name}` };
+  if (!volumes().includes(dest)) return { ok: false, output: `${dest} is not a mounted volume` };
+
+  const takeDir = path.join(TAKES, safe(r.take || name));
+  const src = firstWav(takeDir);
+  const out = path.join(dest, r.file);
+  const times = r.starts.map((t) => t.toFixed(3)).join(",");
+  const done = await run(["splice", src, "--times", times, "--output", out]);
+  // **Say where it went and what is in it**, from what was actually asked for
+  // — never a cheerful sentence assembled beside the act. The name a reel
+  // lands under is the whole question a person is looking down at the module
+  // to answer.
+  return done.ok
+    ? { ok: true, output: `wrote ${r.file} \u00b7 ${r.splices} splices \u00b7 ${r.secs.toFixed(1)}s to ${dest}`
+                          + (r.over ? ` \u2014 longer than the ${r.max}s a reel holds` : "") }
+    : done;
+}
+
 function cards() {
   const vols = "/Volumes";
   if (!fs.existsSync(vols)) return [];
@@ -2187,6 +2286,15 @@ const server = http.createServer(async (req, res) => {
       if (body.replace) args.push("--overwrite");
       const r = await run(args);
       return json(res, 200, r);
+    }
+    if (url.pathname === "/api/volumes" && req.method === "GET") {
+      return json(res, 200, { ok: true, volumes: volumes() });
+    }
+    if (url.pathname === "/api/reel" && req.method === "GET") {
+      return json(res, 200, reelOf(safe(url.searchParams.get("set") || "")));
+    }
+    if (url.pathname === "/api/reel/write" && req.method === "POST") {
+      return json(res, 200, await writeReel(await readBody(req)));
     }
     if (url.pathname === "/api/card/clear" && req.method === "POST") {
       return json(res, 200, { ok: true, card: writeCard(emptyCard()), sets: sets(), output: "card cleared" });

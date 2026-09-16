@@ -313,6 +313,14 @@ type State =
   -- | filter: see `Quadrat.Dest` — the shape of the destination decides the
   -- | controls, so each one gets its own panel rather than a relabelled Rample.
   , dest :: Dest.Dest
+  -- | **What the ticked set would become as a Morphagene reel.** Fetched
+  -- | rather than computed, because only the server can see the take a set
+  -- | was cut from. `Nothing` until asked.
+  , reel :: Maybe Http.Reel
+  -- | Mounted volumes, for the reel to be written to. Not "cards": see
+  -- | `Http.volumes` — a reel card cannot be told from a stick of samples.
+  , volumes :: Array String
+  , reelBusy :: Boolean
   -- | **How the listing is ordered.** A control rather than a fact printed on
   -- | every row: see `Sort`.
   , setSort :: Sort
@@ -506,6 +514,11 @@ data Action
   | SetQuery String
   | SetOnlyPicked Boolean
   | SetSort String
+  -- | Ask the server what the ticked set would become as a reel, and what
+  -- | volumes there are to write it to. One action because they are always
+  -- | wanted together and neither is useful alone.
+  | LookAtReel
+  | WriteReel String
   | SetKit String
   | SetVoice String
   | SendToCard { place :: Boolean, append :: Boolean }
@@ -629,6 +642,7 @@ component = H.mkComponent
       , levels: [], modal: Nothing, kept: false, confirmKeep: false
       , picked: Set.empty, confirmDrop: false, confirmWrite: Nothing, preview: Nothing
       , dest: Dest.Rample, setQuery: "", onlyPicked: false, setSort: Newest
+      , reel: Nothing, volumes: [], reelBusy: false
       , cardPeek: Nothing, openSet: Nothing, openSetInfo: Nothing, peekSample: 0
       , shownSecs: Nothing, audio: Nothing, audioBusy: false
       , placeSliced: false, placeLayers: 0, placeVoices: 0
@@ -1277,10 +1291,13 @@ handleAction = case _ of
          (Array.nub [ 0, n / 2, max 0 (n - 1) ]))
       1.0
 
-  PickSet nm -> H.modify_ \s0 ->
-    s0 { picked = if Set.member nm s0.picked then Set.delete nm s0.picked
-                  else Set.insert nm s0.picked
-       , confirmDrop = false }
+  PickSet nm -> do
+    H.modify_ \s0 ->
+      s0 { picked = if Set.member nm s0.picked then Set.delete nm s0.picked
+                    else Set.insert nm s0.picked
+         , confirmDrop = false }
+    st0 <- H.get
+    when (st0.dest == Dest.Morphagene) (handleAction LookAtReel)
   PickAllSets on -> H.modify_ \s0 ->
     s0 { picked = if on then Set.fromFoldable (map _.name s0.sets) else Set.empty
        , confirmDrop = false }
@@ -1327,7 +1344,32 @@ handleAction = case _ of
             handleAction (OpenSweep true)
   SetBank v -> H.modify_ _ { bank = v }
   SetLetter v -> H.modify_ _ { letter = v }
-  SetDest d -> H.modify_ _ { dest = d }
+  SetDest d -> do
+    H.modify_ _ { dest = d, reel = Nothing }
+    when (d == Dest.Morphagene) (handleAction LookAtReel)
+
+  -- | **Both halves at once**, because neither answers anything alone: a reel
+  -- | with nowhere to go and a volume with no reel are the same non-answer.
+  LookAtReel -> do
+    st0 <- H.get
+    vols <- H.liftAff (toAffE Http.volumes)
+    r <- case Array.fromFoldable st0.picked of
+      [ one ] -> Just <$> H.liftAff (toAffE (Http.reel one))
+      _ -> pure Nothing
+    H.modify_ _ { volumes = vols, reel = r }
+
+  -- | **The write says what landed, read from the answer and not from the
+  -- | request.** The same rule the card write had to learn: a report assembled
+  -- | beside the act is a report of what was asked for, which is exactly the
+  -- | thing that is wrong when it is wrong.
+  WriteReel dest -> do
+    st0 <- H.get
+    case Array.fromFoldable st0.picked of
+      [ one ] -> do
+        H.modify_ _ { reelBusy = true }
+        done <- H.liftAff (toAffE (Http.writeReel one dest))
+        H.modify_ (note done.output <<< _ { reelBusy = false })
+      _ -> H.modify_ (note "tick exactly one set — a reel is one take")
   SetQuery v -> H.modify_ _ { setQuery = v }
   SetOnlyPicked v -> H.modify_ _ { onlyPicked = v }
   SetSort v -> H.modify_ _ { setSort = sortOf v }
@@ -3598,9 +3640,10 @@ render st =
             [ HH.div [ HP.class_ (HH.ClassName "q-pane is-library") ] [ setsView ]
             , HH.div [ HP.class_ (HH.ClassName "q-pane is-dest") ]
                 ( [ destHead ]
-                    <> case (Dest.factsOf st.dest).unbuilt of
-                         Nothing -> [ transformPanel, cardView ]
-                         Just why -> [ destSoon st.dest why ]
+                    <> case st.dest of
+                         Dest.Rample -> [ transformPanel, cardView ]
+                         Dest.Morphagene -> [ reelPanel, destKnows Dest.Morphagene ]
+                         d -> [ destSoon d (fromMaybe "" (Dest.factsOf d).unbuilt) ]
                 )
             , maybe (HH.text "") setModal st.openSet
             ]
@@ -5061,15 +5104,115 @@ render st =
   -- | half of the decision that does not need any machinery: whether the set
   -- | you have ticked can fit at all, and what it would become if it did.
   destSoon d why =
+    HH.div [ HP.class_ (HH.ClassName "q-destsoon") ]
+      [ destKnows d
+      , HH.p [ HP.class_ (HH.ClassName "q-notyet") ] [ HH.text why ]
+      ]
+
+  -- | The module's own arithmetic. Worth reading whether or not this page can
+  -- | write the thing, which is why it is separate from the not-yet notice.
+  destKnows d =
     let f = Dest.factsOf d
-    in HH.div [ HP.class_ (HH.ClassName "q-destsoon") ]
+    in HH.div [ HP.class_ (HH.ClassName "q-destknows") ]
          [ HH.p [ HP.class_ (HH.ClassName "q-destsuits") ]
              [ HH.strong_ [ HH.text "suits" ], HH.text (" " <> f.suits) ]
          , HH.ul [ HP.class_ (HH.ClassName "q-destimposes") ]
              (map (\i -> HH.li_ [ HH.text i ]) f.imposes)
          , HH.p [ HP.class_ (HH.ClassName "q-muted") ] [ HH.text ("format: " <> f.format) ]
-         , HH.p [ HP.class_ (HH.ClassName "q-notyet") ] [ HH.text why ]
          ]
+
+  -- | **A reel is the take, marked.**
+  -- |
+  -- | Not the cut samples glued back together, which would butt-join at every
+  -- | boundary — and on a reel the gaps between progressions ARE material,
+  -- | because a splice runs from one marker to the next. So the source is the
+  -- | capture itself, and the placement is a copy plus a `cue ` chunk.
+  -- |
+  -- | Which costs nothing: the capture is already 48 kHz, 32-bit float,
+  -- | stereo, format tag 3 — the reel format exactly, measured on a real take
+  -- | rather than assumed from the profile. Nothing is converted and nothing
+  -- | is re-encoded.
+  reelPanel =
+    case Array.fromFoldable st.picked, st.reel of
+      [], _ ->
+        HH.p [ HP.class_ (HH.ClassName "q-muted") ]
+          [ HH.text "Tick one set on the left and this says what reel it makes." ]
+      _, Nothing ->
+        HH.p [ HP.class_ (HH.ClassName "q-muted") ]
+          [ HH.text "A reel is one continuous take, so it is made from one set \
+                    \\x2014 tick exactly one." ]
+      _, Just rl
+        | not rl.ok ->
+            HH.p [ HP.class_ (HH.ClassName "q-notyet") ] [ HH.text rl.output ]
+      _, Just rl ->
+        HH.div [ HP.class_ (HH.ClassName "q-transform q-reel") ]
+          [ reelStrip rl
+          , HH.p [ HP.class_ (HH.ClassName "q-reelsays") ]
+              [ HH.strong_ [ HH.text rl.file ]
+              , HH.text (" \x00b7 " <> show rl.splices <> " splices \x00b7 "
+                  <> secs2 rl.secs <> "s from " <> rl.take)
+              ]
+          -- | **Splice 1 is the lead-in, and the page says so.** The markers
+          -- | go at each region's start, the first included, so N markers make
+          -- | N+1 splices and progression k is splice k+1. Trimming the head
+          -- | would save one splice out of ninety-nine and cost a re-encode of
+          -- | the whole reel, so it is not done \x2014 and a thing not done has to
+          -- | be said, or it reads as an off-by-one on the module.
+          , HH.p [ HP.class_ (HH.ClassName "q-muted") ]
+              [ HH.text "splice 1 is the silence before the first one, so \
+                        \region k is splice k+1" ]
+          , if not rl.over then HH.text "" else
+              HH.p [ HP.class_ (HH.ClassName "q-notyet") ]
+                [ HH.text (secs2 rl.secs <> "s is longer than the " <> show rl.max
+                    <> "s a reel holds \x2014 the file is written whole and the \
+                       \module takes what fits") ]
+          , HH.div [ HP.class_ (HH.ClassName "q-send") ]
+              [ HH.span [ HP.class_ (HH.ClassName "q-arm-label") ] [ HH.text "Write to" ]
+              , if Array.null st.volumes
+                  then HH.span [ HP.class_ (HH.ClassName "q-muted") ]
+                         [ HH.text "no volume is mounted \x2014 mount the card, then \
+                                   \press the tab again" ]
+                  else HH.div [ HP.class_ (HH.ClassName "q-chips") ]
+                         (map (\v -> HH.button
+                                 [ HP.class_ (HH.ClassName "q-chip is-arm")
+                                 , HP.disabled st.reelBusy
+                                 , HP.title ("write " <> rl.file <> " into the root of " <> v)
+                                 , HE.onClick \_ -> WriteReel v
+                                 ]
+                                 [ HH.text v ]) st.volumes)
+              ]
+          -- | **No volume is claimed to be a Morphagene card**, because nothing
+          -- | in one says so: a reel card is a FAT32 volume with WAVs in its
+          -- | root, which is also what a stick of samples is. The page offers
+          -- | the volumes and says that is what it is doing.
+          , if Array.null st.volumes then HH.text "" else
+              HH.p [ HP.class_ (HH.ClassName "q-muted") ]
+                [ HH.text "these are every mounted volume \x2014 nothing about a reel \
+                          \card distinguishes it, so the choice is yours" ]
+          ]
+
+  -- | **The reel, drawn.** One block per splice, as wide as the splice is
+  -- | long, which is the one picture a count cannot give: a splice runs marker
+  -- | to marker and so carries the silence after its sound. Uneven blocks mean
+  -- | uneven progressions, and that is worth seeing before the card goes in
+  -- | the module.
+  reelStrip rl =
+    let
+      bounds = Array.cons 0.0 rl.starts <> [ rl.secs ]
+      spans = Array.zipWith (\a b -> max 0.0 (b - a)) bounds (Array.drop 1 bounds)
+      total = max 0.001 (sum spans)
+    in
+      HH.div [ HP.class_ (HH.ClassName "q-reelstrip") ]
+        (Array.mapWithIndex
+          (\i w -> HH.div
+             [ HP.class_ (HH.ClassName ("q-reelsplice" <> if i == 0 then " is-lead" else ""))
+             , HP.attr (HH.AttrName "style") ("flex: " <> show (w / total) <> " 1 0")
+             , HP.title ("splice " <> show (i + 1) <> " \x00b7 " <> secs2 w <> "s"
+                 <> (if i == 0 then " \x2014 the lead-in, before the first region"
+                     else " \x2014 region " <> show i))
+             ]
+             [])
+          spans)
 
   -- | **The transform, between the two places.**
   -- |

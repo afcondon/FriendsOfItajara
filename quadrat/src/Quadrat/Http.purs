@@ -44,6 +44,10 @@ module Quadrat.Http
   , deleteSets
   , StoredSet
   , writeToCard
+  , Reel
+  , reel
+  , volumes
+  , writeReel
   ) where
 
 import Prelude
@@ -668,3 +672,33 @@ foreign import loadSpec
 -- | **deletes each kit slot's whole directory before writing it** — so it is
 -- | never a default and the page asks before sending it true.
 foreign import writeToCard :: String -> Boolean -> Effect (Promise Wrote)
+
+-- | **What a set would become on a Morphagene**, asked of the server because
+-- | only the server can see the take the set was cut from.
+-- |
+-- | `splices` is one more than the number of regions: the markers go at each
+-- | region's start, the first included, so splice 1 is the lead-in before the
+-- | first progression and splice k+1 is progression k.
+type Reel =
+  { ok :: Boolean
+  , take :: String
+  , file :: String
+  , secs :: Number
+  , splices :: Int
+  -- | Where the markers land, in seconds. The page draws the reel from these:
+  -- | a splice runs from one marker to the next, so it carries the gap after
+  -- | the sound as well as the sound.
+  , starts :: Array Number
+  , over :: Boolean
+  , max :: Int
+  , output :: String
+  }
+
+foreign import reel :: String -> Effect (Promise Reel)
+
+-- | Every mounted volume. Deliberately NOT "every Morphagene card" — there is
+-- | nothing in a reel card that distinguishes it from a stick of samples, so
+-- | the page offers the volumes and the person says which.
+foreign import volumes :: Effect (Promise (Array String))
+
+foreign import writeReel :: String -> String -> Effect (Promise Wrote)

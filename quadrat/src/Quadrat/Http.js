@@ -327,3 +327,44 @@ export const nameSource = (wire) => (label) => () =>
     .then(j)
     .then((d) => ({ ok: !!d.ok, output: String(d.output ?? "") }))
     .catch((e) => ({ ok: false, output: String(e.message ?? e) }));
+
+// ── The Morphagene reel ────────────────────────────────────────────────────
+//
+// A reel is the TAKE, marked — not the cut samples, glued. See `reelOf` in
+// server.mjs for why, and for where the markers land.
+
+export const reel = (set) => () =>
+  fetch("/api/reel?set=" + encodeURIComponent(set))
+    .then(j)
+    .then((d) => ({
+      ok: !!d.ok,
+      take: String(d.take ?? ""),
+      file: String(d.file ?? ""),
+      secs: Number(d.secs ?? 0),
+      splices: Number(d.splices ?? 0),
+      // The marker positions themselves, so the page can DRAW the reel
+      // rather than say how many splices it has: a splice spans one marker
+      // to the next, so its length includes the gap that follows the sound,
+      // and that is exactly the thing a count cannot show.
+      starts: (d.starts ?? []).map(Number).filter(Number.isFinite),
+      over: !!d.over,
+      max: Number(d.max ?? 0),
+      output: String(d.output ?? ""),
+    }))
+    .catch((e) => ({ ok: false, take: "", file: "", secs: 0, splices: 0, starts: [], over: false,
+                     max: 0, output: String(e.message ?? e) }));
+
+// Mounted volumes, and no claim about which is a Morphagene card — there is
+// nothing to sniff for. See `volumes` in server.mjs.
+export const volumes = () =>
+  fetch("/api/volumes").then(j).then((d) => (d.volumes ?? []).map(String)).catch(() => []);
+
+export const writeReel = (set) => (dest) => () =>
+  fetch("/api/reel/write", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ set, dest }),
+  })
+    .then(j)
+    .then((d) => ({ ok: !!d.ok, output: String(d.output ?? "") }))
+    .catch((e) => ({ ok: false, output: String(e.message ?? e) }));
