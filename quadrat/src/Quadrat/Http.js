@@ -339,7 +339,12 @@ export const reel = (set) => () =>
     .then((d) => ({
       ok: !!d.ok,
       take: String(d.take ?? ""),
+      // The REEL's length, which is not the take's: the reel ends at the last
+      // region's end, capped at the ceiling. See `reelEnd` in server.mjs.
       secs: Number(d.secs ?? 0),
+      takeSecs: Number(d.takeSecs ?? 0),
+      trimmed: Number(d.trimmed ?? 0),
+      trimWhy: String(d.trimWhy ?? ""),
       splices: Number(d.splices ?? 0),
       // The marker positions themselves, so the page can DRAW the reel rather
       // than say how many splices it has: a splice spans one marker to the
@@ -354,8 +359,9 @@ export const reel = (set) => () =>
       slots: Number(d.slots ?? 0),
       output: String(d.output ?? ""),
     }))
-    .catch((e) => ({ ok: false, take: "", secs: 0, splices: 0, starts: [], format: "",
-                     refuses: [], max: 0, slots: 0, output: String(e.message ?? e) }));
+    .catch((e) => ({ ok: false, take: "", secs: 0, takeSecs: 0, trimmed: 0, trimWhy: "",
+                     splices: 0, starts: [], format: "", refuses: [], max: 0, slots: 0,
+                     output: String(e.message ?? e) }));
 
 // Mounted volumes, and no claim about which is a Morphagene card — there is
 // nothing to sniff for. See `volumes` in server.mjs.

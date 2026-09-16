@@ -513,6 +513,24 @@ function reelFits(f, secs) {
   return why;
 }
 
+// **Where the reel ends**, which is not where the take ends.
+//
+// Two reasons to trim, and they are different. The take runs on past the last
+// region — a hand-stopped one always does, and the region the divider gave the
+// rest of the file to carries that dead air inside it. And the ceiling is
+// hard: a reel over 2.9 minutes is not shortened by the module, it is not
+// RECOGNISED, so a take 1.3 s over would land on the card and never appear.
+//
+// So the reel ends at the last region's end, capped at the ceiling. The trim
+// is lossless (samples are dropped, nothing is re-encoded) and the page says
+// how much went, because a trim nobody was told about is the same fault as a
+// write nobody was told about.
+function reelEnd(starts, ends, takeSecs) {
+  const last = Math.max(0, ends.length ? ends[ends.length - 1] : 0,
+                        starts.length ? starts[starts.length - 1] : 0);
+  return Math.min(takeSecs, last > 0 ? last : takeSecs, REEL_MAX_SECS);
+}
+
 function reelOf(name) {
   const got = storedSet(name);
   if (!got.ok) return { ok: false, output: got.output };
@@ -520,13 +538,25 @@ function reelOf(name) {
   const takeDir = path.join(TAKES, safe(set.take || name));
   const wav = fs.existsSync(takeDir) ? firstWav(takeDir) : null;
   const starts = (set.samples ?? []).map((x) => Number(x.start) || 0);
+  const ends = (set.samples ?? []).map((x) => Number(x.end) || 0);
   const f = wav ? wavFacts(wav) : null;
-  const secs = f ? f.secs : 0;
+  const takeSecs = f ? f.secs : 0;
+  // The reel's own length — what lands on the card, and so what every number
+  // shown and every rule checked has to be about.
+  const secs = wav ? reelEnd(starts, ends, takeSecs) : 0;
   const why = wav ? reelFits(f, secs) : [];
   return {
     ok: !!wav && starts.length > 0,
     take: set.take || "",
     secs,
+    takeSecs,
+    // How much of the take does not reach the card, and why. Zero is the
+    // ordinary case and says nothing.
+    trimmed: Math.max(0, takeSecs - secs),
+    trimWhy: takeSecs - secs <= 0.001 ? ""
+      : (takeSecs > REEL_MAX_SECS
+         ? `the ${REEL_MAX_SECS}s ceiling`
+         : "everything after the last region, which no splice reaches"),
     starts,
     splices: starts.length + 1,
     // The format, as read off the file. Said even when it is right, because
@@ -611,13 +641,15 @@ async function writeReel(body) {
   const file = reelName(slot);
   const out = path.join(dest, file);
   const times = r.starts.map((t) => t.toFixed(3)).join(",");
-  const done = await run(["splice", src, "--times", times, "--output", out]);
+  const done = await run(["splice", src, "--times", times,
+                          "--end", r.secs.toFixed(3), "--output", out]);
   // **Say where it went and what is in it**, read from what was actually
   // asked for and never assembled beside the act. The name a reel lands under
   // is the whole question a person is looking down at the module to answer —
   // and here it is a slot number, which nothing else on the card records.
   return done.ok
     ? { ok: true, file, output: `wrote ${file} \u00b7 reel ${slot} \u00b7 ${r.splices} splices \u00b7 ${r.secs.toFixed(1)}s to ${dest}`
+                                + (r.trimmed > 0.001 ? ` \u00b7 trimmed ${r.trimmed.toFixed(1)}s (${r.trimWhy})` : "")
                                 + (r.refuses.length ? ` \u2014 but ${r.refuses.join("; ")}` : "") }
     : done;
 }

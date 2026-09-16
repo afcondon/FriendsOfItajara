@@ -5201,6 +5201,16 @@ render st =
           , HH.p [ HP.class_ (HH.ClassName "q-muted") ]
               [ HH.text "splice 1 is the silence before the first one, so \
                         \region k is splice k+1" ]
+          -- | **A trim nobody was told about is the same fault as a write
+          -- | nobody was told about.** The reel ends at the last region's end,
+          -- | capped at the ceiling \x2014 so a hand-stopped take loses its dead
+          -- | air, and one over 2.9 minutes loses whatever will not fit. Both
+          -- | are right and neither may be silent.
+          , if rl.trimmed <= 0.05 then HH.text "" else
+              HH.p [ HP.class_ (HH.ClassName "q-muted") ]
+                [ HH.text ("the take is " <> secs2 rl.takeSecs <> "s; the last "
+                    <> secs2 rl.trimmed <> "s does not go on the card \x2014 "
+                    <> rl.trimWhy) ]
           -- | **Not a warning \x2014 a refusal, and it is the module's.**
           -- |
           -- | *"each file must be 2.9 minutes or less and stereo in order for

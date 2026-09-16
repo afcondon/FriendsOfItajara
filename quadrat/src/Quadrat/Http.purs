@@ -684,7 +684,16 @@ foreign import writeToCard :: String -> Boolean -> Effect (Promise Wrote)
 type Reel =
   { ok :: Boolean
   , take :: String
+  -- | **The reel's length, which is not the take's.** A reel ends at the last
+  -- | region's end, capped at the 2.9-minute ceiling; everything past that
+  -- | reaches no splice, and past the ceiling the module does not load the
+  -- | file at all. See `reelEnd` in server.mjs.
   , secs :: Number
+  , takeSecs :: Number
+  -- | How much of the take does not reach the card, and why. Zero is the
+  -- | ordinary case and says nothing.
+  , trimmed :: Number
+  , trimWhy :: String
   , splices :: Int
   -- | Where the markers land, in seconds. The page draws the reel from these:
   -- | a splice runs from one marker to the next, so it carries the gap after
