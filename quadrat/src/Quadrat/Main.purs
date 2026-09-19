@@ -1404,10 +1404,24 @@ handleAction = case _ of
     case Array.fromFoldable st0.picked, st0.reelDest of
       [ one ], Just dest | st0.reelSlot > 0 -> do
         H.modify_ _ { reelBusy = true }
-        done <- H.liftAff (toAffE (Http.writeReel one dest st0.reelSlot))
-        H.modify_ (note done.output <<< _ { reelBusy = false })
-        -- What is on the card changed, so what the page says about it has to.
-        handleAction (SetReelDest dest)
+        -- | **A write that throws must still clear the flag.** It did not, and
+        -- | the result was the worst failure this page can have: the button
+        -- | disables itself for the duration of the write, so a request that
+        -- | never returns \x2014 the server restarted underneath an open page is
+        -- | all it takes \x2014 left it disabled forever with nothing said. The
+        -- | page then looks fine and does nothing, which reads as the module's
+        -- | fault or the card's. `attempt` so the flag comes back either way,
+        -- | and the failure gets said out loud.
+        r <- H.liftAff (attempt (toAffE (Http.writeReel one dest st0.reelSlot)))
+        case r of
+          Left e -> H.modify_ (note ("the write did not get an answer: "
+                                     <> Aff.message e
+                                     <> " \x2014 nothing was written; reload and try again")
+                               <<< _ { reelBusy = false })
+          Right done -> do
+            H.modify_ (note done.output <<< _ { reelBusy = false })
+            -- What is on the card changed, so what the page says about it has to.
+            handleAction (SetReelDest dest)
       [ _ ], Just _ -> H.modify_ (note "say which reel it is")
       [ _ ], Nothing -> H.modify_ (note "say which card it goes to")
       _, _ -> H.modify_ (note "tick exactly one set \x2014 a reel is one take")
