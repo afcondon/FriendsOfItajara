@@ -544,10 +544,28 @@ function reelFits(f, secs) {
 // is lossless (samples are dropped, nothing is re-encoded) and the page says
 // how much went, because a trim nobody was told about is the same fault as a
 // write nobody was told about.
-function reelEnd(starts, ends, takeSecs) {
+//
+// **And the head is trimmed too, which used not to be true.** The take opens
+// with silence before the first region, and leaving it on cost a splice AND an
+// explanation: N markers made N+1 splices, so region k was splice k+1 and the
+// page had to say so. The reason given for leaving it was that trimming the
+// head "would mean re-encoding the audio" — which was simply wrong. Dropping
+// leading frames is the same lossless slice as dropping trailing ones; the
+// only extra work is subtracting the same number from every marker, which
+// `msm splice --start` now does.
+//
+// It pays for itself twice over. A take 0.5 s past the ceiling was silently
+// losing its tail; trimming a second of opening silence lets the whole thing
+// fit, so the trim at the *end* disappears as well.
+function reelHead(starts) {
+  return starts.length ? Math.max(0, starts[0]) : 0;
+}
+
+function reelEnd(starts, ends, takeSecs, head) {
   const last = Math.max(0, ends.length ? ends[ends.length - 1] : 0,
                         starts.length ? starts[starts.length - 1] : 0);
-  return Math.min(takeSecs, last > 0 ? last : takeSecs, REEL_MAX_SECS);
+  // The ceiling applies to what LANDS on the card, which now begins at `head`.
+  return Math.min(takeSecs, last > 0 ? last : takeSecs, head + REEL_MAX_SECS);
 }
 
 function reelOf(name) {
@@ -562,7 +580,10 @@ function reelOf(name) {
   const takeSecs = f ? f.secs : 0;
   // The reel's own length — what lands on the card, and so what every number
   // shown and every rule checked has to be about.
-  const secs = wav ? reelEnd(starts, ends, takeSecs) : 0;
+  const head = reelHead(starts);
+  const endAt = wav ? reelEnd(starts, ends, takeSecs, head) : 0;
+  // What lands on the card: the span between the trims, not a point in the take.
+  const secs = Math.max(0, endAt - head);
   const why = wav ? reelFits(f, secs) : [];
   return {
     ok: !!wav && starts.length > 0,
@@ -573,11 +594,19 @@ function reelOf(name) {
     // ordinary case and says nothing.
     trimmed: Math.max(0, takeSecs - secs),
     trimWhy: takeSecs - secs <= 0.001 ? ""
-      : (takeSecs > REEL_MAX_SECS
-         ? `the ${REEL_MAX_SECS}s ceiling`
-         : "everything after the last region, which no splice reaches"),
+      : [head > 0.001 ? `${head.toFixed(2)}s of silence before the first region` : "",
+         takeSecs - endAt > 0.001
+           ? (endAt >= head + REEL_MAX_SECS - 0.001
+              ? `the ${REEL_MAX_SECS.toFixed(3)}s ceiling`
+              : "everything after the last region, which no splice reaches")
+           : ""].filter(Boolean).join(" and "),
+    // Where the reel starts in the take, and so how far every marker moves.
+    head,
+    endAt,
     starts,
-    splices: starts.length + 1,
+    // **One splice per region**, now that the head is gone. It used to be
+    // starts.length + 1, the extra one being the silence at the front.
+    splices: starts.length,
     // The format, as read off the file. Said even when it is right, because
     // "48 kHz · 32-bit float · stereo" is the whole reason no conversion step
     // exists here and a reader should be able to check that claim.
@@ -659,9 +688,14 @@ async function writeReel(body) {
   const src = firstWav(takeDir);
   const file = reelName(slot);
   const out = path.join(dest, file);
+  // Marker times stay in the TAKE's own coordinates; `--start` shifts them.
+  // Keeping one coordinate system on this side is what stops the two trims
+  // from having to agree about arithmetic done in two places.
   const times = r.starts.map((t) => t.toFixed(3)).join(",");
   const done = await run(["splice", src, "--times", times,
-                          "--end", r.secs.toFixed(3), "--output", out]);
+                          "--end", r.endAt.toFixed(3),
+                          "--start", r.head.toFixed(3),
+                          "--output", out]);
   // **Say where it went and what is in it**, read from what was actually
   // asked for and never assembled beside the act. The name a reel lands under
   // is the whole question a person is looking down at the module to answer —

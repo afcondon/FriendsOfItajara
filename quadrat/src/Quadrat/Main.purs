@@ -5193,15 +5193,17 @@ render st =
               , HH.text (" \x00b7 " <> secs2 rl.secs <> "s \x00b7 " <> rl.format
                   <> " \x00b7 from " <> rl.take)
               ]
-          -- | **Splice 1 is the lead-in, and the page says so.** The markers
-          -- | go at each region's start, the first included, so N markers make
-          -- | N+1 splices and progression k is splice k+1. Trimming the head
-          -- | would save one splice out of ninety-nine and cost a re-encode of
-          -- | the whole reel, so it is not done \x2014 and a thing not done has to
-          -- | be said, or it reads as an off-by-one at the module.
+          -- | **Splice k is region k**, which it was not until the head was
+          -- | trimmed. The take opens with silence before the first region;
+          -- | leaving it on spent a splice on it and made every region count
+          -- | one late, and the page had to explain that every time. The
+          -- | reason given for leaving it was that trimming the head would
+          -- | mean re-encoding the reel \x2014 it does not: dropping leading
+          -- | frames is the same lossless slice as dropping trailing ones,
+          -- | and the markers just move back by the same amount.
           , HH.p [ HP.class_ (HH.ClassName "q-muted") ]
-              [ HH.text "splice 1 is the silence before the first one, so \
-                        \region k is splice k+1" ]
+              [ HH.text "the silence before the first region is trimmed, so \
+                        \splice k is region k" ]
           -- | **A trim nobody was told about is the same fault as a write
           -- | nobody was told about.** The reel ends at the last region's end,
           -- | capped at the ceiling \x2014 so a hand-stopped take loses its dead
