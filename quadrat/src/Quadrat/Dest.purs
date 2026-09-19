@@ -100,12 +100,27 @@ factsOf = case _ of
     , format: "48 kHz \x00b7 32-bit float \x00b7 stereo"
     , imposes:
         [ "splices are WAV cue points, up to 300 in a reel"
-        , "a reel is at most about 174 seconds"
+        -- | Measured 2026-09-19, and the rounding matters: the ceiling is a
+        -- | BUFFER, not a duration. A reel of exactly 2^26 bytes plays (tested
+        -- | on hardware against a control just under it), and 174.763 s is
+        -- | only what that comes to at this format. Saying "174 s" cost us a
+        -- | reel once already \x2014 a file was condemned for being "175 s over a
+        -- | 174 s ceiling" when it was exactly on the boundary and fine.
+        , "a reel holds at most 2^26 bytes of audio \x2014 174.763 s at this format, \
+          \and a reel exactly on the line loads"
+        , "cue ids run from zero and the last cue sits on the data end, which is \
+          \how the module writes its own; that terminal cue is what makes n cues \
+          \mean n splices instead of n+1"
         , "files go in the root of the card, no folders"
+        , "the card cannot say what is on it \x2014 no names, and options.txt carries \
+          \configuration and the selected reel, nothing about contents"
         ]
     , suits: "progressions \x2014 a whole chord sequence per splice, not one hit per splice"
-    , unbuilt: Just "Quadrat can already record a take of this shape; what is missing is \
-                    \writing the cue points, which is `msm splice` and not a card layout"
+    -- | Built. The note that used to sit here said the cue-point writing was
+    -- | missing; it is not, and had not been for a while. A stale `unbuilt` is
+    -- | the same fault it exists to prevent, one tab over: the page saying
+    -- | something about itself that stopped being true.
+    , unbuilt: Nothing
     }
   Arbhar ->
     { name: "Arbhar"

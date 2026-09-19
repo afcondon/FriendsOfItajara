@@ -1644,6 +1644,23 @@ body {
    mgw.wav, and the module reads nothing else — so the only question a write
    can be asked is which one, and a taken slot is what the write destroys.
    Same shape and same reason as the Rample's letter strip. */
+/* The thirty-two drawn in NAMED BLOCKS, because the number is all the module
+   gives back: a card cannot say what is on it, so a grouping is the only
+   navigational help there is. Placing a set is choosing a section and letting
+   the slot follow. The blocks are ours, not the module's — see
+   Quadrat.Sections. */
+.q-reelsections { margin: 14px 0 6px; }
+.q-reelsection { margin: 0 0 10px; padding-left: 9px; border-left: 2px solid var(--rule); }
+.q-reelsection-head {
+  display: flex; align-items: baseline; gap: 7px;
+  font-size: 11px; line-height: 1.4;
+}
+.q-reelsection-name {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  text-transform: uppercase; letter-spacing: 0.08em;
+  font-size: 10px; color: #1a1a1a;
+}
+.q-reelsection .q-reelslots { margin: 4px 0 0; }
 .q-reelslots { display: flex; flex-wrap: wrap; align-items: center; gap: 3px; margin: 14px 0 6px; }
 .q-reelslots .q-arm-label { margin-right: 7px; }
 .q-reelslot {

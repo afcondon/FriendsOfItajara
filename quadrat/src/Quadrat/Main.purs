@@ -79,6 +79,7 @@ import Quadrat.Audio as Audio
 import Quadrat.Clip (copyText)
 import Quadrat.Declared as Declared
 import Quadrat.Dest as Dest
+import Quadrat.Sections as Sections
 import Quadrat.Http as Http
 import Quadrat.RebusView as RebusView
 import Quadrat.SetIdentity (chordGlyph, markOf)
@@ -5280,21 +5281,42 @@ render st =
   -- | card with it, and the only question a write can be asked is *which
   -- | one*. Same shape as the Rample's letter strip and for the same reason:
   -- | the position decides what is destroyed, so the positions are drawn.
+  -- | Drawn in **named blocks**, because the number is all the module gives
+  -- | you back. See `Quadrat.Sections`: the grouping is the only navigational
+  -- | affordance a card that cannot describe itself has, so placing a set is
+  -- | choosing a *section* and letting the slot follow, not choosing a number
+  -- | and hoping to remember. The blocks are ours and the module knows nothing
+  -- | of them \x2014 it will happily take a beat in the voices block, and this
+  -- | strip is what stops us doing it without meaning to.
   reelSlots rl =
-    HH.div [ HP.class_ (HH.ClassName "q-reelslots") ]
-      ( [ HH.span [ HP.class_ (HH.ClassName "q-arm-label") ] [ HH.text "Reel" ] ]
-          <> map one (Array.range 1 (max 1 rl.slots))
-      )
+    HH.div [ HP.class_ (HH.ClassName "q-reelsections") ]
+      (map (block rl) Sections.sections)
     where
+    block r sec =
+      HH.div [ HP.class_ (HH.ClassName "q-reelsection") ]
+        [ HH.div [ HP.class_ (HH.ClassName "q-reelsection-head") ]
+            [ HH.span [ HP.class_ (HH.ClassName "q-reelsection-name") ]
+                [ HH.text sec.name ]
+            , HH.span [ HP.class_ (HH.ClassName "q-muted") ]
+                [ HH.text (" " <> sec.holds) ]
+            ]
+        , HH.div [ HP.class_ (HH.ClassName "q-reelslots") ]
+            (map one (Array.range sec.from (min sec.to (max 1 r.slots))))
+        ]
+
     one n =
       let taken = Array.elem n st.reelTaken
       in HH.button
            [ HP.class_ (HH.ClassName ("q-reelslot"
                <> (if st.reelSlot == n then " is-on" else "")
                <> (if taken then " is-taken" else "")))
-           , HP.title (reelFile n <> (if taken then " \x2014 a reel is already here; \
-                                                    \writing replaces it"
-                                      else " \x2014 free"))
+           , HP.title (reelFile n
+                        <> (case Sections.sectionAt n of
+                              Just sec -> " \x2014 " <> sec.name
+                              Nothing -> "")
+                        <> (if taken then " \x2014 a reel is already here; \
+                                          \writing replaces it"
+                            else " \x2014 free"))
            , HE.onClick \_ -> SetReelSlot n
            ]
            [ HH.text (reelLabel n) ]

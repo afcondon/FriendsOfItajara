@@ -476,7 +476,21 @@ function dropSets(names) {
 // progression and splice k+1 is progression k. Said plainly on the page
 // rather than tidied away, because trimming the head would mean re-encoding
 // the audio to save one splice out of ninety-nine.
-const REEL_MAX_SECS = 174;
+// **The ceiling is a buffer, not a duration** — measured 2026-09-19.
+//
+// A reel's `data` chunk may be at most 2^26 bytes, and the bound is INCLUSIVE:
+// tested on hardware with a reel of exactly 67108864 bytes beside a control
+// 292864 bytes under it, and the module read both. The manual's "2.9 minutes"
+// is that number divided by 48000 * 2 * 4 and nothing more.
+//
+// Every reel here is already 48 kHz stereo float32 (`reelFits` refuses
+// anything else), so seconds are a faithful restatement — but they must be
+// the *derived* seconds, not a rounded 174. Rounding the limit down while
+// rounding a file's duration up is exactly how a perfectly good reel got
+// recorded as dead: 174.763 s read as "175 s over a 174 s ceiling".
+const REEL_MAX_BYTES = 64 * 1024 * 1024;
+const REEL_FRAME_BYTES = 2 * 4;            // stereo, 32-bit float
+const REEL_MAX_SECS = REEL_MAX_BYTES / (REEL_FRAME_BYTES * 48000);   // 174.7626…
 
 // **A reel's name is its slot.** `mg1.wav`..`mg9.wav`, then `mga.wav`..
 // `mgw.wav` — 32 of them, in the root, and the module reads NOTHING else.
@@ -504,7 +518,12 @@ function reelName(slot) {
 // module boots, and the reel simply is not there.
 function reelFits(f, secs) {
   const why = [];
-  if (secs > REEL_MAX_SECS) why.push(`${secs.toFixed(1)}s is over the ${REEL_MAX_SECS}s ceiling`);
+  // Compared at full precision and reported at it: a reel 0.2 s over is over,
+  // and saying so as "175s is over the 174s ceiling" reads as a rounding
+  // argument rather than a refusal.
+  if (secs > REEL_MAX_SECS)
+    why.push(`${secs.toFixed(3)}s is over the ${REEL_MAX_SECS.toFixed(3)}s ceiling `
+      + `(2^26 bytes of audio); a reel exactly on the line is fine, this one is not`);
   if (f) {
     if (f.ch !== 2) why.push(`${f.ch === 1 ? "mono" : f.ch + " channels"}, and a reel must be stereo`);
     if (f.rate !== 48000) why.push(`${f.rate} Hz, and a reel must be 48000`);
