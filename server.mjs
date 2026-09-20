@@ -707,6 +707,92 @@ async function writeReel(body) {
     : done;
 }
 
+// **The card, written whole and in order.**
+//
+// One reel at a time is what the module undoes: it compacts on load, keeping
+// one contiguous run `mg1..mgN` and closing any gap, so a slot chosen in
+// advance is renumbered underneath you (measured 2026-09-19: slot 9 onto a
+// card holding 1-5 came back as mg6, rewritten and byte-identical). A card
+// written in one pass is the only arrangement it leaves alone — and the only
+// one whose names can be promised, because they are derived from position at
+// the moment of writing rather than chosen before it.
+//
+// What this deliberately does NOT do yet is tell strangers apart. Two kinds of
+// reel can be on a card that this library knows nothing about: recordings made
+// on the module itself, and reels from somewhere else. Both are simply
+// replaced. Rather than pretend otherwise, the reply says how many were there
+// and how many are there now, so the loss is reported even though it is not
+// yet prevented.
+async function writeReelCard(body) {
+  const dest = String(body.dest || "");
+  const names = Array.isArray(body.sets) ? body.sets.map((x) => safe(String(x))) : [];
+  if (!volumes().includes(dest)) return { ok: false, output: `${dest} is not a mounted volume` };
+  if (!names.length) return { ok: false, output: "nothing to write \u2014 the card plan is empty" };
+  if (names.length > REEL_SLOTS)
+    return { ok: false, output: `${names.length} reels, and a card holds ${REEL_SLOTS}` };
+
+  // Refuse the whole card if any one reel will not load. A card written with a
+  // hole in it is worse than one not written: the module would compact around
+  // the missing reel and every position after it would shift.
+  const plan = [];
+  for (const name of names) {
+    const r = reelOf(name);
+    if (!r.ok) return { ok: false, output: `${name}: ${r.output || "nothing to write"}` };
+    if (r.refuses.length) return { ok: false, output: `${name}: ${r.refuses.join("; ")}` };
+    plan.push({ name, r });
+  }
+
+  const before = existingReels(dest);
+  const written = [];
+  for (let i = 0; i < plan.length; i++) {
+    const { name, r } = plan[i];
+    const file = reelName(i + 1);
+    const takeDir = path.join(TAKES, safe(r.take || name));
+    const src = firstWav(takeDir);
+    const done = await run(["splice", src, "--times", r.starts.map((t) => t.toFixed(3)).join(","),
+                            "--end", r.endAt.toFixed(3),
+                            "--start", r.head.toFixed(3),
+                            "--output", path.join(dest, file)]);
+    // Stop at the first failure rather than carrying on: the reels after this
+    // one would land at the wrong positions, and a card that is half right is
+    // the hardest kind to notice.
+    if (!done.ok)
+      return { ok: false,
+               output: `wrote ${written.length} of ${plan.length}, then ${file} failed: `
+                       + (done.output || "").trim().split("\n").pop() };
+    written.push({ file, name, splices: r.splices });
+  }
+
+  // Anything past the end of the plan is left behind by the write and would be
+  // compacted up into the run, so it is removed deliberately and counted.
+  let removed = 0;
+  for (let i = plan.length; i < REEL_SLOTS; i++) {
+    const f = path.join(dest, reelName(i + 1));
+    try { if (fs.existsSync(f)) { fs.unlinkSync(f); removed++; } } catch {}
+  }
+
+  return {
+    ok: true,
+    output: `wrote ${written.length} reels to ${dest} \u00b7 `
+      + written.map((w) => `${w.file} ${w.name} (${w.splices})`).join(", ")
+      + (removed ? ` \u00b7 removed ${removed} reel${removed === 1 ? "" : "s"} past the end`
+                 : "")
+      + (before > plan.length + removed
+         ? ` \u2014 note ${before} reels were on this card before`
+         : ""),
+  };
+}
+
+// How many `mgN.wav` a card holds right now. Counted rather than listed
+// because the only use is "how much was here before we replaced it".
+function existingReels(dest) {
+  let n = 0;
+  for (let i = 1; i <= REEL_SLOTS; i++) {
+    try { if (fs.existsSync(path.join(dest, reelName(i)))) n++; } catch {}
+  }
+  return n;
+}
+
 function cards() {
   const vols = "/Volumes";
   if (!fs.existsSync(vols)) return [];
@@ -2477,6 +2563,9 @@ const server = http.createServer(async (req, res) => {
     }
     if (url.pathname === "/api/reel/on" && req.method === "GET") {
       return json(res, 200, await reelsOn(String(url.searchParams.get("dest") || "")));
+    }
+    if (url.pathname === "/api/reel/card" && req.method === "POST") {
+      return json(res, 200, await writeReelCard(await readBody(req)));
     }
     if (url.pathname === "/api/reel/write" && req.method === "POST") {
       return json(res, 200, await writeReel(await readBody(req)));

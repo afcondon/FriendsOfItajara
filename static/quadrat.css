@@ -1677,3 +1677,33 @@ body {
 .q-chip.is-go:disabled { opacity: 0.4; cursor: default; }
 .q-notyet ul { margin: 6px 0; padding-left: 18px; }
 .q-notyet li { margin: 0 0 2px; }
+
+/* **The card as an ordered list, not a grid of addresses.** The Morphagene
+   compacts on load, so a slot chosen here is one it renumbers; what it does
+   preserve is ORDER, so order is what the page lets you choose. The mgN name
+   on each row is derived from position and is true only at the moment of
+   writing. */
+.q-reelmove { display: flex; gap: 6px; align-items: center; margin: 4px 0 10px; }
+.q-plan { border-top: 1px solid var(--rule); margin: 0 0 12px; }
+.q-planrow {
+  display: grid;
+  grid-template-columns: 70px minmax(0, 1fr) auto auto;
+  gap: 8px; align-items: center;
+  padding: 5px 0; border-bottom: 1px solid var(--rule);
+}
+.q-planslot {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px; color: #1a1a1a;
+}
+.q-planname { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.q-plansays { font-size: 11px; }
+.q-planmove { display: flex; gap: 2px; }
+.q-planbtn {
+  font: inherit; font-size: 11px; line-height: 1;
+  min-width: 20px; padding: 3px 4px;
+  border: 1px solid var(--rule); border-radius: 2px; background: #fff;
+  color: var(--muted); cursor: pointer;
+}
+.q-planbtn:hover:not(:disabled) { color: inherit; border-color: #999; }
+.q-planbtn:disabled { opacity: 0.3; cursor: default; }
+.q-planrow .q-reelstrip { grid-column: 1 / -1; margin: 2px 0 0; }

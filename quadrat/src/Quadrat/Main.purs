@@ -46,6 +46,7 @@ import Data.Array as Array
 import Data.Foldable (for_, sum)
 import Data.Int as Int
 import Data.Either (Either(..), either)
+import Data.Traversable (traverse)
 import Data.Maybe (Maybe(..), fromMaybe, isJust, maybe)
 import Data.Maybe as Maybe
 import Data.Nullable as Nullable
@@ -79,7 +80,6 @@ import Quadrat.Audio as Audio
 import Quadrat.Clip (copyText)
 import Quadrat.Declared as Declared
 import Quadrat.Dest as Dest
-import Quadrat.Sections as Sections
 import Quadrat.Http as Http
 import Quadrat.RebusView as RebusView
 import Quadrat.SetIdentity (chordGlyph, markOf)
@@ -123,6 +123,10 @@ derive instance Eq Page
 data Fill = Swept | Played
 
 derive instance Eq Fill
+
+-- | One entry in the card plan: a set of ours, and what we know about the reel
+-- | it makes. `reel` is `Nothing` only while the facts are still being read.
+type PlanItem = { name :: String, reel :: Maybe Http.Reel }
 
 type State =
   { looper :: Maybe LooperState
@@ -328,7 +332,16 @@ type State =
   -- | Which of the 32 reel positions this write takes. `0` is "not said", and
   -- | it stays 0 until somebody says: a reel is addressed by position, and a
   -- | default here would be a default about what to overwrite.
-  , reelSlot :: Int
+  -- | **The card, as an ordered list rather than a set of addresses.**
+  -- |
+  -- | The Morphagene compacts on load: it keeps one contiguous run `mg1..mgN`
+  -- | and closes any gap, so a reel written to a chosen slot is renumbered
+  -- | underneath you (measured: slot 9 onto a card holding 1-5 came back as
+  -- | `mg6`). Inventing a name the module will then change is worse than
+  -- | inventing none, so the page stops choosing addresses and chooses an
+  -- | ORDER. The names are derived from position at the moment of writing,
+  -- | which is the only moment they are true.
+  , reelPlan :: Array PlanItem
   , reelBusy :: Boolean
   -- | **How the listing is ordered.** A control rather than a fact printed on
   -- | every row: see `Sort`.
@@ -535,9 +548,13 @@ data Action
   | LookAtReel
   -- | Point the reel at a volume, which reads what that card already holds.
   | SetReelDest String
+  | PlanAdd
+  | PlanDrop String
+  | PlanUp String
+  | PlanDown String
+  | PlanClear
+  | WriteReelCard
   -- | Which of the 32 reel positions the write takes.
-  | SetReelSlot Int
-  | WriteReel
   | SetKit String
   | SetVoice String
   | SendToCard { place :: Boolean, append :: Boolean }
@@ -661,7 +678,7 @@ component = H.mkComponent
       , levels: [], modal: Nothing, kept: false, confirmKeep: false
       , picked: Set.empty, confirmDrop: false, confirmWrite: Nothing, preview: Nothing
       , dest: Dest.Rample, setQuery: "", onlyPicked: false, setSort: Newest
-      , reel: Nothing, volumes: [], reelDest: Nothing, reelTaken: [], reelSlot: 0
+      , reel: Nothing, volumes: [], reelDest: Nothing, reelTaken: [], reelPlan: []
       , reelBusy: false
       , cardPeek: Nothing, openSet: Nothing, openSetInfo: Nothing, peekSample: 0
       , shownSecs: Nothing, audio: Nothing, audioBusy: false
@@ -1393,38 +1410,48 @@ handleAction = case _ of
     H.modify_ _ { reelTaken = on.reels }
     unless on.ok (H.modify_ (note on.output))
 
-  SetReelSlot n -> H.modify_ _ { reelSlot = n }
-
-  -- | **The write says what landed, read from the answer and not from the
-  -- | request.** The same rule the card write had to learn: a report assembled
-  -- | beside the act is a report of what was asked for, which is exactly the
-  -- | thing that is wrong when it is wrong.
-  WriteReel -> do
+  -- | **Ticked sets join the card in the order the list shows them.** Nothing
+  -- | is addressed here; a set takes a position, and its name on the card is
+  -- | read off that position when the card is written.
+  PlanAdd -> do
     st0 <- H.get
-    case Array.fromFoldable st0.picked, st0.reelDest of
-      [ one ], Just dest | st0.reelSlot > 0 -> do
-        H.modify_ _ { reelBusy = true }
-        -- | **A write that throws must still clear the flag.** It did not, and
-        -- | the result was the worst failure this page can have: the button
-        -- | disables itself for the duration of the write, so a request that
-        -- | never returns \x2014 the server restarted underneath an open page is
-        -- | all it takes \x2014 left it disabled forever with nothing said. The
-        -- | page then looks fine and does nothing, which reads as the module's
-        -- | fault or the card's. `attempt` so the flag comes back either way,
-        -- | and the failure gets said out loud.
-        r <- H.liftAff (attempt (toAffE (Http.writeReel one dest st0.reelSlot)))
-        case r of
-          Left e -> H.modify_ (note ("the write did not get an answer: "
-                                     <> Aff.message e
-                                     <> " \x2014 nothing was written; reload and try again")
-                               <<< _ { reelBusy = false })
-          Right done -> do
-            H.modify_ (note done.output <<< _ { reelBusy = false })
-            -- What is on the card changed, so what the page says about it has to.
-            handleAction (SetReelDest dest)
-      [ _ ], Just _ -> H.modify_ (note "say which reel it is")
-      [ _ ], Nothing -> H.modify_ (note "say which card it goes to")
-      _, _ -> H.modify_ (note "tick exactly one set \x2014 a reel is one take")
+    let have = map _.name st0.reelPlan
+        adding = Array.filter (\n -> not (Array.elem n have))
+                              (Array.fromFoldable st0.picked)
+    items <- traverse (\n -> do
+               r <- H.liftAff (attempt (toAffE (Http.reel n)))
+               pure { name: n, reel: either (const Nothing) Just r }) adding
+    H.modify_ _ { reelPlan = st0.reelPlan <> items }
+
+  PlanDrop n -> H.modify_ \st ->
+    st { reelPlan = Array.filter (\i -> i.name /= n) st.reelPlan }
+
+  PlanUp n -> H.modify_ \st -> st { reelPlan = shiftPlan (-1) n st.reelPlan }
+  PlanDown n -> H.modify_ \st -> st { reelPlan = shiftPlan 1 n st.reelPlan }
+
+  PlanClear -> H.modify_ _ { reelPlan = [] }
+
+  -- | **The card is written whole, in order.** Slot by slot is what the
+  -- | module undoes; a card written in one pass is the only arrangement it
+  -- | leaves alone, and it is also the only one whose names we can promise.
+  WriteReelCard -> do
+    st0 <- H.get
+    case st0.reelDest of
+      Nothing -> H.modify_ (note "say which card it goes to")
+      Just dest
+        | Array.null st0.reelPlan -> H.modify_ (note "the card is empty \x2014 add some sets first")
+        | otherwise -> do
+            H.modify_ _ { reelBusy = true }
+            r <- H.liftAff (attempt (toAffE (Http.writeCard (map _.name st0.reelPlan) dest)))
+            case r of
+              Left e -> H.modify_ (note ("the write did not get an answer: "
+                                         <> Aff.message e
+                                         <> " \x2014 reload and check the card")
+                                   <<< _ { reelBusy = false })
+              Right done -> do
+                H.modify_ (note done.output <<< _ { reelBusy = false })
+                handleAction (SetReelDest dest)
+
   SetQuery v -> H.modify_ _ { setQuery = v }
   SetOnlyPicked v -> H.modify_ _ { onlyPicked = v }
   SetSort v -> H.modify_ _ { setSort = sortOf v }
@@ -5188,175 +5215,145 @@ render st =
   -- | rather than assumed from the profile. Nothing is converted and nothing
   -- | is re-encoded.
   reelPanel =
-    case Array.fromFoldable st.picked, st.reel of
-      [], _ ->
-        HH.p [ HP.class_ (HH.ClassName "q-muted") ]
-          [ HH.text "Tick one set on the left and this says what reel it makes." ]
-      _, Nothing ->
-        HH.p [ HP.class_ (HH.ClassName "q-muted") ]
-          [ HH.text "A reel is one continuous take, so it is made from one set \
-                    \\x2014 tick exactly one." ]
-      _, Just rl
-        | not rl.ok ->
-            HH.p [ HP.class_ (HH.ClassName "q-notyet") ] [ HH.text rl.output ]
-      _, Just rl ->
-        HH.div [ HP.class_ (HH.ClassName "q-transform q-reel") ]
-          [ reelStrip rl
-          , HH.p [ HP.class_ (HH.ClassName "q-reelsays") ]
-              [ HH.strong_ [ HH.text (show rl.splices <> " splices") ]
-              , HH.text (" \x00b7 " <> secs2 rl.secs <> "s \x00b7 " <> rl.format
-                  <> " \x00b7 from " <> rl.take)
+    HH.div [ HP.class_ (HH.ClassName "q-transform q-reel") ]
+      [ HH.div [ HP.class_ (HH.ClassName "q-reelmove") ]
+          [ HH.button
+              [ HP.class_ (HH.ClassName "q-chip is-arm")
+              , HP.disabled (Set.isEmpty st.picked)
+              , HP.title "put the ticked sets on the card, in the order they are listed"
+              , HE.onClick \_ -> PlanAdd
               ]
-          -- | **Splice k is region k**, which it was not until the head was
-          -- | trimmed. The take opens with silence before the first region;
-          -- | leaving it on spent a splice on it and made every region count
-          -- | one late, and the page had to explain that every time. The
-          -- | reason given for leaving it was that trimming the head would
-          -- | mean re-encoding the reel \x2014 it does not: dropping leading
-          -- | frames is the same lossless slice as dropping trailing ones,
-          -- | and the markers just move back by the same amount.
-          , HH.p [ HP.class_ (HH.ClassName "q-muted") ]
-              [ HH.text "the silence before the first region is trimmed, so \
-                        \splice k is region k" ]
-          -- | **A trim nobody was told about is the same fault as a write
-          -- | nobody was told about.** The reel ends at the last region's end,
-          -- | capped at the ceiling \x2014 so a hand-stopped take loses its dead
-          -- | air, and one over 2.9 minutes loses whatever will not fit. Both
-          -- | are right and neither may be silent.
-          , if rl.trimmed <= 0.05 then HH.text "" else
-              HH.p [ HP.class_ (HH.ClassName "q-muted") ]
-                [ HH.text ("the take is " <> secs2 rl.takeSecs <> "s; the last "
-                    <> secs2 rl.trimmed <> "s does not go on the card \x2014 "
-                    <> rl.trimWhy) ]
-          -- | **Not a warning \x2014 a refusal, and it is the module's.**
-          -- |
-          -- | *"each file must be 2.9 minutes or less and stereo in order for
-          -- | the Morphagene to recognize and load the files."* An over-long
-          -- | reel is not truncated; it is INVISIBLE. That is the worst
-          -- | failure available here: the write succeeds, the card mounts, the
-          -- | module boots, and the reel is not there \x2014 with nothing anywhere
-          -- | saying why. So it is said before the write, in the module's own
-          -- | terms, and the write is refused rather than left to look fine.
-          , if Array.null rl.refuses then HH.text "" else
-              HH.div [ HP.class_ (HH.ClassName "q-notyet") ]
-                [ HH.strong_ [ HH.text "the Morphagene will not load this reel" ]
-                , HH.ul_ (map (\w -> HH.li_ [ HH.text w ]) rl.refuses)
-                , HH.span [ HP.class_ (HH.ClassName "q-muted") ]
-                    [ HH.text "it is not truncated or converted \x2014 it simply does \
-                              \not appear in Reel mode" ]
+              [ HH.text ("Add ticked" <> (if Set.isEmpty st.picked then ""
+                                          else " (" <> show (Set.size st.picked) <> ")")
+                         <> " \x2192") ]
+          , if Array.null st.reelPlan then HH.text "" else
+              HH.button
+                [ HP.class_ (HH.ClassName "q-chip")
+                , HP.title "take everything off the card plan"
+                , HE.onClick \_ -> PlanClear
                 ]
-          , HH.div [ HP.class_ (HH.ClassName "q-send") ]
-              [ HH.span [ HP.class_ (HH.ClassName "q-arm-label") ] [ HH.text "Card" ]
-              , if Array.null st.volumes
-                  then HH.span [ HP.class_ (HH.ClassName "q-muted") ]
-                         [ HH.text "no volume is mounted \x2014 mount the card, then \
-                                   \press the tab again" ]
-                  else HH.div [ HP.class_ (HH.ClassName "q-chips") ]
-                         (map (\v -> HH.button
-                                 [ HP.class_ (HH.ClassName ("q-chip is-arm"
-                                     <> (if st.reelDest == Just v then " is-on" else "")))
-                                 , HP.title ("read " <> v <> ", and say which reels it holds")
-                                 , HE.onClick \_ -> SetReelDest v
-                                 ]
-                                 [ HH.text v ]) st.volumes)
-              ]
-          , case st.reelDest of
-              Nothing -> HH.text ""
-              Just dest ->
-                HH.div_
-                  [ reelSlots rl
-                  , HH.div [ HP.class_ (HH.ClassName "q-send") ]
-                      [ HH.button
-                          [ HP.class_ (HH.ClassName "q-chip is-arm is-go")
-                          , HP.disabled (st.reelBusy || st.reelSlot <= 0
-                                          || not (Array.null rl.refuses))
-                          , HP.title (if st.reelSlot <= 0 then "pick a reel above"
-                                      else "write " <> reelFile st.reelSlot <> " into the \
-                                           \root of " <> dest)
-                          , HE.onClick \_ -> WriteReel
-                          ]
-                          [ HH.text (if st.reelSlot <= 0 then "pick a reel"
-                                     else (if Array.elem st.reelSlot st.reelTaken
-                                           then "Replace " else "Write ")
-                                          <> reelFile st.reelSlot <> " on " <> dest) ]
-                      ]
-                  -- | **Where it will actually be**, which is not always where
-                  -- | it is written. The Morphagene keeps one contiguous run
-                  -- | and closes any gap, so a reel written past the end of
-                  -- | that run is rewritten further down when the card loads.
-                  -- | Measured: slot 9 onto a card holding 1-5 came back as
-                  -- | mg6. Said before the write, because a write that lands
-                  -- | somewhere else without saying so is the exact failure
-                  -- | this page exists to avoid.
-                  , let l = Sections.landing st.reelTaken st.reelSlot in
-                    if st.reelSlot <= 0 || l == st.reelSlot then HH.text "" else
-                      HH.p [ HP.class_ (HH.ClassName "q-notyet") ]
-                        [ HH.strong_ [ HH.text ("this will become " <> reelFile l) ]
-                        , HH.text (" \x2014 the module closes gaps, so a reel written to "
-                            <> reelFile st.reelSlot <> " past the end of the run is moved \
-                               \down when the card loads. Slots cannot be reserved; \
-                               \the blocks above hold only if the card is written in order.")
-                        ]
-                  -- | The module writes back to this card whenever you record
-                  -- | on it. Straight from the manual, and the one fact that
-                  -- | decides what happens to this reel AFTER it is loaded.
-                  , HH.p [ HP.class_ (HH.ClassName "q-muted") ]
-                      [ HH.text "the Morphagene stores its own recordings and splices \
-                                \back to the card, so take the card out once the reel \
-                                \is loaded if you want to keep it as written" ]
-                  ]
+                [ HH.text "clear" ]
           ]
+      , planList
+      , cardTarget
+      ]
 
-  -- | **The thirty-two reels, and which are taken.**
+  -- | **The card, in order.**
   -- |
-  -- | A reel is addressed by POSITION \x2014 `mg1.wav` through `mgw.wav`, and the
-  -- | module reads nothing else \x2014 so the set's name cannot travel onto the
-  -- | card with it, and the only question a write can be asked is *which
-  -- | one*. Same shape as the Rample's letter strip and for the same reason:
-  -- | the position decides what is destroyed, so the positions are drawn.
-  -- | Drawn in **named blocks**, because the number is all the module gives
-  -- | you back. See `Quadrat.Sections`: the grouping is the only navigational
-  -- | affordance a card that cannot describe itself has, so placing a set is
-  -- | choosing a *section* and letting the slot follow, not choosing a number
-  -- | and hoping to remember. The blocks are ours and the module knows nothing
-  -- | of them \x2014 it will happily take a beat in the voices block, and this
-  -- | strip is what stops us doing it without meaning to.
-  reelSlots rl =
-    HH.div [ HP.class_ (HH.ClassName "q-reelsections") ]
-      (map (block rl) Sections.ranges)
-    where
-    block r sec =
-      HH.div [ HP.class_ (HH.ClassName "q-reelsection") ]
-        [ HH.div [ HP.class_ (HH.ClassName "q-reelsection-head") ]
-            [ HH.span [ HP.class_ (HH.ClassName "q-reelsection-name") ]
-                [ HH.text sec.name ]
-            , HH.span [ HP.class_ (HH.ClassName "q-muted") ]
-                [ HH.text (" " <> sec.holds) ]
-            ]
-        , HH.div [ HP.class_ (HH.ClassName "q-reelslots") ]
-            (map one (Array.range sec.from (min sec.to (max 1 r.slots))))
-        ]
+  -- | Position is the whole content of this list, because position is the only
+  -- | thing the module preserves. It compacts on load \x2014 one contiguous run,
+  -- | gaps closed \x2014 so an address chosen here would be rewritten underneath
+  -- | us, and a name we invent and the module then changes is worse than no
+  -- | name at all. What it cannot undo is the ORDER, so that is what is
+  -- | chosen, and the `mgN` names are derived from it at the moment of writing,
+  -- | which is the only moment they are true.
+  planList
+    | Array.null st.reelPlan =
+        HH.p [ HP.class_ (HH.ClassName "q-muted") ]
+          [ HH.text "Tick sets on the left and add them. They go on the card in \
+                    \this order, and the module names them by position." ]
+    | otherwise =
+        HH.div [ HP.class_ (HH.ClassName "q-plan") ]
+          (Array.mapWithIndex planRow st.reelPlan)
 
-    one n =
-      let taken = Array.elem n st.reelTaken
-      in HH.button
-           [ HP.class_ (HH.ClassName ("q-reelslot"
-               <> (if st.reelSlot == n then " is-on" else "")
-               <> (if taken then " is-taken" else "")))
-           , HP.title (reelFile n
-                        <> (case Sections.sectionAt n of
-                              Just sec -> " \x2014 " <> sec.name
-                              Nothing -> "")
-                        <> (if taken then " \x2014 a reel is already here; \
-                                          \writing replaces it"
-                            else " \x2014 free")
-                        <> (let l = Sections.landing st.reelTaken n
-                            in if l == n then ""
-                               else " \x2014 the module will move it to "
-                                    <> reelFile l <> " when it loads the card"))
-           , HE.onClick \_ -> SetReelSlot n
-           ]
-           [ HH.text (reelLabel n) ]
+  planRow i item =
+    let n = i + 1
+        last = Array.length st.reelPlan - 1
+    in HH.div [ HP.class_ (HH.ClassName "q-planrow") ]
+         [ HH.span [ HP.class_ (HH.ClassName "q-planslot") ] [ HH.text (reelFile n) ]
+         , HH.span [ HP.class_ (HH.ClassName "q-planname") ] [ HH.text item.name ]
+         , HH.span [ HP.class_ (HH.ClassName "q-muted q-plansays") ]
+             [ HH.text (case item.reel of
+                          Nothing -> "reading\x2026"
+                          Just r | not r.ok -> r.output
+                          Just r -> show r.splices <> " splices \x00b7 " <> secs2 r.secs <> "s") ]
+         , case item.reel of
+             Just r | r.ok && not (Array.null r.starts) -> reelStrip r
+             _ -> HH.text ""
+         , case item.reel of
+             Just r | not (Array.null r.refuses) ->
+               HH.span [ HP.class_ (HH.ClassName "q-notyet q-plansays") ]
+                 [ HH.text (joinWith "; " r.refuses) ]
+             _ -> HH.text ""
+         , HH.div [ HP.class_ (HH.ClassName "q-planmove") ]
+             [ HH.button [ HP.class_ (HH.ClassName "q-planbtn")
+                         , HP.disabled (i == 0)
+                         , HP.title "earlier on the card"
+                         , HE.onClick \_ -> PlanUp item.name ] [ HH.text "\x2191" ]
+             , HH.button [ HP.class_ (HH.ClassName "q-planbtn")
+                         , HP.disabled (i == last)
+                         , HP.title "later on the card"
+                         , HE.onClick \_ -> PlanDown item.name ] [ HH.text "\x2193" ]
+             , HH.button [ HP.class_ (HH.ClassName "q-planbtn")
+                         , HP.title "take it off the card"
+                         , HE.onClick \_ -> PlanDrop item.name ] [ HH.text "\x00d7" ]
+             ]
+         ]
+
+  -- | **Which card, and what is already on it that we did not put there.**
+  -- |
+  -- | Two kinds of stranger can be on a Morphagene card and we know nothing
+  -- | about either: reels recorded on the module itself, and reels from
+  -- | somewhere else entirely. Neither is handled yet, so rather than write
+  -- | over them quietly the count is said and the decision is left with the
+  -- | player. Writing the card whole is the only arrangement the module leaves
+  -- | alone; it is also the only one whose names this page can promise.
+  cardTarget =
+    HH.div_
+      [ HH.div [ HP.class_ (HH.ClassName "q-send") ]
+          [ HH.span [ HP.class_ (HH.ClassName "q-arm-label") ] [ HH.text "Card" ]
+          , if Array.null st.volumes
+              then HH.span [ HP.class_ (HH.ClassName "q-muted") ]
+                     [ HH.text "no volume is mounted \x2014 mount the card, then \
+                               \press the tab again" ]
+              else HH.div [ HP.class_ (HH.ClassName "q-chips") ]
+                     (map (\v -> HH.button
+                             [ HP.class_ (HH.ClassName ("q-chip is-arm"
+                                 <> (if st.reelDest == Just v then " is-on" else "")))
+                             , HP.title ("read " <> v <> ", and say which reels it holds")
+                             , HE.onClick \_ -> SetReelDest v
+                             ]
+                             [ HH.text v ]) st.volumes)
+          ]
+      , case st.reelDest of
+          Nothing -> HH.text ""
+          Just dest ->
+            HH.div_
+              [ if Array.null st.reelTaken then HH.text "" else
+                  HH.p [ HP.class_ (HH.ClassName "q-notyet") ]
+                    [ HH.strong_ [ HH.text (show (Array.length st.reelTaken)
+                                            <> " reels are already on this card") ]
+                    , HH.text " \x2014 some may be recordings made on the module, or \
+                              \reels this library has never seen. Nothing here can tell \
+                              \them apart yet, so writing the card replaces the lot."
+                    ]
+              , HH.div [ HP.class_ (HH.ClassName "q-send") ]
+                  [ HH.button
+                      [ HP.class_ (HH.ClassName "q-chip is-arm is-go")
+                      , HP.disabled (st.reelBusy || Array.null st.reelPlan
+                                      || Array.any planRefused st.reelPlan)
+                      , HP.title ("write " <> show (Array.length st.reelPlan)
+                                  <> " reels into the root of " <> dest
+                                  <> ", named mg1 upward in this order")
+                      , HE.onClick \_ -> WriteReelCard
+                      ]
+                      [ HH.text (if Array.null st.reelPlan then "nothing to write"
+                                 else "Write " <> show (Array.length st.reelPlan)
+                                      <> " reels to " <> dest) ]
+                  ]
+              -- | The module writes back to this card whenever you record on
+              -- | it. Straight from the manual, and the one fact that decides
+              -- | what happens to these reels AFTER they are loaded.
+              , HH.p [ HP.class_ (HH.ClassName "q-muted") ]
+                  [ HH.text "the Morphagene stores its own recordings and splices \
+                            \back to the card, so take the card out once the reel \
+                            \is loaded if you want to keep it as written" ]
+              ]
+      ]
+
+  planRefused i = case i.reel of
+    Just r -> not (Array.null r.refuses)
+    Nothing -> false
 
   -- | `mg1`..`mg9`, then `mga`..`mgw`. The module's own naming, mirrored here
   -- | so the page can say the filename before the write rather than after it.
@@ -7367,3 +7364,18 @@ render st =
                                      other -> other)
       ]
       [ HH.text (Kind.label k) ]
+
+-- | **Move one entry of the card plan by one place**, keeping everything else
+-- | in order. Arrows rather than drag: the list is short, the intent is exact,
+-- | and a drag that lands one row off is a card written in the wrong order.
+shiftPlan :: Int -> String -> Array PlanItem -> Array PlanItem
+shiftPlan d n xs =
+  case Array.findIndex (\i -> i.name == n) xs of
+    Nothing -> xs
+    Just at ->
+      let to = clamp 0 (Array.length xs - 1) (at + d)
+      in if to == at then xs
+         else fromMaybe xs do
+                item <- Array.index xs at
+                without <- Array.deleteAt at xs
+                Array.insertAt to item without

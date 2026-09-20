@@ -50,6 +50,7 @@ module Quadrat.Http
   , ReelsOn
   , reelsOn
   , writeReel
+  , writeCard
   ) where
 
 import Prelude
@@ -730,3 +731,10 @@ foreign import reelsOn :: String -> Effect (Promise ReelsOn)
 -- | `mgw.wav` — and the module reads nothing else, so the set's name cannot
 -- | travel onto the card with it.
 foreign import writeReel :: String -> String -> Int -> Effect (Promise Wrote)
+
+-- | **The card, written whole and in order.** Sets in card order, then the
+-- | volume. Names are derived from position at the far end, not chosen here:
+-- | the Morphagene compacts on load, so a slot picked in advance is one the
+-- | module will renumber, and a name we invent that then changes is worse
+-- | than no name at all.
+foreign import writeCard :: Array String -> String -> Effect (Promise Wrote)

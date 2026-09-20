@@ -387,3 +387,18 @@ export const writeReel = (set) => (dest) => (slot) => () =>
     .then(j)
     .then((d) => ({ ok: !!d.ok, output: String(d.output ?? "") }))
     .catch((e) => ({ ok: false, output: String(e.message ?? e) }));
+
+// **The card, written whole and in order.** The Morphagene compacts on load —
+// one contiguous run, gaps closed — so a slot chosen in advance is one the
+// module renumbers underneath you. The only arrangement it leaves alone is a
+// card written in one pass, so that is what this asks for: the sets in order,
+// and the names derived from position at the other end.
+export const writeCard = (sets) => (dest) => () =>
+  fetch("/api/reel/card", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ sets, dest }),
+  })
+    .then(j)
+    .then((d) => ({ ok: !!d.ok, output: String(d.output ?? "") }))
+    .catch((e) => ({ ok: false, output: String(e.message ?? e) }));
