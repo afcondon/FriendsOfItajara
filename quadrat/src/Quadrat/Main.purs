@@ -5280,6 +5280,23 @@ render st =
                                            then "Replace " else "Write ")
                                           <> reelFile st.reelSlot <> " on " <> dest) ]
                       ]
+                  -- | **Where it will actually be**, which is not always where
+                  -- | it is written. The Morphagene keeps one contiguous run
+                  -- | and closes any gap, so a reel written past the end of
+                  -- | that run is rewritten further down when the card loads.
+                  -- | Measured: slot 9 onto a card holding 1-5 came back as
+                  -- | mg6. Said before the write, because a write that lands
+                  -- | somewhere else without saying so is the exact failure
+                  -- | this page exists to avoid.
+                  , let l = Sections.landing st.reelTaken st.reelSlot in
+                    if st.reelSlot <= 0 || l == st.reelSlot then HH.text "" else
+                      HH.p [ HP.class_ (HH.ClassName "q-notyet") ]
+                        [ HH.strong_ [ HH.text ("this will become " <> reelFile l) ]
+                        , HH.text (" \x2014 the module closes gaps, so a reel written to "
+                            <> reelFile st.reelSlot <> " past the end of the run is moved \
+                               \down when the card loads. Slots cannot be reserved; \
+                               \the blocks above hold only if the card is written in order.")
+                        ]
                   -- | The module writes back to this card whenever you record
                   -- | on it. Straight from the manual, and the one fact that
                   -- | decides what happens to this reel AFTER it is loaded.
@@ -5306,7 +5323,7 @@ render st =
   -- | strip is what stops us doing it without meaning to.
   reelSlots rl =
     HH.div [ HP.class_ (HH.ClassName "q-reelsections") ]
-      (map (block rl) Sections.sections)
+      (map (block rl) Sections.ranges)
     where
     block r sec =
       HH.div [ HP.class_ (HH.ClassName "q-reelsection") ]
@@ -5332,7 +5349,11 @@ render st =
                               Nothing -> "")
                         <> (if taken then " \x2014 a reel is already here; \
                                           \writing replaces it"
-                            else " \x2014 free"))
+                            else " \x2014 free")
+                        <> (let l = Sections.landing st.reelTaken n
+                            in if l == n then ""
+                               else " \x2014 the module will move it to "
+                                    <> reelFile l <> " when it loads the card"))
            , HE.onClick \_ -> SetReelSlot n
            ]
            [ HH.text (reelLabel n) ]
