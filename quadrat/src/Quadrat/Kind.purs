@@ -93,8 +93,8 @@ blurb = case _ of
     "One strike each, let them ring. Divided the same way, with a decay window \
     \long enough for a piano rather than a kick."
   Bars _ ->
-    "Starts on your first note and closes itself at the count. Kept whole — \
-    \a groove cut into hits stops being a groove."
+    "Starts on the next bar line and closes itself at the count, both in the \
+    \rig's own bars. Kept whole — a groove cut into hits stops being a groove."
   Chromatic ->
     "Twelve of something, pitched. One joined file, addressed by start point \
     \\x2014 how the pitches get their NAMES is what is not settled yet."
@@ -247,8 +247,8 @@ prompt :: Kind -> String
 prompt = case _ of
   DrumHits -> "listening — play them softest first, then stop"
   ChordHits -> "listening — one strike each, let them ring"
-  Bars n -> "listening — it starts on your first note and closes after "
-              <> show n <> (if n == 1 then " bar" else " bars")
+  Bars n -> "waiting for the next bar line — then " <> show n
+              <> (if n == 1 then " bar" else " bars") <> ", and it closes itself"
   Chromatic -> "listening — twelve, in order"
   Longform -> "listening — starts on your first sound, stop when you are done"
   Phrase -> "listening — the phrase plays once, at its own times"

@@ -56,7 +56,7 @@ import Data.String.Common (joinWith)
 -- `Bars` names a thing in both vocabularies — a length in the daemon's verbs
 -- and a kind of material here — so the verbs come in by name and the kinds
 -- through `Kind.`.
-import Data.Looper.Verb (Verb(Capture, CaptureArm, CapturePeaks, CaptureStop, EndCapture, WriteCapture))
+import Data.Looper.Verb (Verb(Capture, CaptureArm, CaptureBars, CapturePeaks, CaptureQuantise, CaptureStop, EndCapture, WriteCapture))
 import Data.Looper.Verb as Verb
 import Effect (Effect)
 import Effect.Aff (Milliseconds(..), attempt, delay)
@@ -2179,11 +2179,26 @@ captureOn trimHead src = do
   -- capture holds one take and there is nothing a second could be layered
   -- onto. That is also why there is no Discard button — starting the next one
   -- does early what this does anyway.
-  send (CaptureArm trimHead)
-  -- **A count, in frames**, because the page is the one holding the tempo and
-  -- the daemon is the one holding the frame. Zero runs until stopped, which is
-  -- every kind but `Bars`.
-  send (CaptureStop (closeAfter st))
+  -- **Bars start on the bar and count the rig's bars**, both resolved by the
+  -- daemon from one read of its grid. This used to be a frame count computed
+  -- here from `barFrames`, started at the press: the take began whenever you
+  -- pressed and, with the head trimmed, came out short by however long you
+  -- waited for the first note. A break wants its downbeat as frame 0 and its
+  -- length exact, because it is going to be a loop and a set of layers.
+  --
+  -- The two ways of giving a length replace each other in the daemon, so each
+  -- branch sends the one it means last.
+  case Kind.closes st.kind of
+    AtCount n -> do
+      send (CaptureArm false)
+      send (CaptureStop 0)
+      send (CaptureQuantise (-1))
+      send (CaptureBars n)
+    ByHand -> do
+      send (CaptureArm trimHead)
+      send (CaptureQuantise 0)
+      send (CaptureBars 0)
+      send (CaptureStop 0)
   send (Capture src)
   -- **Nothing may still be playing the rig when a new take opens.**
   --
@@ -2292,17 +2307,6 @@ phraseNotesOf c =
               Just x | x > 0 -> x
               _ -> 92
     in map (\n -> { note: n, velocity: v, at, ms }) ns
-
--- | **How many frames a take of this kind runs for**, or zero for by hand.
--- |
--- | The bar comes from the daemon's own `barFrames`, which is Link's where
--- | there is a clock and the anchor loop's cycle where there is not — the
--- | field the daemon's own comment says the app should read. No clock and no
--- | anchor means no bar, and a count of nothing is by hand.
-closeAfter :: State -> Int
-closeAfter st = case Kind.closes st.kind of
-  ByHand -> 0
-  AtCount n -> n * maybe 0 _.barFrames st.looper
 
 -- | **The run.**
 -- |
