@@ -1150,7 +1150,15 @@ handleAction = case _ of
     -- one the new kind cannot use, and a select showing nothing selected still
     -- holds the old number underneath.
     H.modify_ \s -> s { kind = k, divider = Divider.defaultFor k
-                      , voice = onlyVoices k s.voice }
+                      , voice = onlyVoices k s.voice
+                      -- **A bar take is never a sweep.** It is one take that
+                      -- starts and stops on the rig's grid; a transect of
+                      -- triggers inside it would be closed by the count
+                      -- half-way through. Several takes of one break as
+                      -- layers is a different run, and not built yet.
+                      , fill = case k of
+                          Kind.Bars _ -> Played
+                          _ -> s.fill }
     st <- H.get
     -- The name says what the take holds, so changing what you are about to
     -- record renames it — unless you have typed one of your own, which the
@@ -3250,7 +3258,11 @@ tailMaxMs = 30000.0
 -- | wrong is how a run that plays nothing still records eight seconds of
 -- | silence and looks like it worked.
 pageFires :: State -> Boolean
-pageFires st = st.fill == Swept || isJust st.against
+pageFires st = case st.kind of
+  -- A bar take is struck by whatever is playing and started by the rig's
+  -- grid, whichever fill the page was left on. See `PickKind`.
+  Kind.Bars _ -> false
+  _ -> st.fill == Swept || isJust st.against
 
 -- | **A declared key as a centre**, e.g. "F# Ionian" → root 6, major.
 -- |
@@ -4075,7 +4087,24 @@ render st =
       -- so the only visible trace of it was the generated name, which looks
       -- like a name.
       , HH.p [ HP.class_ (HH.ClassName "q-sayline") ]
-          ( case st.fill of
+          ( case st.kind of
+            -- **A bar take is a third case, and says so.** Nothing triggers
+            -- it, nothing divides it and it makes one sample, so the count,
+            -- the trigger and the hold are all questions without answers. What
+            -- IS dispositive is where it starts and how long it runs, and both
+            -- are the rig's: the next bar line, and a count of its bars. So
+            -- the sentence says those, with the length in seconds at the
+            -- tempo it will actually be recorded at.
+            Kind.Bars n ->
+              [ HH.text "Recording ", slotBars, HH.text " ", slotKind ]
+                <> keySays
+                <> [ HH.text " from ", slotSource, slotSourceName
+                   , HH.text " playing ", slotVoice
+                   , HH.text ", from the next bar line", HH.text (barSays n)
+                   , HH.text ", kept as ", slotName
+                   , HH.text " for ", slotEncoding, HH.text "."
+                   ]
+            _ -> case st.fill of
               Played ->
                 [ HH.text "Making ", slotKind ]
                   <> keySays
@@ -4451,8 +4480,29 @@ render st =
   -- | The kind as it reads mid-sentence: "12 pitched chord hits from …".
   -- | `Kind.label` is a heading and is capitalised for one.
   sentenceKind k = case k of
-    Kind.Bars n -> if n == 1 then "one bar" else show n <> " bars"
+    Kind.Bars n -> if n == 1 then "bar" else "bars"
     other -> String.toLower (Kind.label other)
+
+  -- | **How many bars**, in the sentence where the count is read. It was a
+  -- | field behind the Trigger door while the sentence printed a sample count
+  -- | — "Making 2 unpitched one bar" — which was the count of something else.
+  slotBars =
+    HH.input
+      [ HP.class_ (HH.ClassName "q-slot is-num"), HP.type_ HP.InputNumber
+      , HP.value (show st.bars), HP.min 1.0, HP.max 64.0
+      , HP.disabled (st.armed || writing)
+      , HP.title "how many of the rig's bars — counted by the daemon from the \
+                 \bar line the take starts on"
+      , HE.onValueInput SetBars
+      ]
+
+  -- | The length at the tempo it will be recorded at, or why there is none.
+  barSays n = case st.looper of
+    Just top | top.barFrames > 0 && top.sampleRate > 0 ->
+      " — " <> fmt (Int.toNumber (n * top.barFrames) / Int.toNumber top.sampleRate)
+        <> " s" <> (if top.linkTempo > 0.0
+                      then " at " <> fmt top.linkTempo <> " bpm" else "")
+    _ -> " — but there is no bar to count: start Link, or record a loop"
 
   slotPitched =
     sel "q-slot" (if pitchOn then "pitched" else "unpitched") SetPitched
