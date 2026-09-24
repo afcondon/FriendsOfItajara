@@ -133,6 +133,13 @@ type State =
   , kind :: Kind
   , bars :: Int
   , armed :: Boolean
+  -- | **This capture has been seen running** since it was armed. Until then a
+  -- | snapshot can still describe the LAST one — off, holding something — and
+  -- | that reads exactly like a capture that closed itself at its count.
+  -- | Measured 2026-09-24: a bar take waiting for its downbeat was reported
+  -- | as "closed itself: 2.0 s" (the previous take's length), and the page
+  -- | then asked to write a take the daemon was still waiting to start.
+  , capOpened :: Boolean
   , name :: String
   , log :: Array String
   -- | The picture, from the daemon: it holds the audio, so it draws it.
@@ -663,7 +670,7 @@ component :: forall q i o m. MonadAff m => H.Component q i o m
 component = H.mkComponent
   { initialState: \_ ->
       { looper: Nothing, kind: Kind.DrumHits, bars: 1
-      , armed: false, name: "", log: []
+      , armed: false, capOpened: false, name: "", log: []
       , peaks: Nothing, regions: [], keep: Set.empty, busy: false, dry: false
       , opened: Nothing
       , takeIsDry: false
@@ -982,9 +989,13 @@ handleAction = case _ of
     -- **A capture that closed itself at its count.** One field, where the
     -- looper needed four read together — a loop that stopped recording could
     -- be armed, writing, sized or empty and only the combination said which.
+    opened <- H.get
+    for_ (cap opened) \c ->
+      when (opened.armed && c.on && not opened.capOpened) $
+        H.modify_ _ { capOpened = true }
     st <- H.get
     for_ (cap st) \c ->
-      when (st.armed && not c.on) $
+      when (st.armed && st.capOpened && not c.on) $
         H.modify_ (note ("closed itself: " <> fmt c.secs <> " s")
                      <<< _ { armed = false, waiting = true })
 
@@ -2252,7 +2263,7 @@ captureOn trimHead src = do
   -- boundaries of the sweep before it — silently, and at plausible-looking
   -- times.
   H.modify_ (note (if trimHead then Kind.prompt st.kind else "recording — the run starts in a moment")
-    <<< _ { armed = true, swept = false, schedule = [], overran = false })
+    <<< _ { armed = true, capOpened = false, swept = false, schedule = [], overran = false })
 
 -- | Take back whatever of a phrase has not sounded yet, and silence what has.
 -- | A no-op unless a phrase is what is playing, and harmless either way.
