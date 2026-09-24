@@ -1570,7 +1570,34 @@ handleAction = case _ of
     let keptRegions = Array.catMaybes
           (Array.mapWithIndex
             (\i r -> if Set.member i st.keep then Just r else Nothing)
-            st.regions)
+            closed)
+        -- **The last region, closed where its sound did.**
+        --
+        -- Nothing follows the last hit, so its far edge is the take's own end
+        -- (see `lastGap`) — deliberately, because a nominal length would throw
+        -- away the tail of a long pad. The other half of that decision was
+        -- that silence detection would then close it, and that half was never
+        -- built: measured 2026-09-24, `chord-hits-0924-170955` stored eleven
+        -- samples of ~2.5 s and a twelfth of 3.64 s whose own decay was 2.20 s,
+        -- the same as the rest. The extra second was the room until Stop.
+        --
+        -- So the last region ends at its decay plus the 300 ms of silence the
+        -- dry run paces every cell with. Only ever shortened: a sound still
+        -- going at the end of the take has a decay equal to its span, and
+        -- keeps all of it. Only the LAST, only when the take was divided —
+        -- every other region is closed by its successor, and a whole take is
+        -- one region you stopped by hand on purpose.
+        closed =
+          let lastIx = Array.length st.regions - 1
+              divided = Array.length st.regions > 1
+                          && isJust (Kind.divides st.kind)
+                          && st.divider /= Divider.Whole
+          in Array.mapWithIndex
+               (\i r -> case Array.index settles i of
+                  Just d | divided && i == lastIx && d.decay > 0.0 ->
+                    r { end = min r.end (r.start + d.decay + 0.3) }
+                  _ -> r)
+               st.regions
         -- **What each kept sample is, and what it meant.**
         --
         -- Zipped by index against the run's own steps, before the keep filter
@@ -1634,7 +1661,7 @@ handleAction = case _ of
                 , notes: Array.nub (Array.sort (join (strikesOf i r)))
                 , struck: strikesOf i r
                 })
-            st.regions)
+            closed)
     if Array.null keptRegions
       then H.modify_ (note "nothing kept, so there is nothing to send")
       else do
