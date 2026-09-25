@@ -10763,7 +10763,7 @@
     }
     ;
     if (v instanceof Bars2) {
-      return Attacks.value;
+      return Whole.value;
     }
     ;
     if (v instanceof Chromatic) {
@@ -10778,7 +10778,7 @@
       return Whole.value;
     }
     ;
-    throw new Error("Failed pattern match at Quadrat.Divider (line 82, column 14 - line 92, column 18): " + [v.constructor.name]);
+    throw new Error("Failed pattern match at Quadrat.Divider (line 82, column 14 - line 96, column 18): " + [v.constructor.name]);
   };
   var blurb2 = function(v) {
     if (v instanceof Attacks) {
