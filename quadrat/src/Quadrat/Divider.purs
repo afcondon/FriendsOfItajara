@@ -84,7 +84,11 @@ defaultFor = case _ of
   -- A chord is held, not struck. Even on a piano the useful boundary is the
   -- release; on a pad there is no attack to find at all.
   ChordHits -> Gaps
-  Bars _ -> Attacks
+  -- Whole, as the kind's own blurb always said ("a groove cut into hits stops
+  -- being a groove") while this said Attacks — and a bar recorded on the grid
+  -- came back as sixteen uneven pieces. `equally` with 16 is the grid cut, one
+  -- chip away, for a Rample slice card.
+  Bars _ -> Whole
   Chromatic -> Attacks
   Longform -> Whole
   -- Not a default that could go either way: a phrase cut into pieces stops
