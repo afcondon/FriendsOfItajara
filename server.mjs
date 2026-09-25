@@ -45,7 +45,7 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import dgram from "node:dgram";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 
 const PORT = Number(process.env.PORT || 3029);
 const MSM = process.env.MSM || "msm";
@@ -972,6 +972,81 @@ function sets() {
     out[d.name] = files.length;
   }
   return out;
+}
+
+// ── Send to · tape ───────────────────────────────────────────────────────────
+//
+// **A kept take played whole, not cut**: the Conspicillum tape projection.
+// Keeping a set never decides where it goes; this is one more place it can go,
+// beside the card and the reel, and like the reel it is made from the TAKE
+// rather than the cuts. The projector is triggerfish's `project-tape.py`
+// (measurements, hit scores, the tape's meaning — the tempo written beside a
+// bars take when it was kept), found beside this repo or named by
+// QUADRAT_TAPE_PROJECTOR. Missing is reported, not hidden: the Friends are an
+// open-source app and a machine without the grain engine is a real machine.
+//
+// Then the corpora are rebuilt so Conspicillum lists it, and SuperDirt is told
+// to load the one new bank (`/quadrat/load`, superdirt-daemon.scd) so it is
+// playable now rather than after a restart.
+const TAPE_PROJECTOR = process.env.QUADRAT_TAPE_PROJECTOR
+  || path.join(path.dirname(new URL(import.meta.url).pathname), "..", "live-coding",
+               "triggerfish", "audio", "project-tape.py");
+const DIRT_HOST = "127.0.0.1";
+const DIRT_PORT = Number(process.env.SUPERDIRT_PORT || 57120);
+
+// The projector needs numpy, and "python3" is whichever PATH finds first —
+// under Bosun that is Homebrew's, which has none (measured 2026-09-25). So the
+// first interpreter that can actually import it, probed once: QUADRAT_PYTHON,
+// then the Nix profile's, then the system's, then whatever PATH says.
+let PYTHON = null;
+function pythonBin() {
+  if (PYTHON) return PYTHON;
+  const cands = [process.env.QUADRAT_PYTHON,
+                 path.join(os.homedir(), ".nix-profile", "bin", "python3"),
+                 "/usr/bin/python3", "python3"].filter(Boolean);
+  PYTHON = cands.find((p) => {
+    try { return spawnSync(p, ["-c", "import numpy"]).status === 0; } catch { return false; }
+  }) || "python3";
+  return PYTHON;
+}
+
+function python(args) {
+  return new Promise((resolve) => {
+    let out = "";
+    const child = spawn(pythonBin(), args);
+    child.stdout.on("data", (c) => (out += c));
+    child.stderr.on("data", (c) => (out += c));
+    child.on("error", (e) => resolve({ ok: false, output: e.message }));
+    child.on("close", (code) => resolve({ ok: code === 0, output: out.trim() }));
+  });
+}
+
+function oscString(address, str) {
+  const pad = (b) => Buffer.concat([b, Buffer.alloc(4 - (b.length % 4))]);
+  return Buffer.concat([pad(Buffer.from(address)), pad(Buffer.from(",s")), pad(Buffer.from(str))]);
+}
+
+async function projectTape(set) {
+  if (!set) return { ok: false, output: "which set?" };
+  const name = safe(set);
+  let take = name;
+  try {
+    const sj = JSON.parse(fs.readFileSync(path.join(SAMPLES, name, "set.json"), "utf8"));
+    take = sj.take || name;
+  } catch { /* a set without a description is still named after its take */ }
+  if (!fs.existsSync(path.join(TAKES, take, "take.json")))
+    return { ok: false, output: `the take ${take} is not kept, so there is no tape to make` };
+  if (!fs.existsSync(TAPE_PROJECTOR))
+    return { ok: false, output: `no tape projector at ${TAPE_PROJECTOR} (set QUADRAT_TAPE_PROJECTOR)` };
+  const p = await python([TAPE_PROJECTOR, take]);
+  if (!p.ok) return p;
+  const corpora = path.join(path.dirname(TAPE_PROJECTOR), "build-corpora.py");
+  if (fs.existsSync(corpora)) await python([corpora]);
+  const dir = path.join(os.homedir(), ".itajara", "quadrat", "tapes", `${take}-tape`);
+  const s = dgram.createSocket("udp4");
+  s.send(oscString("/quadrat/load", dir), DIRT_PORT, DIRT_HOST, () => s.close());
+  const line = p.output.split("\n").find((l) => l.includes("-tape:")) || p.output;
+  return { ok: true, output: `${line.trim()} \u2014 s "${take}-tape" in SuperDirt and Conspicillum` };
 }
 
 function run(args) {
@@ -2608,6 +2683,11 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === "/api/sets/delete" && req.method === "POST") {
       const body = await readBody(req);
       return json(res, 200, dropSets(body?.names));
+    }
+    // Send to · tape. See `projectTape`.
+    if (url.pathname === "/api/tape" && req.method === "POST") {
+      const body = await readBody(req);
+      return json(res, 200, await projectTape(body?.set));
     }
     if (url.pathname === "/api/card/place" && req.method === "POST") {
       const body = await readBody(req);

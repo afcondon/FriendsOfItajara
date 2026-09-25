@@ -629,6 +629,8 @@ data Action
   | StopAudio
   | RunAgain String
   | PlaceSet String
+  -- | Send to · tape: the set's take, projected whole. See `Http.projectTape`.
+  | SendTape String
   -- | Put a stored set back on the bench, drawn from its own take.
   | OpenSet String
   -- | Tick or untick one stored set.
@@ -1220,6 +1222,12 @@ handleAction = case _ of
   -- | cut and nothing is measured — the shape the card needs is in the set's
   -- | own description, and re-deriving it from the take would make this a
   -- | second recording rather than a projection.
+  SendTape nm -> do
+    H.modify_ _ { cardBusy = true }
+    r <- H.liftAff (attempt (toAffE (Http.projectTape nm)))
+    case r of
+      Left e -> H.modify_ (note (Aff.message e) <<< _ { cardBusy = false })
+      Right w -> H.modify_ (note (lastLine w.output) <<< _ { cardBusy = false })
   PlaceSet nm -> do
     st <- H.get
     -- The arrangement this set will actually take, resolved against what the
@@ -4117,7 +4125,7 @@ render st =
                    , HH.text " playing ", slotVoice
                    , HH.text ", from the next bar line", HH.text (barSays n)
                    , HH.text ", kept as ", slotName
-                   , HH.text " for ", slotEncoding, HH.text "."
+                   , HH.text ", laid out as ", slotEncoding, HH.text "."
                    ]
             _ -> case st.fill of
               Played ->
@@ -4128,7 +4136,7 @@ render st =
                      , HH.text ", triggered by ", slotTrigger ]
                   <> holdSays
                   <> [ HH.text ", kept as ", slotName
-                     , HH.text " for ", slotEncoding
+                     , HH.text ", laid out as ", slotEncoding
                      , HH.text ". As many as you play."
                      ]
               Swept ->
@@ -4142,7 +4150,7 @@ render st =
                      , HH.text ", triggered by ", slotTrigger ]
                   <> holdSays
                   <> [ HH.text ", kept as ", slotName
-                     , HH.text " for ", slotEncoding
+                     , HH.text ", laid out as ", slotEncoding
                      ]
                   -- Named only when there IS one to name: "tuned by nothing"
                   -- is a clause about an absence, and an unpitched run is not
@@ -7145,6 +7153,21 @@ render st =
                    , HE.onClick \_ -> PlaceSet r.name
                    ]
                    [ HH.text "Onto the card" ]
+            else HH.text ""
+        -- **Send to · tape.** The same kept take, somewhere else: played whole
+        -- by the grain engine rather than cut. Made from the take, so any set
+        -- that has one can go; nothing about the set changes.
+        , if r.described && r.take /= ""
+            then HH.button
+                   [ HP.class_ (HH.ClassName "q-plain")
+                   , HP.disabled st.cardBusy
+                   , HP.title "play the take this set was cut from WHOLE, as a \
+                              \tape for Conspicillum: linked, never cut, with its \
+                              \tempo and what each sixteenth sounds like \x2014 \
+                              \loaded into SuperDirt as <take>-tape"
+                   , HE.onClick \_ -> SendTape r.name
+                   ]
+                   [ HH.text "As a tape" ]
             else HH.text ""
     ]
 

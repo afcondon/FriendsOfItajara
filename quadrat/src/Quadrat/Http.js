@@ -131,6 +131,7 @@ export const addToCard = (req) => () => post("/api/card/add", req);
 export const writeToCard = (dest) => (replace) => () =>
   post("/api/card/write", { dest, replace });
 export const placeSet = (req) => () => post("/api/card/place", req);
+export const projectTape = (set) => () => post("/api/tape", { set });
 
 // A take's envelope, read off the file. Shaped like the daemon's own peaks so
 // the page draws a reopened set with exactly the code it draws a live one with.

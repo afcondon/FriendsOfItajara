@@ -32,6 +32,7 @@ module Quadrat.Http
   , calibrations
   , calibration
   , placeSet
+  , projectTape
   , Arrangement
   , arrangementsOf
   , voiceRoom
@@ -569,6 +570,11 @@ foreign import deleteSets :: Array String -> Effect (Promise Wrote)
 -- |
 -- | `sliced` survives for sets with no extent at all, where there is no grid
 -- | to regroup and the only question is whether the files are joined.
+-- | **Send to · tape**: the set's take, projected whole as a tape the grain
+-- | engine can play — linked, never cut, with its tempo and hit scores — and
+-- | loaded into SuperDirt as `<take>-tape`. Nothing about the set changes.
+foreign import projectTape :: String -> Effect (Promise Wrote)
+
 foreign import placeSet
   :: { set :: String, bank :: String, letter :: String, kit :: String, voice :: Int
      , append :: Boolean, sliced :: Boolean, layerMode :: String, layers :: Int

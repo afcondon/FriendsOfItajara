@@ -76,13 +76,21 @@ name = case _ of
   DirtBank -> "dirt-bank"
   DirtGrid -> "dirt-grid"
 
+-- | **The shape, named as a shape.** These used to read "Rample · layers" and
+-- | "SuperDirt · a bank", which made the choice look like a destination made at
+-- | save time — and Keep never places anything: a set goes to a card, a reel
+-- | or a tape later, from the Library, as often as you like (Andrew,
+-- | 2026-09-25: "decouple save from convert for"). What this choice really
+-- | settles is how the take is RECORDED — the axes, the cell order, the
+-- | objections — so it is named by that, with the module whose limits it
+-- | checks in brackets. `name` is unchanged: it is what stored specs carry.
 label :: Encoding -> String
 label = case _ of
-  RampleLayers -> "Rample · layers"
-  RampleSlices -> "Rample · slices"
-  RampleGrid -> "Rample · layers × slices"
-  DirtBank -> "SuperDirt · a bank"
-  DirtGrid -> "SuperDirt · a grid, flattened"
+  RampleLayers -> "a stack of alternatives (Rample layers)"
+  RampleSlices -> "one file, sliced (Rample slices)"
+  RampleGrid -> "stacks of slices (Rample grid)"
+  DirtBank -> "a list"
+  DirtGrid -> "a grid, flattened to a list"
 
 blurb :: Encoding -> String
 blurb = case _ of
