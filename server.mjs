@@ -1920,6 +1920,24 @@ async function addToCard(body) {
   // Here rather than in a second call from the page, so that a set cannot
   // exist without it: an interruption between "cut" and "describe" would
   // leave exactly the folder of anonymous WAVs this is meant to abolish.
+  // **A bars take is a tape, and only now can anyone say at what tempo.**
+  // Written beside the take rather than into the set, because the tape is a
+  // projection of the TAKE (triggerfish audio/project-tape.py reads it): the
+  // set is one way to cut it, the tape another, and both hang off the take.
+  if (body.tape && body.kind === "bars") {
+    try {
+      const tdir = path.join(TAKES, take);
+      const tj = JSON.parse(fs.readFileSync(path.join(tdir, "take.json"), "utf8"));
+      fs.writeFileSync(path.join(tdir, "tape.json"), JSON.stringify({
+        version: 1, bpm: Number(body.tape.bpm), bpmFrom: "link",
+        beats: Number(body.tape.beats) || 4, bars: Number(body.tape.bars) || 1,
+        swing: 0.5, secs: Number(tj.loopSecs) || null,
+      }, null, 1));
+    } catch (e) {
+      console.error(`tape.json for ${take}: ${e.message}`);
+    }
+  }
+
   const described = writeSet(path.join(SAMPLES, set), {
     name: set,
     take,

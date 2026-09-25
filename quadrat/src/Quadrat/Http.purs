@@ -307,6 +307,12 @@ foreign import addToCard
      -- | **Cut it, or cut it and put it on a voice.** Two acts, and they were
      -- | one until SuperDirt arrived with no voices to be placed in.
      , place :: Boolean
+     -- | **What a bars take is as a tape**: the Link tempo it was captured at
+     -- | and how many bars the daemon counted. Null for any other kind. The
+     -- | server writes it beside the take (`takes/<take>/tape.json`), where a
+     -- | tape projection finds it, because nothing can recover the tempo from
+     -- | a two-second file afterwards.
+     , tape :: Nullable { bpm :: Number, beats :: Int, bars :: Int }
      -- | The spec that produced these samples, so the set can be run again at
      -- | a resolution nobody chose at the time. **Null for a take played by
      -- | hand**, which is what makes such a set worth keeping but not worth

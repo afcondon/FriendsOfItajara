@@ -1723,6 +1723,10 @@ handleAction = case _ of
               -- right there and it would be easy to send regardless — and then
               -- every hand-played set would carry a description of a sweep
               -- that never touched it.
+              , tape: case st.kind, st.looper of
+                  Kind.Bars n, Just top | top.linkTempo > 0.0 ->
+                    Nullable.notNull { bpm: top.linkTempo, beats: 4, bars: n }
+                  _, _ -> Nullable.null
               , spec: if Array.null st.schedule
                         then Nullable.null
                         else Nullable.notNull (Sweep.flatten st.sweep)
