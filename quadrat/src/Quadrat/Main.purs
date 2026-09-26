@@ -350,6 +350,15 @@ type State =
   -- | which is the only moment they are true.
   , reelPlan :: Array PlanItem
   , reelBusy :: Boolean
+  -- | **The QuadDrum card as staged.** Built on disk and copied whole, because
+  -- | the module wants its card filled in one operation.
+  , qd :: Maybe Http.QdCard
+  -- | How a stereo set becomes the mono the module reads: sum, left, right.
+  -- | A decision, so it is on screen rather than defaulted out of sight.
+  , qdFold :: String
+  -- | Name the next folder `\x2026_RANDOM`: one sample at random per trigger.
+  , qdRandom :: Boolean
+  , qdDest :: Maybe String
   -- | **How the listing is ordered.** A control rather than a fact printed on
   -- | every row: see `Sort`.
   , setSort :: Sort
@@ -631,6 +640,18 @@ data Action
   | PlaceSet String
   -- | Send to · tape: the set's take, projected whole. See `Http.projectTape`.
   | SendTape String
+  -- | Send to · Arbhar: the set onto the mounted stick. See `Http.setToArbhar`.
+  | SendArbhar String
+  -- | Send to · Morphagene: the set joins the reel plan, and the plan is shown.
+  | IntoReel String
+  -- | Send to · QuadDrum: the set becomes one folder on the staged card.
+  | SendQd String
+  | QdLook
+  | QdFold String
+  | QdRandom Boolean
+  | QdDrop String
+  | QdDest String
+  | QdWrite Boolean
   -- | Put a stored set back on the bench, drawn from its own take.
   | OpenSet String
   -- | Tick or untick one stored set.
@@ -689,6 +710,7 @@ component = H.mkComponent
       , dest: Dest.Rample, setQuery: "", onlyPicked: false, setSort: Newest
       , reel: Nothing, volumes: [], reelDest: Nothing, reelTaken: [], reelPlan: []
       , reelBusy: false
+      , qd: Nothing, qdFold: "sum", qdRandom: false, qdDest: Nothing
       , cardPeek: Nothing, openSet: Nothing, openSetInfo: Nothing, peekSample: 0
       , shownSecs: Nothing, audio: Nothing, audioBusy: false
       , placeSliced: false, placeLayers: 0, placeVoices: 0
@@ -1228,6 +1250,47 @@ handleAction = case _ of
     case r of
       Left e -> H.modify_ (note (Aff.message e) <<< _ { cardBusy = false })
       Right w -> H.modify_ (note (lastLine w.output) <<< _ { cardBusy = false })
+  SendArbhar nm -> do
+    H.modify_ _ { cardBusy = true }
+    r <- H.liftAff (attempt (toAffE (Http.setToArbhar nm)))
+    case r of
+      Left e -> H.modify_ (note (Aff.message e) <<< _ { cardBusy = false })
+      Right w -> H.modify_ (note (lastLine w.output) <<< _ { cardBusy = false })
+  -- | The reel plan is the Morphagene's card, so a set sent there joins the
+  -- | end of it, and the tab turns to show where it went.
+  IntoReel nm -> do
+    st0 <- H.get
+    unless (Array.any (\i -> i.name == nm) st0.reelPlan) do
+      r <- H.liftAff (attempt (toAffE (Http.reel nm)))
+      H.modify_ \st -> st { reelPlan = Array.snoc st.reelPlan
+                              { name: nm, reel: either (const Nothing) Just r } }
+    H.modify_ (note (nm <> " is on the reel plan \x2014 write the card from the Morphagene tab"))
+    handleAction (SetDest Dest.Morphagene)
+  SendQd nm -> do
+    st0 <- H.get
+    H.modify_ _ { cardBusy = true }
+    r <- H.liftAff (attempt (toAffE (Http.qdAdd { set: nm, fold: st0.qdFold, random: st0.qdRandom })))
+    case r of
+      Left e -> H.modify_ (note (Aff.message e) <<< _ { cardBusy = false })
+      Right c -> H.modify_ (note (lastLine c.output) <<< _ { cardBusy = false, qd = Just c })
+  QdLook -> do
+    c <- H.liftAff (toAffE Http.qdCard)
+    vols <- H.liftAff (toAffE Http.volumes)
+    H.modify_ _ { qd = Just c, volumes = vols }
+  QdFold f -> H.modify_ _ { qdFold = f }
+  QdRandom b -> H.modify_ _ { qdRandom = b }
+  QdDrop f -> do
+    c <- H.liftAff (toAffE (Http.qdDrop f))
+    H.modify_ (note c.output <<< _ { qd = Just c })
+  QdDest v -> H.modify_ _ { qdDest = Just v }
+  QdWrite replace -> do
+    st0 <- H.get
+    case st0.qdDest of
+      Nothing -> H.modify_ (note "which card? choose a volume first")
+      Just d -> do
+        H.modify_ _ { cardBusy = true }
+        c <- H.liftAff (toAffE (Http.qdWrite d replace))
+        H.modify_ (note c.output <<< _ { cardBusy = false, qd = Just c })
   PlaceSet nm -> do
     st <- H.get
     -- The arrangement this set will actually take, resolved against what the
@@ -1411,6 +1474,7 @@ handleAction = case _ of
   SetDest d -> do
     H.modify_ _ { dest = d, reel = Nothing }
     when (d == Dest.Morphagene) (handleAction LookAtReel)
+    when (d == Dest.QuadDrum) (handleAction QdLook)
 
   -- | **Both halves at once**, because neither answers anything alone: a reel
   -- | with nowhere to go and a volume with no reel are the same non-answer.
@@ -3791,7 +3855,8 @@ render st =
                     <> case st.dest of
                          Dest.Rample -> [ transformPanel, cardView ]
                          Dest.Morphagene -> [ reelPanel, destKnows Dest.Morphagene ]
-                         d -> [ destSoon d (fromMaybe "" (Dest.factsOf d).unbuilt) ]
+                         Dest.QuadDrum -> [ qdPanel, destKnows Dest.QuadDrum ]
+                         Dest.Arbhar -> [ arbharPanel, destKnows Dest.Arbhar ]
                 )
             , maybe (HH.text "") setModal st.openSet
             ]
@@ -5276,24 +5341,89 @@ render st =
          , HE.onClick \_ -> SetDest d
          ]
          [ HH.text f.name ]
-
-  -- | **A destination this page cannot write, saying so and saying what it
-  -- | knows.**
-  -- |
-  -- | The temptation is to leave the Rample\'s controls under the new heading
-  -- | and let the letters and voices mean whatever they mean there. That is
-  -- | the exact failure this project keeps meeting \x2014 the act succeeds and the
-  -- | report of it is wrong \x2014 and it would be worse here, because the write
-  -- | would go through and land on a card in the module\'s own layout.
-  -- |
-  -- | What IS worth showing is the module\'s own arithmetic, because it is the
-  -- | half of the decision that does not need any machinery: whether the set
-  -- | you have ticked can fit at all, and what it would become if it did.
-  destSoon d why =
-    HH.div [ HP.class_ (HH.ClassName "q-destsoon") ]
-      [ destKnows d
-      , HH.p [ HP.class_ (HH.ClassName "q-notyet") ] [ HH.text why ]
+  -- | **The QuadDrum card, staged.** On the Rample a set is a kit; here it is
+  -- | a curve: one folder, in order, that the MOD pot or a V/Oct sequencer
+  -- | walks. The two choices that change what gets written are here, not
+  -- | behind the button: how stereo becomes mono, and whether the folder is
+  -- | played in order or at random.
+  qdPanel =
+    HH.div [ HP.class_ (HH.ClassName "q-transform q-qd") ]
+      [ HH.div [ HP.class_ (HH.ClassName "q-send") ]
+          [ HH.span [ HP.class_ (HH.ClassName "q-arm-label") ] [ HH.text "Fold" ]
+          , HH.div [ HP.class_ (HH.ClassName "q-chips") ]
+              (map (\{ f, says } -> HH.button
+                      [ HP.class_ (HH.ClassName ("q-chip" <> (if st.qdFold == f then " is-on" else "")))
+                      , HP.title says
+                      , HE.onClick \_ -> QdFold f ]
+                      [ HH.text f ])
+                 [ { f: "sum", says: "(L + R) / 2 \x2014 safe for level, cancels anything out of phase" }
+                 , { f: "left", says: "the left channel only" }
+                 , { f: "right", says: "the right channel only" } ])
+          , HH.label [ HP.class_ (HH.ClassName "q-check") ]
+              [ HH.input [ HP.type_ HP.InputCheckbox, HP.checked st.qdRandom
+                         , HE.onChecked QdRandom ]
+              , HH.text " random per trigger" ]
+          ]
+      , case st.qd of
+          Nothing -> HH.p [ HP.class_ (HH.ClassName "q-muted") ] [ HH.text "reading\x2026" ]
+          Just c ->
+            HH.div_
+              [ HH.p [ HP.class_ (HH.ClassName "q-muted") ]
+                  [ HH.text (show (Array.length c.folders) <> " of " <> show c.maxFolders
+                      <> " folders \x00b7 " <> show c.files <> " of " <> show c.maxFiles
+                      <> " files \x00b7 " <> show c.perFolder <> " to a folder") ]
+              , if Array.null c.folders
+                  then HH.p [ HP.class_ (HH.ClassName "q-muted") ]
+                         [ HH.text "Empty. Open a set and send it: Onto the QuadDrum." ]
+                  else HH.div [ HP.class_ (HH.ClassName "q-plan") ]
+                         (map (\f -> HH.div [ HP.class_ (HH.ClassName "q-planrow") ]
+                                 [ HH.span [ HP.class_ (HH.ClassName "q-planname") ] [ HH.text f.name ]
+                                 , HH.span [ HP.class_ (HH.ClassName "q-muted q-plansays") ]
+                                     [ HH.text (show f.files <> (if f.files == 1 then " sample" else " samples")
+                                         <> (if f.files > 120 then " \x2014 past 120, V/Oct may not reach the top" else "")) ]
+                                 , HH.div [ HP.class_ (HH.ClassName "q-planmove") ]
+                                     [ HH.button [ HP.class_ (HH.ClassName "q-planbtn")
+                                                 , HP.title "take it off the card"
+                                                 , HE.onClick \_ -> QdDrop f.name ] [ HH.text "\x00d7" ] ]
+                                 ]) c.folders)
+              ]
+      , HH.div [ HP.class_ (HH.ClassName "q-send") ]
+          [ HH.span [ HP.class_ (HH.ClassName "q-arm-label") ] [ HH.text "Card" ]
+          , if Array.null st.volumes
+              then HH.span [ HP.class_ (HH.ClassName "q-muted") ]
+                     [ HH.text "no volume is mounted \x2014 mount the card, then press the tab again" ]
+              else HH.div [ HP.class_ (HH.ClassName "q-chips") ]
+                     (map (\v -> HH.button
+                             [ HP.class_ (HH.ClassName ("q-chip is-arm"
+                                 <> (if st.qdDest == Just v then " is-on" else "")))
+                             , HE.onClick \_ -> QdDest v ]
+                             [ HH.text v ]) st.volumes)
+          , HH.button
+              [ HP.class_ (HH.ClassName "q-chip is-arm")
+              , HP.disabled (st.cardBusy || st.qdDest == Nothing)
+              , HP.title "copy every folder here onto the card, after what is already on it; \
+                         \a folder of ours already there by name is refused"
+              , HE.onClick \_ -> QdWrite false ]
+              [ HH.text "Write" ]
+          , HH.button
+              [ HP.class_ (HH.ClassName "q-chip")
+              , HP.disabled (st.cardBusy || st.qdDest == Nothing)
+              , HP.title "the same, replacing our own folders already on the card \x2014 only those"
+              , HE.onClick \_ -> QdWrite true ]
+              [ HH.text "Write, replacing ours" ]
+          ]
+      , HH.p [ HP.class_ (HH.ClassName "q-muted") ]
+          [ HH.text "No hot swap: power the module down before the card comes out. \
+                    \For the best playback, erase the card and write it in one go." ]
       ]
+
+  -- | Nothing to arrange: the stick is positional, and the server finds the
+  -- | first empty bank and scene. What is worth a line is where the button is.
+  arbharPanel =
+    HH.p [ HP.class_ (HH.ClassName "q-muted") ]
+      [ HH.text "Open a set and send it: Onto the stick. Each six samples take a \
+                \library bank and a scene, the first ones that hold nothing; a taken \
+                \slot is left alone." ]
 
   -- | The module's own arithmetic. Worth reading whether or not this page can
   -- | write the thing, which is why it is separate from the not-yet notice.
@@ -7168,6 +7298,40 @@ render st =
                    , HE.onClick \_ -> SendTape r.name
                    ]
                    [ HH.text "As a tape" ]
+            else HH.text ""
+        -- **Send to · the modules.** Each is the set, projected: nothing is
+        -- re-cut and nothing about the set changes. The destination's own
+        -- choices (the QuadDrum's fold, the reel's order) live on its tab.
+        , if r.described && r.count > 0
+            then HH.button
+                   [ HP.class_ (HH.ClassName "q-plain")
+                   , HP.title "add it to the end of the Morphagene reel plan \x2014 \
+                              \one splice per sample, the take marked"
+                   , HE.onClick \_ -> IntoReel r.name
+                   ]
+                   [ HH.text "Into a reel" ]
+            else HH.text ""
+        , if r.described && r.count > 0
+            then HH.button
+                   [ HP.class_ (HH.ClassName "q-plain")
+                   , HP.disabled st.cardBusy
+                   , HP.title "onto the mounted Arbhar stick: six samples to a library \
+                              \bank and a scene, at the first ones that are empty"
+                   , HE.onClick \_ -> SendArbhar r.name
+                   ]
+                   [ HH.text "Onto the stick" ]
+            else HH.text ""
+        , if r.described && r.count > 0
+            then HH.button
+                   [ HP.class_ (HH.ClassName "q-plain")
+                   , HP.disabled st.cardBusy
+                   , HP.title ("one folder on the QuadDrum card, in order, so the MOD \
+                               \pot (or a V/Oct sequencer) walks the set \x2014 folded to \
+                               \mono by " <> st.qdFold
+                               <> (if st.qdRandom then ", random per trigger" else ""))
+                   , HE.onClick \_ -> SendQd r.name
+                   ]
+                   [ HH.text "Onto the QuadDrum" ]
             else HH.text ""
     ]
 

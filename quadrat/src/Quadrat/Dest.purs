@@ -82,16 +82,17 @@ factsOf = case _ of
     { name: "QuadDrum"
     , maker: "vpme.de"
     , shape: "a folder per sample set at the root, 4 voices, up to 128 samples each"
-    , format: "44.1 kHz \x00b7 16-bit \x00b7 mono preferred"
+    , format: "48 kHz (or 44.1) \x00b7 16-bit \x00b7 mono"
     , imposes:
-        [ "128 samples per voice, 1024 on the card"
+        [ "a folder per set, 128 files in it, 48 folders and 1536 files on a card \x2014 \
+          \anything past those is ignored, not refused"
+        , "16-bit MONO: a stereo file is ignored, so the fold is chosen here"
+        , "files play in ascending name order, so they are numbered 001_ onward"
+        , "a folder named \x2026RANDOM picks a sample at random per trigger"
         , "copy the whole card in one operation after erasing it \x2014 fragmentation costs playback"
-        , "no layer ceiling to work around: the constraint here is the opposite one"
         ]
-    , suits: "runs \x2014 a long chromatic or a whole sweep, where the Rample's twelve run out"
-    , unbuilt: Just "what a QuadDrum is BEST used for is still an open question \x2014 \
-                    \128 a voice is a different instrument from 12, and the placement \
-                    \here should follow the answer rather than guess it"
+    , suits: "curves \x2014 a sweep in order, walked by the MOD pot or addressed by a V/Oct sequencer"
+    , unbuilt: Nothing
     }
   Morphagene ->
     { name: "Morphagene"
@@ -133,9 +134,7 @@ factsOf = case _ of
         , "_toConvert converts on boot; _userfiles expects the format already right"
         ]
     , suits: "grain material \x2014 washes and sustained tones rather than hits"
-    , unbuilt: Just "the Friend already writes these, through `msm harvest`, which is the \
-                    \compiler between a name and a position \x2014 Quadrat should reach that \
-                    \rather than grow a second one"
+    , unbuilt: Nothing
     }
 
 slug :: Dest -> String

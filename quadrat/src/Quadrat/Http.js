@@ -133,6 +133,32 @@ export const writeToCard = (dest) => (replace) => () =>
 export const placeSet = (req) => () => post("/api/card/place", req);
 export const projectTape = (set) => () => post("/api/tape", { set });
 
+export const setToArbhar = (set) => () => post("/api/arbhar/set", { set });
+
+// The staged QuadDrum card, flattened: the numbers the page shows beside the
+// module's own ceilings, and whatever the last action said.
+const qd = (d) => {
+  const c = d.card ?? {};
+  const l = c.limits ?? {};
+  return {
+    ok: !!d.ok,
+    output: String(d.output ?? ""),
+    folders: (c.folders ?? []).map((f) => ({ name: String(f.name), files: Number(f.files ?? 0), random: !!f.random })),
+    files: Number(c.files ?? 0),
+    maxFolders: Number(l.folders ?? 48),
+    maxFiles: Number(l.files ?? 1536),
+    perFolder: Number(l.perFolder ?? 128),
+  };
+};
+const qdPost = (url, body) =>
+  fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) })
+    .then(j).then(qd)
+    .catch((e) => qd({ ok: false, output: String(e.message ?? e) }));
+export const qdCard = () => fetch("/api/qd").then(j).then(qd).catch((e) => qd({ ok: false, output: String(e.message ?? e) }));
+export const qdAdd = (o) => () => qdPost("/api/qd/add", o);
+export const qdDrop = (folder) => () => qdPost("/api/qd/drop", { folder });
+export const qdWrite = (dest) => (replace) => () => qdPost("/api/qd/write", { dest, replace });
+
 // A take's envelope, read off the file. Shaped like the daemon's own peaks so
 // the page draws a reopened set with exactly the code it draws a live one with.
 export const takePeaks = (take) => (buckets) => () =>

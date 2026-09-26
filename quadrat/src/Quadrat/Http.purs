@@ -33,6 +33,13 @@ module Quadrat.Http
   , calibration
   , placeSet
   , projectTape
+  , setToArbhar
+  , QdFolder
+  , QdCard
+  , qdCard
+  , qdAdd
+  , qdDrop
+  , qdWrite
   , Arrangement
   , arrangementsOf
   , voiceRoom
@@ -574,6 +581,34 @@ foreign import deleteSets :: Array String -> Effect (Promise Wrote)
 -- | engine can play — linked, never cut, with its tempo and hit scores — and
 -- | loaded into SuperDirt as `<take>-tape`. Nothing about the set changes.
 foreign import projectTape :: String -> Effect (Promise Wrote)
+
+-- | **Send to · Arbhar**: the set onto the mounted stick, six samples to a
+-- | library bank and a scene, at the first ones that hold nothing. msm does
+-- | the placing; the server only chooses where.
+foreign import setToArbhar :: String -> Effect (Promise Wrote)
+
+-- | One folder on the QuadDrum card: one set, played as an axis.
+type QdFolder = { name :: String, files :: Int, random :: Boolean }
+
+-- | **The QuadDrum card as we build it** \x2014 staged on disk, copied whole.
+type QdCard =
+  { ok :: Boolean
+  , output :: String
+  , folders :: Array QdFolder
+  , files :: Int
+  , maxFolders :: Int
+  , maxFiles :: Int
+  , perFolder :: Int
+  }
+
+foreign import qdCard :: Effect (Promise QdCard)
+-- | A set onto the staged card: `fold` is sum, left or right; `random` names
+-- | the folder so each trigger picks a sample at random.
+foreign import qdAdd :: { set :: String, fold :: String, random :: Boolean } -> Effect (Promise QdCard)
+foreign import qdDrop :: String -> Effect (Promise QdCard)
+-- | Copy the staged card onto a mounted volume; `replace` overwrites our own
+-- | folders already there by name, and nothing else.
+foreign import qdWrite :: String -> Boolean -> Effect (Promise QdCard)
 
 foreign import placeSet
   :: { set :: String, bank :: String, letter :: String, kit :: String, voice :: Int

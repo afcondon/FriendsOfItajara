@@ -23,6 +23,12 @@
 //                                  every slot created, replaced or left alone
 //                                  → runs msm harvest,
 //                                    answers { ok, output }
+//   POST /api/arbhar/set           { set, stick?, dryRun } → a set onto the stick,
+//                                  at the first free bank and scene
+//   GET  /api/qd                   the staged QuadDrum card: folders, files, limits
+//   POST /api/qd/add               { set, fold, random } → one folder on it
+//   POST /api/qd/drop              { folder }
+//   POST /api/qd/write             { dest, replace } → copy it onto a mounted card
 //   POST /api/card/place           { set, bank, letter, kit, voice, append,
 //                                    layerMode, layers } — `layers` is the
 //                                    arrangement: how many alternatives the
@@ -1047,6 +1053,141 @@ async function projectTape(set) {
   s.send(oscString("/quadrat/load", dir), DIRT_PORT, DIRT_HOST, () => s.close());
   const line = p.output.split("\n").find((l) => l.includes("-tape:")) || p.output;
   return { ok: true, output: `${line.trim()} \u2014 s "${take}-tape" in SuperDirt and Conspicillum` };
+}
+
+// ===========================================================================
+// Send to · Arbhar and Send to · QuadDrum. Both are `msm harvest` with a SET
+// as its input (msm finds a set by its set.json), so the rules each module
+// fails on silently stay in msm, the one compiler between a name and a
+// position. What lives here is only the choosing: which stick, which bank.
+
+// **The first bank and scene with nothing in them.** A set takes one of each
+// per six samples, and msm refuses a taken slot rather than overwrite it — so
+// starting at 1_1 every time would be a harvest that stands down on the second
+// set. A slot is taken when its folder holds audio; AppleDouble is not audio.
+function arbharFree(stick) {
+  const audioIn = (d) => {
+    try { return fs.readdirSync(d).some((f) => /\.wav$/i.test(f) && !f.startsWith("._")); }
+    catch { return false; }
+  };
+  let bank = 0;
+  for (let b = 1; b <= 6 && !bank; b++) {
+    const slots = [1, 2, 3, 4, 5, 6].map((l) => path.join(stick, "_arbhar_library", `${b}_${l}_sample`));
+    if (!slots.some(audioIn)) bank = b;
+  }
+  let scene = "";
+  for (let b = 1; b <= 6 && !scene; b++)
+    for (let c = 1; c <= 6 && !scene; c++)
+      if (!audioIn(path.join(stick, "_arbhar_scenes", `${b}_${c}_scene`))) scene = `${b}_${c}`;
+  return { bank, scene };
+}
+
+async function setToArbhar(body) {
+  const name = safe(body?.set || "");
+  if (!name || !fs.existsSync(path.join(SAMPLES, name, "set.json")))
+    return { ok: false, output: "which set?" };
+  const found = sticks();
+  const stick = body.stick ? String(body.stick) : (found.length === 1 ? found[0] : "");
+  if (!stick) return { ok: false, output: found.length
+    ? `more than one Arbhar stick is mounted (${found.join(", ")}) — say which`
+    : "no Arbhar stick is mounted (a volume with _arbhar_library)" };
+  const free = arbharFree(stick);
+  const args = ["harvest", path.join(SAMPLES, name), "--module", "arbhar", "--stick", stick];
+  if (free.bank) args.push("--bank", String(free.bank)); else args.push("--scenes-only");
+  if (free.scene) args.push("--scene", free.scene); else if (free.bank) args.push("--library-only");
+  if (!free.bank && !free.scene) return { ok: false, output: `${stick}: every bank and scene holds audio` };
+  if (body.dryRun) args.push("--dry-run");
+  const r = await run(args);
+  return { ...r, stick, bank: free.bank, scene: free.scene };
+}
+
+// **The QuadDrum card is built here first, then copied whole.** The module
+// wants a card erased and filled in one operation (fragmentation costs
+// playback), and cannot say what is on it, so the card is compiled like the
+// Rample's: a directory we own is the truth, and a write copies it across.
+const QD_CARD = path.join(SHOP, "quaddrum");
+const QD_LIMITS = { folders: 48, files: 1536, perFolder: 128 };
+
+function qdUsage(root) {
+  const folders = [];
+  try {
+    for (const n of fs.readdirSync(root).sort()) {
+      const p = path.join(root, n);
+      if (n.startsWith(".") || !fs.statSync(p).isDirectory()) continue;
+      const files = fs.readdirSync(p).filter((f) => /\.wav$/i.test(f) && !f.startsWith("._")).length;
+      folders.push({ name: n, files, random: /RANDOM/.test(n) });
+    }
+  } catch { /* no card yet is an empty card */ }
+  return { root, folders, files: folders.reduce((a, f) => a + f.files, 0), limits: QD_LIMITS };
+}
+
+async function setToQuadDrum(body) {
+  const name = safe(body?.set || "");
+  if (!name || !fs.existsSync(path.join(SAMPLES, name, "set.json")))
+    return { ok: false, output: "which set?" };
+  fs.mkdirSync(QD_CARD, { recursive: true });
+  const fold = ["sum", "left", "right"].includes(body.fold) ? body.fold : "sum";
+  const args = ["harvest", path.join(SAMPLES, name), "--module", "qd", "--card", QD_CARD, "--fold", fold];
+  if (body.random) args.push("--random");
+  if (body.overwrite !== false) args.push("--overwrite");
+  const r = await run(args);
+  return { ...r, card: qdUsage(QD_CARD) };
+}
+
+function qdDrop(body) {
+  const f = String(body?.folder || "");
+  if (!f || f.includes("/") || f.startsWith(".")) return { ok: false, output: "which folder?" };
+  fs.rmSync(path.join(QD_CARD, f), { recursive: true, force: true });
+  return { ok: true, output: `${f} taken off the card`, card: qdUsage(QD_CARD) };
+}
+
+// **Copy the staged card onto a mounted one.** Not an erase: what is already
+// on the card stays, and a folder of ours that is already there by name is
+// refused unless `replace` — a card write deletes by name, and the name here
+// is the set. The totals are checked against the card as it will be.
+// AppleDouble files are cleaned afterwards, because a `._x.wav` read as a
+// sample shifts an axis by one and sounds exactly like a sort bug.
+function qdWrite(body) {
+  const dest = String(body?.dest || "");
+  if (!volumes().includes(dest)) return { ok: false, output: `${dest || "(none)"} is not a mounted volume` };
+  const ours = qdUsage(QD_CARD).folders;
+  if (!ours.length) return { ok: false, output: "the QuadDrum card is empty — send some sets to it first" };
+  const there = qdUsage(dest).folders;
+  const id = (n) => n.replace(/^\d+_/, "").replace(/_RANDOM$/, "");
+  const clash = ours.filter((o) => there.some((t) => id(t.name) === id(o.name)));
+  if (clash.length && !body.replace)
+    return { ok: false, output: `already on ${dest}: ${clash.map((c) => c.name).join(", ")} — replace to overwrite them` };
+  const keep = there.filter((t) => !ours.some((o) => id(o.name) === id(t.name)));
+  const folders = keep.length + ours.length;
+  const files = keep.reduce((a, f) => a + f.files, 0) + ours.reduce((a, f) => a + f.files, 0);
+  if (folders > QD_LIMITS.folders || files > QD_LIMITS.files)
+    return { ok: false, output: `${dest} would hold ${folders} folders and ${files} files; the module reads ${QD_LIMITS.folders} and ${QD_LIMITS.files}` };
+  // Our numbers go after the card's own, so vpme's folders keep their order.
+  let next = Math.max(0, ...keep.map((t) => parseInt(t.name, 10) || 0)) + 1;
+  const lines = [];
+  const written = [];
+  for (const o of ours) {
+    for (const t of there.filter((t) => id(t.name) === id(o.name)))
+      fs.rmSync(path.join(dest, t.name), { recursive: true, force: true });
+    const named = `${String(next++).padStart(2, "0")}_${o.name.replace(/^\d+_/, "")}`;
+    fs.cpSync(path.join(QD_CARD, o.name), path.join(dest, named), { recursive: true });
+    written.push(named);
+    lines.push(`${o.name} → ${named} (${o.files})`);
+  }
+  // `dot_clean -m` is no use here: on FAT it merges the sidecar back into
+  // the only place FAT can keep extended attributes, which is a new sidecar.
+  // Measured on a FAT image: every file still had its `._` twin afterwards.
+  // So they are deleted, in our folders and beside them, and nowhere else.
+  let swept = 0;
+  const sweep = (f) => { try { fs.unlinkSync(f); swept++; } catch { /* gone is fine */ } };
+  for (const w of written) {
+    sweep(path.join(dest, `._${w}`));
+    for (const f of fs.readdirSync(path.join(dest, w))) if (f.startsWith("._")) sweep(path.join(dest, w, f));
+  }
+  const left = written.reduce((a, w) =>
+    a + fs.readdirSync(path.join(dest, w)).filter((f) => f.startsWith("._")).length, 0);
+  if (left) lines.push(`${left} macOS sidecar files came back \u2014 run dot_clean before ejecting`);
+  return { ok: true, output: `${lines.join(", ")} — ${folders} of ${QD_LIMITS.folders} folders, ${files} of ${QD_LIMITS.files} files. Power the module down before you take the card out.`, card: qdUsage(QD_CARD) };
 }
 
 function run(args) {
@@ -2684,6 +2825,17 @@ const server = http.createServer(async (req, res) => {
       const body = await readBody(req);
       return json(res, 200, dropSets(body?.names));
     }
+    // Send to · Arbhar, · QuadDrum. See `setToArbhar`, `setToQuadDrum`.
+    if (url.pathname === "/api/arbhar/set" && req.method === "POST")
+      return json(res, 200, await setToArbhar(await readBody(req)));
+    if (url.pathname === "/api/qd" && req.method === "GET")
+      return json(res, 200, { ok: true, card: qdUsage(QD_CARD) });
+    if (url.pathname === "/api/qd/add" && req.method === "POST")
+      return json(res, 200, await setToQuadDrum(await readBody(req)));
+    if (url.pathname === "/api/qd/drop" && req.method === "POST")
+      return json(res, 200, qdDrop(await readBody(req)));
+    if (url.pathname === "/api/qd/write" && req.method === "POST")
+      return json(res, 200, qdWrite(await readBody(req)));
     // Send to · tape. See `projectTape`.
     if (url.pathname === "/api/tape" && req.method === "POST") {
       const body = await readBody(req);
