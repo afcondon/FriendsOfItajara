@@ -43,6 +43,8 @@ import Prelude
 
 import Control.Monad.Rec.Class (forever)
 import Data.Array as Array
+import Data.Map as Map
+import Data.Tuple (Tuple(..))
 import Data.Foldable (for_, sum)
 import Data.Int as Int
 import Data.Either (Either(..), either)
@@ -5773,8 +5775,12 @@ render st =
   -- library: a collision you cannot see cannot mislead you, and naming every
   -- row against sets the filter has hidden would put the timestamps straight
   -- back.
-  ambiguous r =
-    Array.length (Array.filter (\x -> labelOf x == labelOf r) shownSets) > 1
+  -- Counted once per render: comparing each row with every other, deriving both
+  -- labels each time, was a quarter of this page's idle CPU.
+  ambiguous r = fromMaybe 0 (Map.lookup (labelOf r) labelCounts) > 1
+
+  labelCounts :: Map.Map String Int
+  labelCounts = Map.fromFoldableWith (+) (map (\x -> Tuple (labelOf x) 1) shownSets)
 
   -- | **Only the part that differs.** Two sets wearing one rebus are two takes
   -- | of the same progression, so their names share everything but the last
