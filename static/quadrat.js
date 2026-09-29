@@ -19924,7 +19924,7 @@
       }
       ;
       if (!st.midiOk) {
-        return new Just("this page has no Web MIDI (it needs a secure origin \u2014 try http://localhost:3029), so this set will say nothing about what was played. That cannot be added later.");
+        return new Just("this page has no Web MIDI (it needs a secure origin \u2014 try http://localhost:3023/quadrat.html), so this set will say nothing about what was played. That cannot be added later.");
       }
       ;
       if ($$null2(st.midiIn)) {
@@ -21726,7 +21726,7 @@
       }
       ;
       if (!st.midiOk) {
-        return p([class_("q-clash is-soft")])([text5("this page has no Web MIDI, so nothing can be recorded about what you play. The browser only offers it on a secure origin \u2014 open the page as http://localhost:3029 rather than by the machine's name, and the ports appear.")]);
+        return p([class_("q-clash is-soft")])([text5("this page has no Web MIDI, so nothing can be recorded about what you play. The browser only offers it on a secure origin \u2014 open the page as http://localhost:3023/quadrat.html rather than by the machine's name, and the ports appear.")]);
       }
       ;
       if ($$null2(st.midiIn)) {

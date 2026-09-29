@@ -4279,7 +4279,7 @@ render st =
         HH.p [ HP.class_ (HH.ClassName "q-clash is-soft") ]
           [ HH.text "this page has no Web MIDI, so nothing can be recorded \
                     \about what you play. The browser only offers it on a \
-                    \secure origin — open the page as http://localhost:3029 \
+                    \secure origin — open the page as http://localhost:3023/quadrat.html \
                     \rather than by the machine's name, and the ports appear." ]
     | Array.null st.midiIn =
         HH.p [ HP.class_ (HH.ClassName "q-clash is-soft") ]
@@ -6520,7 +6520,7 @@ render st =
     | Maybe.isJust st.opened = Nothing
     | not st.midiOk =
         Just "this page has no Web MIDI (it needs a secure origin — try \
-             \http://localhost:3029), so this set will say nothing about \
+             \http://localhost:3023/quadrat.html), so this set will say nothing about \
              \what was played. That cannot be added later."
     | Array.null st.midiIn =
         Just "no MIDI reached the page, so this set will say nothing about \
