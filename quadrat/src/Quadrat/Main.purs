@@ -39,6 +39,7 @@
 -- | and those four verbs are exactly what capture removed.
 module Quadrat.Main where
 
+import Quadrat.Bus as Bus
 import Prelude
 
 import Control.Monad.Rec.Class (forever)
@@ -971,6 +972,7 @@ handleAction = case _ of
     H.modify_ _ { srcNames = either (const []) identity lab }
     handleAction RefreshCard
     liftEffect $ Socket.connect Socket.defaultUrl
+    liftEffect Bus.start
     void $ H.subscribe $ HS.makeEmitter \emit -> do
       fiber <- Aff.launchAff $ forever do
         delay (Milliseconds 100.0)
@@ -978,6 +980,7 @@ handleAction = case _ of
       pure (Aff.launchAff_ (Aff.killFiber (Aff.error "stopped") fiber))
   Poll -> do
     before <- H.get
+    liftEffect (Bus.setArmed before.armed)
     -- The sparkline's history. Capped here rather than at render, so the
     -- array cannot grow without bound over a long session.
     H.modify_ \s0 ->
