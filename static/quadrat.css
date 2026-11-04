@@ -1707,3 +1707,31 @@ body {
 .q-planbtn:hover:not(:disabled) { color: inherit; border-color: #999; }
 .q-planbtn:disabled { opacity: 0.3; cursor: default; }
 .q-planrow .q-reelstrip { grid-column: 1 / -1; margin: 2px 0 0; }
+
+/* **Jam**: one source, recorded to disk for as long as it plays. One row of
+   choices and a button, then a status line; nothing else on the page, because
+   while a jam runs the thing to look at is the clock. */
+.q-jam { max-width: 960px; padding-top: 22px; }
+.q-jam .q-note { margin-bottom: 18px; }
+.q-jam-row { display: flex; align-items: center; flex-wrap: wrap; gap: 18px; }
+.q-jam-field { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+.q-jam-field span { color: var(--muted); }
+.q-jam-field select, .q-jam-field input {
+  padding: 6px 9px; border: 1px solid var(--rule); border-radius: 3px; font: inherit; background: #fff;
+}
+.q-jam-field input { width: 220px; }
+.q-jam-meter {
+  display: inline-block; width: 140px; height: 8px; background: var(--rule); border-radius: 2px; overflow: hidden;
+}
+.q-jam-level { display: block; height: 100%; background: var(--live); }
+.q-jam-go {
+  padding: 8px 22px; border: 1px solid var(--ink); border-radius: 3px; background: #fff;
+  font: inherit; font-weight: 600; cursor: pointer;
+}
+.q-jam-go.is-on { background: var(--hot); border-color: var(--hot); color: #fff; }
+.q-jam-go:disabled { opacity: 0.4; cursor: default; }
+.q-jam-status { display: flex; align-items: baseline; flex-wrap: wrap; gap: 14px; margin-top: 22px; font-size: 14px; }
+.q-jam-status.is-on .q-jam-clock { color: var(--hot); }
+.q-jam-clock { font-size: 34px; font-weight: 300; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.q-jam-status code { font-size: 13px; padding: 2px 6px; background: #fff; border: 1px solid var(--rule); border-radius: 3px; }
+.q-jam .q-warn { margin: 12px 0 0; }

@@ -10,7 +10,7 @@
 -- | and when. `chord-hits-0909-115143`. It sorts, it says what it holds, it
 -- | cannot collide with yesterday's, and it is still a plain editable string
 -- | for when you would rather call it something.
-module Quadrat.Slug (slugFor) where
+module Quadrat.Slug (slugFor, stamped) where
 
 import Prelude
 
@@ -27,3 +27,9 @@ slugFor :: Kind -> Effect String
 slugFor k = do
   t <- _stamp
   pure (Kind.name k <> "-" <> t)
+
+-- | `<prefix>-<MMDD>-<HHMMSS>`, for a take that is not of a `Kind`: a jam.
+stamped :: String -> Effect String
+stamped prefix = do
+  t <- _stamp
+  pure (prefix <> "-" <> t)

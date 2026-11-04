@@ -59,7 +59,7 @@ import Data.String.Common (joinWith)
 -- `Bars` names a thing in both vocabularies — a length in the daemon's verbs
 -- and a kind of material here — so the verbs come in by name and the kinds
 -- through `Kind.`.
-import Data.Looper.Verb (Verb(Capture, CaptureArm, CaptureBars, CapturePeaks, CaptureQuantise, CaptureStop, EndCapture, WriteCapture))
+import Data.Looper.Verb (Verb(Capture, CaptureArm, CaptureBars, CapturePeaks, CaptureQuantise, CaptureStop, EndCapture, EndJam, Jam, NameJam, WriteCapture))
 import Data.Looper.Verb as Verb
 import Effect (Effect)
 import Effect.Aff (Milliseconds(..), attempt, delay)
@@ -91,7 +91,8 @@ import Quadrat.Tidal as Tidal
 import Quadrat.Wave as Wave
 import Quadrat.Kind (Close(..), Fold(..), Kind)
 import Quadrat.Kind as Kind
-import Quadrat.Slug (slugFor)
+import Quadrat.Slug (slugFor, stamped)
+import Quadrat.JamView as JamView
 import Quadrat.Divider (Divider)
 import Quadrat.Divider as Divider
 import Quadrat.Rig as Rig
@@ -114,7 +115,7 @@ main = HA.runHalogenAff do
 -- | allows, with nobody present, and it fails *silently*. They want different
 -- | things on screen and they are never done at the same moment, so they are
 -- | two pages and not two panels.
-data Page = Bench | Library
+data Page = Bench | Library | JamPage
 
 derive instance Eq Page
 
@@ -469,6 +470,8 @@ type State =
   -- | "no ports" and "no API" look identical from the page and want opposite
   -- | remedies.
   , midiOk :: Boolean
+  -- | The next jam's source and name (`Quadrat.JamView`).
+  , jam :: JamView.Choice
   }
 
 -- | The two panels that became modals.
@@ -631,6 +634,10 @@ data Action
   | SetLead String
   | RefreshSets
   | GoTo Page
+  | SetJamName String
+  | SetJamSource String
+  | StartJam
+  | StopJam
   | FillBy Fill
   | PickSource String
   | OpenPivot (Maybe Int)
@@ -718,7 +725,7 @@ component = H.mkComponent
       , shownSecs: Nothing, audio: Nothing, audioBusy: false
       , placeSliced: false, placeLayers: 0, placeVoices: 0
       , placeAppend: false, srcNames: []
-      , heard: [], midiIn: [], midiOk: true }
+      , heard: [], midiIn: [], midiOk: true, jam: { source: "", name: "" } }
   , render
   , eval: H.mkEval H.defaultEval { handleAction = handleAction, initialize = Just Init }
   }
@@ -2119,6 +2126,21 @@ handleAction = case _ of
   -- | the first time, and a permission dialog appearing in the middle of a run
   -- | would cost the take.
   GoTo pg -> H.modify_ _ { page = pg }
+  SetJamName v -> H.modify_ \s0 -> s0 { jam = s0.jam { name = v } }
+  SetJamSource v -> H.modify_ \s0 -> s0 { jam = s0.jam { source = v } }
+  -- | **Name it, then start it.** An empty name is stamped now, as a take's
+  -- | is, so a jam can never land on another; the field is cleared after, so
+  -- | the next jam gets its own stamp rather than this one's name.
+  StartJam -> do
+    st <- H.get
+    case st.looper >>= \rig -> JamView.sourceIndex rig st.jam.source of
+      Nothing -> H.modify_ (note "no source to jam from")
+      Just src -> do
+        name <- if String.trim st.jam.name == "" then liftEffect (stamped "jam") else pure (String.trim st.jam.name)
+        send (NameJam name)
+        send (Jam src)
+        H.modify_ \s0 -> s0 { jam = s0.jam { name = "" } }
+  StopJam -> send EndJam
   -- | **The input is part of the plan now**, so it survives a reload like
   -- | every other choice. It was page state and reset to the first available
   -- | source every time the page loaded — which is how a transect went to
@@ -3727,6 +3749,7 @@ render st =
         , HH.nav [ HP.class_ (HH.ClassName "q-nav") ]
             [ pageTab Bench "Bench" "cut a transect and look at what came back"
             , pageTab Library "Library" "every set kept, re-runnable, and where it can go"
+            , pageTab JamPage "Jam" "record a source to disk for as long as it plays"
             ]
         , HH.span [ HP.class_ (HH.ClassName "q-sub") ] [ HH.text tagline ]
         , connection
@@ -3852,6 +3875,11 @@ render st =
         -- | this only goes one way. The card is compiled from the library and
         -- | never edited; nothing comes back, so there are no arrows and no
         -- | second direction to choose.
+        JamPage ->
+          JamView.view
+            { setName: SetJamName, setSource: SetJamSource, start: StartJam, stop: StopJam }
+            st.jam
+            st.looper
         Library ->
           HH.div [ HP.class_ (HH.ClassName "q-panes") ]
             [ HH.div [ HP.class_ (HH.ClassName "q-pane is-library") ] [ setsView ]
@@ -4833,6 +4861,7 @@ render st =
   tagline = case st.page of
     Bench -> "sample an instrument at chosen points"
     Library -> "what has been kept, and where it can go"
+    JamPage -> "record a source for as long as it plays"
 
   pageTab pg label why =
     HH.button
