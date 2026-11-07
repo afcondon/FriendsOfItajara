@@ -751,6 +751,7 @@ component = H.mkComponent
       , twisterPage: Loop.initial.twisterPage
       , twisterHeardBank: Loop.initial.twisterHeardBank
       , twisterFollow: Loop.initial.twisterFollow
+      , looperSaveName: Loop.initial.looperSaveName
       }
   , render
   , eval: H.mkEval H.defaultEval { handleAction = handleAction, initialize = Just Init }

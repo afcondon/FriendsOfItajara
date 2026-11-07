@@ -55,6 +55,7 @@ import Data.Looper.Press as Press
 import Data.Looper.Switchboard as Switchboard
 import Data.Looper.Twister as LoopTwister
 import Data.Looper.TwisterHolder as TwisterHolder
+import Data.Looper.Verb as Verb
 import Data.Map (Map)
 import Data.Map as Map
 import Data.Maybe (Maybe(..), isJust, maybe)
@@ -121,6 +122,7 @@ type Fields r =
   -- | page hears what is sent *to* the Twister, never what it sends.
   , twisterHeardBank :: Maybe Int
   , twisterFollow :: Follow
+  , looperSaveName :: String
   | r
   )
 
@@ -142,6 +144,7 @@ initial
      , twisterPage :: Int
      , twisterHeardBank :: Maybe Int
      , twisterFollow :: Follow
+     , looperSaveName :: String
      }
 initial =
   { looperStatus: { connected: false, everConnected: false, lastError: "", url: "" }
@@ -159,6 +162,7 @@ initial =
   , twisterPage: 0
   , twisterHeardBank: Nothing
   , twisterFollow: NotAsked
+  , looperSaveName: ""
   }
 
 -- | Every action the page can cause, plus the hub's two answers.
@@ -183,6 +187,9 @@ data Msg
   | ShiftStart Int Int
   | AskPeaks Int
   | EditDone String
+  | SetSaveName String
+  -- | Save the loop in hand under this name (empty: the looper names it).
+  | Save String
   | HubAnswered (Either String MIDIAccess)
   | TwisterSent String (Array Int)
   | PortsChanged
@@ -298,6 +305,14 @@ handle wrap = case _ of
   -- afresh even for the loop it showed last time.
   OpenPanel which -> H.modify_ _ { looperPanel = which, looperPeaksKey = "" }
   Gesture cc -> pedal cc 127
+  SetSaveName name -> H.modify_ _ { looperSaveName = name }
+  -- Through `runAction` like every other command; the daemon's answer (the
+  -- folder, or "there is already a take called ...") comes back in the log.
+  -- The field empties so the next save is not the same name by accident.
+  Save name -> do
+    st <- H.get
+    runAction 0.0 (Machine.Command (Verb.at st.looperFocus (Verb.SaveTake name)))
+    H.modify_ _ { looperSaveName = "" }
   -- Set from the wanted state, never flipped: the daemon's own flip is how
   -- two surfaces came to disagree about the click.
   SetClick wanted -> pedal 81 (if wanted then 127 else 0)
@@ -454,6 +469,8 @@ view wrap st = Page.render handlers ports extras st
     , clearLayerWindow: \loop layer -> wrap (ClearLayerWindow loop layer)
     , editDone: wrap <<< EditDone
     , waveDrag: Nothing
+    , setSaveName: wrap <<< SetSaveName
+    , save: wrap <<< Save
     }
 
   following = case st.twisterFollow of
