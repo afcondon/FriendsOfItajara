@@ -67,7 +67,7 @@ import Effect.Aff as Aff
 import Effect.Aff.Class (class MonadAff)
 import Effect.Class (liftEffect)
 import Effect.Ref as Ref
-import Foreign.LooperSocket (Capture, LooperState)
+import Foreign.LooperSocket (Capture)
 import Foreign.LooperSocket as Socket
 import Halogen as H
 import Halogen.Aff as HA
@@ -93,6 +93,7 @@ import Quadrat.Kind (Close(..), Fold(..), Kind)
 import Quadrat.Kind as Kind
 import Quadrat.Slug (slugFor, stamped)
 import Quadrat.JamView as JamView
+import Quadrat.Loop as Loop
 import Quadrat.Divider (Divider)
 import Quadrat.Divider as Divider
 import Quadrat.Rig as Rig
@@ -115,7 +116,12 @@ main = HA.runHalogenAff do
 -- | allows, with nobody present, and it fails *silently*. They want different
 -- | things on screen and they are never done at the same moment, so they are
 -- | two pages and not two panels.
-data Page = Bench | Library | JamPage
+-- |
+-- | `LoopPage` is the other use of the same daemon: playing it as a looper,
+-- | with the page PWYF draws (see `Quadrat.Loop`). A page rather than a mode
+-- | of the Bench, because capturing and looping are opposite uses of one
+-- | daemon and the Bench was built on keeping them apart.
+data Page = Bench | Library | JamPage | LoopPage
 
 derive instance Eq Page
 
@@ -133,8 +139,7 @@ derive instance Eq Fill
 type PlanItem = { name :: String, reel :: Maybe Http.Reel }
 
 type State =
-  { looper :: Maybe LooperState
-  , kind :: Kind
+  { kind :: Kind
   , bars :: Int
   , armed :: Boolean
   -- | **This capture has been seen running** since it was armed. Until then a
@@ -472,6 +477,9 @@ type State =
   , midiOk :: Boolean
   -- | The next jam's source and name (`Quadrat.JamView`).
   , jam :: JamView.Choice
+  -- | The Loop page's own fields, the daemon's snapshot (`looper`) among them:
+  -- | see `Quadrat.Loop.Fields`.
+  | Loop.Fields ()
   }
 
 -- | The two panels that became modals.
@@ -634,6 +642,8 @@ data Action
   | SetLead String
   | RefreshSets
   | GoTo Page
+  -- | Anything the Loop page does (`Quadrat.Loop`).
+  | LoopMsg Loop.Msg
   | SetJamName String
   | SetJamSource String
   | StartJam
@@ -725,7 +735,23 @@ component = H.mkComponent
       , shownSecs: Nothing, audio: Nothing, audioBusy: false
       , placeSliced: false, placeLayers: 0, placeVoices: 0
       , placeAppend: false, srcNames: []
-      , heard: [], midiIn: [], midiOk: true, jam: { source: "", name: "" } }
+      , heard: [], midiIn: [], midiOk: true, jam: { source: "", name: "" }
+      , looperStatus: Loop.initial.looperStatus
+      , looperSnapshotAge: Loop.initial.looperSnapshotAge
+      , looperFocus: Loop.initial.looperFocus
+      , looperSelectedSeen: Loop.initial.looperSelectedSeen
+      , looperShowsSlots: Loop.initial.looperShowsSlots
+      , looperPanel: Loop.initial.looperPanel
+      , looperPeaks: Loop.initial.looperPeaks
+      , looperPeaksKey: Loop.initial.looperPeaksKey
+      , looperEditLocal: Loop.initial.looperEditLocal
+      , looperBankShown: Loop.initial.looperBankShown
+      , looperLog: Loop.initial.looperLog
+      , looperAckSeq: Loop.initial.looperAckSeq
+      , twisterPage: Loop.initial.twisterPage
+      , twisterHeardBank: Loop.initial.twisterHeardBank
+      , twisterFollow: Loop.initial.twisterFollow
+      }
   , render
   , eval: H.mkEval H.defaultEval { handleAction = handleAction, initialize = Just Init }
   }
@@ -999,7 +1025,16 @@ handleAction = case _ of
     when back (handleAction FetchDeclared)
     snap <- liftEffect Socket.latest
     pk <- liftEffect Socket.latestPeaks
-    H.modify_ _ { looper = snap, peaks = pk }
+    -- **Two kinds of picture share one slot on the socket**: a capture's
+    -- (`loop` is -1) and a loop's, asked for by the Loop page's Edit panel or
+    -- by any other surface on the daemon. The capture's is this page's; a
+    -- loop's goes to the Loop page and must not be drawn as a take.
+    H.modify_ _ { looper = snap
+                , peaks = case pk of
+                    Just p | p.loop >= 0 -> before.peaks
+                    _ -> pk
+                }
+    Loop.poll before.looper pk
     -- | **Write the default down.** An unset source resolves to the first
     -- | available one, which is the right behaviour and a bad record: a set
     -- | saved that way says it was recorded from "", when the one question
@@ -2125,7 +2160,10 @@ handleAction = case _ of
   -- | Asked once, on opening, rather than at Run: `requestMIDIAccess` prompts
   -- | the first time, and a permission dialog appearing in the middle of a run
   -- | would cost the take.
-  GoTo pg -> H.modify_ _ { page = pg }
+  GoTo pg -> do
+    H.modify_ _ { page = pg }
+    when (pg == LoopPage) (Loop.start LoopMsg)
+  LoopMsg msg -> Loop.handle LoopMsg msg
   SetJamName v -> H.modify_ \s0 -> s0 { jam = s0.jam { name = v } }
   SetJamSource v -> H.modify_ \s0 -> s0 { jam = s0.jam { source = v } }
   -- | **Name it, then start it.** An empty name is stamped now, as a take's
@@ -3750,6 +3788,7 @@ render st =
             [ pageTab Bench "Bench" "cut a transect and look at what came back"
             , pageTab Library "Library" "every set kept, re-runnable, and where it can go"
             , pageTab JamPage "Jam" "record a source to disk for as long as it plays"
+            , pageTab LoopPage "Loop" "play the looper from here: the loops, their layers, the Edit panel"
             ]
         , HH.span [ HP.class_ (HH.ClassName "q-sub") ] [ HH.text tagline ]
         , connection
@@ -3880,6 +3919,7 @@ render st =
             { setName: SetJamName, setSource: SetJamSource, start: StartJam, stop: StopJam }
             st.jam
             st.looper
+        LoopPage -> Loop.view LoopMsg st
         Library ->
           HH.div [ HP.class_ (HH.ClassName "q-panes") ]
             [ HH.div [ HP.class_ (HH.ClassName "q-pane is-library") ] [ setsView ]
@@ -4862,6 +4902,7 @@ render st =
     Bench -> "sample an instrument at chosen points"
     Library -> "what has been kept, and where it can go"
     JamPage -> "record a source for as long as it plays"
+    LoopPage -> "play the looper: the loops, their layers, the Edit panel"
 
   pageTab pg label why =
     HH.button

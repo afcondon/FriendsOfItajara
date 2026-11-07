@@ -32,8 +32,11 @@ package:
     - foldable-traversable
     - halogen
     - halogen-subscriptions
+    - helm
     - integers
     - itajara-client
+    - itajara-controllers
+    - itajara-surface
     - maybe
     - nullable
     - numbers

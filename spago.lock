@@ -44,8 +44,11 @@
             "foldable-traversable",
             "halogen",
             "halogen-subscriptions",
+            "helm",
             "integers",
             "itajara-client",
+            "itajara-controllers",
+            "itajara-surface",
             "maybe",
             "nullable",
             "numbers",
@@ -714,8 +717,14 @@
       }
     },
     "extra_packages": {
+      "helm": {
+        "path": "../helm"
+      },
       "itajara-client": {
         "path": "../itajara/client"
+      },
+      "itajara-controllers": {
+        "path": "../itajara/controllers"
       },
       "itajara-surface": {
         "path": "../itajara/surface"
@@ -1189,6 +1198,27 @@
         "web-events"
       ]
     },
+    "helm": {
+      "type": "local",
+      "path": "../helm",
+      "dependencies": [
+        "aff",
+        "arrays",
+        "effect",
+        "either",
+        "exceptions",
+        "foldable-traversable",
+        "integers",
+        "js-timers",
+        "maybe",
+        "nullable",
+        "ordered-collections",
+        "prelude",
+        "refs",
+        "strings",
+        "tuples"
+      ]
+    },
     "identity": {
       "type": "registry",
       "version": "6.0.0",
@@ -1234,6 +1264,30 @@
         "strings"
       ]
     },
+    "itajara-controllers": {
+      "type": "local",
+      "path": "../itajara/controllers",
+      "dependencies": [
+        "aff",
+        "arrays",
+        "console",
+        "effect",
+        "either",
+        "exceptions",
+        "foldable-traversable",
+        "helm",
+        "integers",
+        "itajara-client",
+        "js-timers",
+        "maybe",
+        "nullable",
+        "ordered-collections",
+        "prelude",
+        "refs",
+        "strings",
+        "tuples"
+      ]
+    },
     "itajara-surface": {
       "type": "local",
       "path": "../itajara/surface",
@@ -1242,6 +1296,7 @@
         "halogen",
         "integers",
         "itajara-client",
+        "itajara-controllers",
         "maybe",
         "numbers",
         "ordered-collections",
@@ -1276,6 +1331,15 @@
         "functions",
         "maybe",
         "newtype",
+        "prelude"
+      ]
+    },
+    "js-timers": {
+      "type": "registry",
+      "version": "6.1.0",
+      "integrity": "sha256-mYEL4zjFOzrDeVCnR9Hg3pcZaBZilB6zPGaZ4fzRmzg=",
+      "dependencies": [
+        "effect",
         "prelude"
       ]
     },
