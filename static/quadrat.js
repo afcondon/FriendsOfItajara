@@ -15631,13 +15631,18 @@
         portType: p2 && p2.type ? String(p2.type) : ""
       });
     };
-    access2.onstatechange = cb;
-    return () => {
-      if (access2.onstatechange === cb) access2.onstatechange = null;
-    };
+    access2.addEventListener("statechange", cb);
+    return () => access2.removeEventListener("statechange", cb);
   };
   var requestHubAccessImpl = (url, client, waitMs, onOk, onFail) => {
     const access2 = { inputs: /* @__PURE__ */ new Map(), outputs: /* @__PURE__ */ new Map(), onstatechange: null, sysexEnabled: true };
+    const stateListeners = /* @__PURE__ */ new Set();
+    access2.addEventListener = (type, k) => {
+      if (type === "statechange") stateListeners.add(k);
+    };
+    access2.removeEventListener = (type, k) => {
+      if (type === "statechange") stateListeners.delete(k);
+    };
     access2.claims = {};
     const claimed = /* @__PURE__ */ new Set();
     const say = (msg) => {
@@ -15676,7 +15681,9 @@
     let failed = false;
     let warned = false;
     const fire = (port3) => {
-      if (access2.onstatechange) access2.onstatechange({ port: port3 });
+      const ev = { port: port3 };
+      if (access2.onstatechange) access2.onstatechange(ev);
+      Array.from(stateListeners).forEach((k) => k(ev));
     };
     const makeInput = (id2, name19) => ({ id: id2, name: name19, type: "input", state: "connected", connection: "open", onmidimessage: null });
     const makeOutput = (id2, name19) => ({
