@@ -283,7 +283,10 @@ handle wrap = case _ of
   -- looper's process holds the switches: this press never reached a wire, so
   -- nothing else will answer it.
   Simulate slot switch gesture ->
-    case LoopBanks.decodeSwitch LoopBanks.switchChannel
+    -- On the default channel at both ends: this press never touches a wire,
+    -- so there is no setting for it to disagree with.
+    case LoopBanks.decodeSwitch LoopBanks.defaultSwitchChannel
+           (LoopBanks.switchChannelNumber LoopBanks.defaultSwitchChannel)
            (LoopBanks.switchCC slot switch) (LoopBanks.gestureValue gesture) of
       Nothing -> note ("the board has no " <> LoopBanks.gestureName gesture
                          <> " on that switch")
