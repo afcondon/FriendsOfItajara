@@ -755,14 +755,14 @@ body {
   .q-say .hw-statement-gauge { justify-self: start; }
 }
 
-/* ── Every recording page: two thirds and one third (Quadrat.Layout) ──────
+/* ── Every recording page: three quarters and one quarter (Quadrat.Layout) ─
    Andrew's drawing, 2026-11-08. The main column's head is the statement and
    the meter, in the same place on Bench, Jam and Loop; the side column holds
    the secondary controls and scrolls on its own, held in view while the main
    column scrolls. */
 .q-layout {
   display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 3fr) minmax(0, 1fr);
   gap: 0 32px; align-items: start;
 }
 .q-layout-side {
@@ -771,7 +771,7 @@ body {
   padding: 32px 0 32px 24px;
   border-left: 1px solid var(--rule);
 }
-/* Narrow enough that a third is not a column: the side goes under. */
+/* Narrow enough that a quarter is not a column: the side goes under. */
 @media (max-width: 1000px) {
   .q-layout { grid-template-columns: minmax(0, 1fr); }
   .q-layout-side { position: static; max-height: none; border-left: 0; padding-left: 0;

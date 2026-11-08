@@ -1,6 +1,6 @@
 -- | **Every recording page, one shape.** Andrew's drawing, 2026-11-08: under
--- | the title, a main column two thirds wide whose head is the page's
--- | statement with the input meter beside it, and a side column a third wide
+-- | the title, a main column three quarters wide whose head is the page's
+-- | statement with the input meter beside it, and a side column a quarter wide
 -- | for the secondary controls, which scrolls on its own.
 -- |
 -- | The statement and meter are in the same place on Bench, Jam and Loop, so

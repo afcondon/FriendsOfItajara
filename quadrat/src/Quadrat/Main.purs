@@ -3866,7 +3866,7 @@ render st =
         -- | they move up against the acts — Andrew, 2026-09-12 — and the
         -- | grid keeps the bottom of the page, where it is the answer rather
         -- | than the question.
-        -- | **Andrew's 2/3 + 1/3** (`Quadrat.Layout`), 2026-11-08: the
+        -- | **Andrew's 3/4 + 1/4** (`Quadrat.Layout`), 2026-11-08: the
         -- | statement and meter head the main column, as on every recording
         -- | page, and the parameter sweeps take the side column, where they
         -- | scroll on their own. The take stays under the acts.
