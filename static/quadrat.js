@@ -19157,7 +19157,7 @@
               })])([text5("Save")])]);
             }
             ;
-            throw new Error("Failed pattern match at Itajara.Surface.Looper.Page (line 410, column 13 - line 433, column 12): " + [v.constructor.name]);
+            throw new Error("Failed pattern match at Itajara.Surface.Looper.Page (line 414, column 13 - line 437, column 12): " + [v.constructor.name]);
           })();
           var recipeStep = function(s) {
             return li_(append111([(function() {
@@ -19176,7 +19176,7 @@
                 return [span3([class_("recipe-expect")])([text5(s.expect.value0)])];
               }
               ;
-              throw new Error("Failed pattern match at Itajara.Surface.Looper.Page (line 300, column 14 - line 304, column 96): " + [s.expect.constructor.name]);
+              throw new Error("Failed pattern match at Itajara.Surface.Looper.Page (line 304, column 14 - line 308, column 96): " + [s.expect.constructor.name]);
             })()));
           };
           var recipeCard = function(r) {
@@ -19189,7 +19189,7 @@
                 return [p([class_("recipe-note")])([text5(r.note.value0)])];
               }
               ;
-              throw new Error("Failed pattern match at Itajara.Surface.Looper.Page (line 289, column 14 - line 291, column 91): " + [r.note.constructor.name]);
+              throw new Error("Failed pattern match at Itajara.Surface.Looper.Page (line 293, column 14 - line 295, column 91): " + [r.note.constructor.name]);
             })()));
           };
           var reading2 = function(label9) {
@@ -19277,7 +19277,7 @@
               })())(false), twisterReading];
             }
             ;
-            throw new Error("Failed pattern match at Itajara.Surface.Looper.Page (line 472, column 14 - line 514, column 10): " + [state4.looper.constructor.name]);
+            throw new Error("Failed pattern match at Itajara.Surface.Looper.Page (line 476, column 14 - line 518, column 10): " + [state4.looper.constructor.name]);
           })();
           var modal = function(klass2) {
             return function(title4) {
@@ -19333,14 +19333,14 @@
             }
             ;
             if (state4.looperPanel instanceof Just && state4.looperPanel.value0 instanceof PanelEdit) {
-              return modal("is-edit")("Edit \u2014 loop " + show24(state4.looperFocus + 1 | 0))([editPanel2]);
+              return modal("is-edit")("Edit \u2014 loop " + show24(state4.looperFocus + 1 | 0))([editPanel2, saveRow]);
             }
             ;
             if (state4.looperPanel instanceof Just && state4.looperPanel.value0 instanceof PanelRecipes) {
               return modal("")("Recipes \u2014 what to press, and what should happen")([div3([class_("recipes")])(append111([p([class_("recipes-preamble")])([text5(preamble)])])(map39(recipeCard)(recipes)))]);
             }
             ;
-            throw new Error("Failed pattern match at Itajara.Surface.Looper.Page (line 251, column 11 - line 279, column 10): " + [state4.looperPanel.constructor.name]);
+            throw new Error("Failed pattern match at Itajara.Surface.Looper.Page (line 251, column 11 - line 283, column 10): " + [state4.looperPanel.constructor.name]);
           })();
           var connectionLine = (function() {
             var stale = state4.looperSnapshotAge > 1e3;
@@ -19379,7 +19379,7 @@
                   })])([text5("\u2315")])];
                 }
                 ;
-                throw new Error("Failed pattern match at Itajara.Surface.Looper.Page (line 366, column 14 - line 376, column 16): " + [loupe.constructor.name]);
+                throw new Error("Failed pattern match at Itajara.Surface.Looper.Page (line 370, column 14 - line 380, column 16): " + [loupe.constructor.name]);
               })()));
             };
           };
@@ -19420,7 +19420,7 @@
           return {
             readings: div3([class_("looper-status-row")])(readings),
             notices: [connectionLine, audioLine],
-            main: [saveRow, (function() {
+            main: [(function() {
               if (state4.looper instanceof Just) {
                 return render3({
                   onLayer: h.setLayer,
