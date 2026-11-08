@@ -50,6 +50,10 @@ type Clip =
   , kind :: String
   , rebus :: String
   , key :: String         -- e.g. "C Ionian"; "" when unknown
+  -- | **The chords that leave that key**, by index from zero, as the
+  -- | publisher checked them (Harmonia's `ProgressionKey`). The key is the one
+  -- | the progression was written in, not a promise every chord keeps to it.
+  , outside :: Array Int
   , onsets :: Array Number
   , chords :: Array (Array Int)
   -- | How long each chord is held, in ms, as the publisher declared it. A

@@ -93,6 +93,13 @@ export const fetchDeclaredImpl = (onError) => (onSuccess) => () => {
               kind: tag(label.tags, "kind:"),
               rebus: tag(label.tags, "rebus:"),
               key: tag(label.tags, "key:") || clip.key || "",
+              // The chords (from zero) whose notes leave that key, as Vetula
+              // checked them. Absent means none did, or nobody checked.
+              outside: tag(label.tags, "outside:")
+                .split(",")
+                .filter((x) => x !== "")
+                .map((x) => parseInt(x, 10))
+                .filter((n) => !isNaN(n)),
               onsets: groups.map((g) => g.at),
               chords: groups.map((g) => g.notes),
               gates: groups.map((g) => g.gate),

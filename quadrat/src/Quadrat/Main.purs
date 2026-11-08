@@ -1193,7 +1193,9 @@ handleAction = case _ of
           , kind = k
           , divider = Divider.defaultFor k
           , sweep = st.sweep
-              { centre = fromMaybe st.sweep.centre (centreOfKey c.key)
+              -- A keyless clip declares no centre, so the set has none: the
+              -- Bench's centre is not the clip's.
+              { centre = fromMaybe { root: -1, tonality: "" } (centreOfKey c.key)
               -- One step per chord. A run against four chords that fires three
               -- times is not a small inaccuracy; it is a different set. A
               -- phrase is one, however many notes are in it.
@@ -3423,7 +3425,10 @@ scoreShelf st =
         -- set, and a key you can see before recording is a key you can fix.
         [ HH.span [ HP.class_ (HH.ClassName "q-shelf-name") ] [ HH.text c.name ]
         , HH.span [ HP.class_ (HH.ClassName "q-shelf-key") ]
-            [ HH.text (if c.key == "" then "no key" else c.key) ]
+            [ HH.text
+                ( if c.key == "" then "no key"
+                  else if Array.null c.outside then c.key
+                  else "written in " <> c.key <> " \x00b7 " <> chordsOutside c.outside <> " outside it" ) ]
         , HH.span [ HP.class_ (HH.ClassName "q-shelf-says") ]
             [ HH.text (says
                 <> (if isPhrase c then ", " <> secs2 (Int.toNumber (phraseMs c) / 1000.0) <> " s" else "")
@@ -3496,8 +3501,23 @@ centreOfKey txt = case String.split (String.Pattern " ") (String.trim txt) of
   _ -> Nothing
   where
   tonalityOf m =
-    if Array.elem m [ "Aeolian", "Dorian", "Phrygian", "Locrian", "minor" ]
+    -- Every mode with a minor third over its tonic: the harmonic- and
+    -- melodic-minor families' too, so D Locrian ♮6 centres on D minor.
+    if Array.elem m
+         [ "Aeolian", "Dorian", "Phrygian", "Locrian", "minor"
+         , "HarmonicMinor", "MelodicMinor", "LocrianNat6", "DorianSharp4"
+         , "Ultralocrian", "DorianFlat2", "LocrianNat2" ]
       then "minor" else "major"
+
+-- | Which chords leave a progression's key, counted from one as a reader
+-- | counts: "chord 3", "chords 2 and 5", "chords 1, 2 and 5".
+chordsOutside :: Array Int -> String
+chordsOutside xs = case map (show <<< (_ + 1)) xs of
+  [ one ] -> "chord " <> one
+  ns -> case Array.unsnoc ns of
+    Just { init, last } | not (Array.null init) ->
+      "chords " <> String.joinWith ", " init <> " and " <> last
+    _ -> "no chord"
 
 -- | A pitch class from a note name, sharps or flats.
 pcOfName :: String -> Maybe Int
@@ -4466,7 +4486,7 @@ render st =
         <> [ HH.text ", kept whole as ", slotName, HH.text "." ]
     Just c ->
       [ HH.text ("Making " <> show (Array.length c.chords) <> " chord hits of "), slotScore c ]
-        <> keySays
+        <> scoreKeySays c
         <> [ HH.text " from ", slotSource, slotSourceName
            , HH.text " playing ", slotVoice
            , HH.text ", triggered by ", slotTrigger ]
@@ -4475,11 +4495,21 @@ render st =
            , HH.text ", laid out as ", slotEncoding
            , HH.text ", about ", HH.text runSecs, HH.text " to record." ]
 
+  -- | **The key as far as it is known.** In a key when every chord keeps to
+  -- | it; *written in* one, with the chords that leave it named, when some do;
+  -- | nothing when none was declared, since any key said would be a guess.
+  scoreKeySays c
+    | c.key == "" = [ HH.text ", which declares no key," ]
+    | Array.null c.outside = [ HH.text " in ", slotCentre ]
+    | otherwise =
+        [ HH.text " written in ", slotCentre
+        , HH.text (" (" <> chordsOutside c.outside <> " outside it)") ]
+
   slotScore c =
     sel "q-slot" c.hash PickScore
-      (map (\x -> { v: x.hash
-                  , t: x.name <> (if x.key == "" then "" else " \x00b7 " <> x.key) })
-        st.declared)
+      -- The name alone: the sentence says the key straight after it, and
+      -- the shelf card carries it too.
+      (map (\x -> { v: x.hash, t: x.name }) st.declared)
 
   -- | **Whether anything is listening, said before the take and not after it.**
   -- |
