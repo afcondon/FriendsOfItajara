@@ -1778,3 +1778,11 @@ body {
 /* The meter's "why?" keeps its line when hidden, so a dip in the input does
    not move the page below. */
 .q-whysilent.is-hidden { visibility: hidden; }
+
+/* The Loop page's help, in the nav: a "?" beside the page's own line. */
+.q-help {
+  font: 600 12px/1 inherit; width: 20px; height: 20px; border-radius: 50%;
+  border: 1px solid var(--rule); background: #fff; color: var(--muted);
+  cursor: pointer; padding: 0; align-self: center;
+}
+.q-help:hover, .q-help:focus { color: var(--ink); border-color: var(--ink); outline: 0; }

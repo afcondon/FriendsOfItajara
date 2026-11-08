@@ -94,6 +94,7 @@ import Quadrat.Kind as Kind
 import Quadrat.Slug (slugFor, stamped)
 import Quadrat.JamView as JamView
 import Quadrat.Layout as Layout
+import Itajara.Surface.Looper.Types (LooperPanel(..))
 import Quadrat.Loop as Loop
 import Quadrat.Divider (Divider)
 import Quadrat.Divider as Divider
@@ -742,7 +743,6 @@ component = H.mkComponent
       , looperSnapshotAge: Loop.initial.looperSnapshotAge
       , looperFocus: Loop.initial.looperFocus
       , looperSelectedSeen: Loop.initial.looperSelectedSeen
-      , looperShowsSlots: Loop.initial.looperShowsSlots
       , looperPanel: Loop.initial.looperPanel
       , looperPeaks: Loop.initial.looperPeaks
       , looperPeaksKey: Loop.initial.looperPeaksKey
@@ -3813,6 +3813,17 @@ render st =
             , pageTab LoopPage "Loop" "play the looper from here: the loops, their layers, the Edit panel"
             ]
         , HH.span [ HP.class_ (HH.ClassName "q-sub") ] [ HH.text tagline ]
+        -- | **Help in the nav, for the page that has some.** The looper's
+        -- | recipes were one of a row of buttons above the loops; as a "?"
+        -- | beside the page's own name they cost no row at all.
+        , if st.page /= LoopPage then HH.text "" else
+            HH.button
+              [ HP.class_ (HH.ClassName "q-help")
+              , HP.title "Recipes: what to press, and what should happen"
+              , HP.attr (HH.AttrName "aria-label") "Recipes"
+              , HE.onClick \_ -> LoopMsg (Loop.OpenPanel (Just PanelRecipes))
+              ]
+              [ HH.text "?" ]
         , connection
         ]
     -- | Outside the page switch on purpose. It is reached from the input

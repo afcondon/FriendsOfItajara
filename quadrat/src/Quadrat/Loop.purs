@@ -68,6 +68,7 @@ import Foreign.LooperSocket (LooperState, Peaks, SocketStatus)
 import Foreign.LooperSocket as Socket
 import Halogen as H
 import Halogen.HTML as HH
+import Halogen.HTML.Events as HE
 import Halogen.HTML.Properties as HP
 import Halogen.Subscription as HS
 import Helm.Twister as HelmTwister
@@ -108,7 +109,6 @@ type Fields r =
   -- | daemon's `selected` when that changes (another surface chose).
   , looperFocus :: Int
   , looperSelectedSeen :: Maybe Int
-  , looperShowsSlots :: Boolean
   , looperPanel :: Maybe LooperPanel
   -- | A loop's picture for the Edit panel: only peaks answers about a loop
   -- | (`loop >= 0`) land here; a capture's (`loop == -1`) are Quadrat's own.
@@ -136,7 +136,6 @@ initial
      , looperSnapshotAge :: Number
      , looperFocus :: Int
      , looperSelectedSeen :: Maybe Int
-     , looperShowsSlots :: Boolean
      , looperPanel :: Maybe LooperPanel
      , looperPeaks :: Maybe Peaks
      , looperPeaksKey :: String
@@ -154,7 +153,6 @@ initial =
   , looperSnapshotAge: 0.0
   , looperFocus: 0
   , looperSelectedSeen: Nothing
-  , looperShowsSlots: true
   , looperPanel: Nothing
   , looperPeaks: Nothing
   , looperPeaksKey: ""
@@ -170,7 +168,8 @@ initial =
 
 -- | Every action the page can cause, plus the hub's two answers.
 data Msg
-  = SetFace Boolean
+  -- | A loop box was clicked: take the loop in hand and open its Edit panel.
+  = EditLoop Int
   | Simulate LoopBanks.BankSlot Int LoopBanks.Gesture
   | ShowTwisterPage Int
   | OpenPanel (Maybe LooperPanel)
@@ -279,7 +278,13 @@ ackGap seen now
 
 handle :: forall r act slots o m. MonadAff m => (Msg -> act) -> Msg -> Loop r act slots o m
 handle wrap = case _ of
-  SetFace slots -> H.modify_ _ { looperShowsSlots = slots }
+  -- Focused the way a press focuses (here at once, and told to the daemon,
+  -- which holds the selection every surface shares), then the panel opened
+  -- the way the old Edit button opened it.
+  EditLoop loop -> do
+    H.modify_ _ { looperFocus = loop }
+    void $ liftEffect $ Socket.send (show loop)
+    H.modify_ _ { looperPanel = Just PanelEdit, looperPeaksKey = "" }
   -- **The MC6's pipeline, minus the wire.** The bytes the device would have
   -- sent are built and decoded exactly as a real press is, then read against
   -- the board's layout by `Switchboard.act`. Acted on here even when the
@@ -459,14 +464,14 @@ view wrap meter st =
   -- side column.
   PageLayout.layout
     { statement
-    , main: [ parts.buttons ] <> parts.notices <> parts.main <> [ parts.overlay ]
+    , main: parts.notices <> parts.main <> [ parts.overlay ]
     , side: parts.side
     }
   where
   parts = Page.parts handlers ports extras st
 
   handlers =
-    { setFace: wrap <<< SetFace
+    { editLoop: wrap <<< EditLoop
     , simulate: \slot switch gesture -> wrap (Simulate slot switch gesture)
     , showTwisterPage: wrap <<< ShowTwisterPage
     , openPanel: wrap <<< OpenPanel
@@ -513,12 +518,46 @@ view wrap meter st =
     Statement.statement Statement.defaultStatement
       { class_ = "q-say is-loop"
       , gauge = [ meter ]
-      , sentences = map (map part) (LooperStatement.sentences st.looper st.looperFocus)
+      , sentences = map (map part) (LooperStatement.sentences settings st.looper st.looperFocus)
+      , warnings = map (\w -> HH.p [ HP.class_ (HH.ClassName "q-clash is-soft") ] [ HH.text w ])
+          (LooperStatement.warnings st.looper)
       }
+
+  settings =
+    { setClick: wrap <<< SetClick
+    , setArm: wrap <<< SetArm
+    , setFeedback: wrap <<< SetFeedback
+    , setTone: wrap <<< SetTone
+    }
 
   part = case _ of
     LooperStatement.Said words -> HH.text words
     LooperStatement.Read r -> Statement.reading r
+    -- The Bench's slot classes, so a setting in this sentence looks and
+    -- behaves like one in the Bench's.
+    LooperStatement.Toggle t ->
+      HH.button
+        [ HP.class_ (HH.ClassName "q-slot is-toggle")
+        , HP.title t.label
+        , HE.onClick \_ -> t.intent
+        ]
+        [ HH.text t.value ]
+    -- On change, not on input: typing "-40" passes through "-" and "-4", and
+    -- each would be sent.
+    LooperStatement.Field f ->
+      HH.span_
+        [ HH.input
+            [ HP.class_ (HH.ClassName "q-slot is-num")
+            , HP.type_ HP.InputNumber
+            , HP.value f.value
+            , HP.min f.min
+            , HP.max f.max
+            , HP.step (HP.Step f.step)
+            , HP.title f.label
+            , HE.onValueChange f.intent
+            ]
+        , HH.text f.unit
+        ]
 
   followLine = case st.twisterFollow of
     Following { port: Just _ } -> HH.text ""
