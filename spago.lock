@@ -44,6 +44,7 @@
             "foldable-traversable",
             "halogen",
             "halogen-subscriptions",
+            "halogen-widgets",
             "helm",
             "integers",
             "itajara-client",
@@ -717,6 +718,9 @@
       }
     },
     "extra_packages": {
+      "halogen-widgets": {
+        "path": "../../purescript-halogen-widgets"
+      },
       "helm": {
         "path": "../helm"
       },
@@ -1196,6 +1200,30 @@
         "unsafe-coerce",
         "web-dom",
         "web-events"
+      ]
+    },
+    "halogen-widgets": {
+      "type": "local",
+      "path": "../../purescript-halogen-widgets",
+      "dependencies": [
+        "aff",
+        "arrays",
+        "datetime",
+        "dom-indexed",
+        "effect",
+        "foldable-traversable",
+        "halogen",
+        "halogen-subscriptions",
+        "integers",
+        "maybe",
+        "numbers",
+        "prelude",
+        "strings",
+        "unsafe-coerce",
+        "web-dom",
+        "web-events",
+        "web-html",
+        "web-uievents"
       ]
     },
     "helm": {

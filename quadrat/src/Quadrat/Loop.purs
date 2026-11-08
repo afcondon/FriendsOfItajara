@@ -74,6 +74,8 @@ import Helm.Twister as HelmTwister
 import Helm.WebMIDI (MIDIAccess)
 import Helm.WebMIDI as MIDI
 import Itajara.Surface.Looper.Page as Page
+import Itajara.Surface.Looper.Statement as LooperStatement
+import Halogen.Widgets.Statement as Statement
 import Itajara.Surface.Looper.TwisterCard as TwisterCard
 import Itajara.Surface.Looper.TwisterMap as TwisterMap
 import Itajara.Surface.Looper.Types (LogLine, LooperPanel(..), pushLog)
@@ -490,7 +492,21 @@ view wrap st = Page.render handlers ports extras st
         ]
     , banks: Nothing
     , printSheet: Nothing
+    , statement: Just statement
     }
+
+  -- | **The strip's readings, said as the page's statement**, like the
+  -- | Bench's and Conspicillum's. The Twister's page is left out: the card on
+  -- | the right says it, and it is about the hand rather than the rig.
+  statement =
+    Statement.statement Statement.defaultStatement
+      { class_ = "q-say is-loop"
+      , sentences = map (map part) (LooperStatement.sentences st.looper st.looperFocus)
+      }
+
+  part = case _ of
+    LooperStatement.Said words -> HH.text words
+    LooperStatement.Read r -> Statement.reading r
 
   followLine = case st.twisterFollow of
     Following { port: Just _ } -> HH.text ""

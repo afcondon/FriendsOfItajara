@@ -712,22 +712,33 @@ body {
   display: grid;
   grid-template-columns: 280px minmax(0, 640px) 280px;
   grid-template-areas:
-    "meter say  heard"
-    "meter warn heard";
+    "gauge say  report"
+    "gauge warn report";
   justify-content: center;
   gap: 0 30px;
   margin: 0 auto; padding: 40px 0 34px;
 }
-.q-sayline { grid-area: say; }
-.q-saywarn { grid-area: warn; }
+/* The regions are Halogen.Widgets.Statement's: the same shape on every page,
+   styled here for Quadrat. */
+.q-say .hw-statement-gauge { grid-area: gauge; align-self: center; justify-self: center; }
+.q-say .hw-statement-say { grid-area: say; }
+.q-say .hw-statement-warn { grid-area: warn; }
 /* Centred in its margin, not hard against the text: a marginal note that
    tracks the top of the prose reads as the first line of it. */
-.q-heard { grid-area: heard; align-self: center; }
-.q-heard > * { margin-top: 0; }
-.q-sayline {
+.q-say .hw-statement-report { grid-area: report; align-self: center; }
+.q-say .hw-statement-report > * { margin-top: 0; }
+.q-say .hw-statement-line {
   margin: 0; font-size: 23px; line-height: 1.55; font-weight: 300;
   letter-spacing: -0.01em;
 }
+/* A reading is a value the sentence reports rather than one you set here:
+   weight, not an underline, since nothing about it can be pressed. */
+.q-say .hw-statement-reading { font-weight: 500; font-variant-numeric: tabular-nums; }
+.q-say .hw-statement-reading.is-alarm { color: var(--hot); font-weight: 600; }
+/* The Loop page's statement sits in the looper's strip, above its buttons:
+   two sentences, no margins, so less air than the Bench's. */
+.q-say.is-loop { padding: 14px 0 18px; }
+.q-say.is-loop .hw-statement-line { font-size: 21px; margin-bottom: .3em; }
 /* Narrow enough that half of it is not a column any more. */
 /* Narrow enough that three columns is not three columns any more: the
    margins become rows, in reading order, and the meter stays first because
@@ -735,11 +746,11 @@ body {
 @media (max-width: 1320px) {
   .q-say {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-areas: "meter" "say" "warn" "heard";
+    grid-template-areas: "gauge" "say" "warn" "report";
     gap: 16px 0; padding: 26px 0 22px;
   }
-  .q-meter { justify-self: start; }
-  .q-heard { align-self: start; }
+  .q-say .hw-statement-gauge { justify-self: start; }
+  .q-say .hw-statement-report { align-self: start; }
 }
 
 /* **A meter, not a word.** Twenty block characters inside the sentence read
@@ -751,7 +762,6 @@ body {
    against the sentence. It is the one instrument on the page that is read
    WHILE playing — at 72 x 34 in the gutter it was a punctuation mark. */
 .q-meter {
-  grid-area: meter; align-self: center; justify-self: center;
   width: 150px; text-align: center;
 }
 .q-meterpic {

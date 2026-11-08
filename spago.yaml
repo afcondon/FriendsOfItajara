@@ -56,3 +56,7 @@ workspace:
     # the SAME identity in both places. By path until it earns publishing.
     rebus:
       path: ../../code-typography/rebus
+    # The shared widgets: Halogen.Widgets.Statement (0.6.0), the sentence
+    # every Quadrat page leads with. By path until 0.6 is released.
+    halogen-widgets:
+      path: ../../purescript-halogen-widgets

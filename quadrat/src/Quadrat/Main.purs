@@ -102,6 +102,7 @@ import Quadrat.Schedule as Schedule
 import Quadrat.Pitch as Pitch
 import Quadrat.Sweep as Sweep
 import Quadrat.SweepView as SweepView
+import Halogen.Widgets.Statement as Statement
 
 main :: Effect Unit
 main = HA.runHalogenAff do
@@ -4227,8 +4228,9 @@ render st =
   -- | choice is in here — and the rest goes. Half width and centred, because a
   -- | statement that runs the full width of a wide screen reads as a caption.
   statement =
-    HH.section [ HP.class_ (HH.ClassName "q-say") ]
-      [ listening
+    Statement.statement Statement.defaultStatement
+      { class_ = "q-say"
+      , gauge = [ listening ]
       -- **The sentence says what will actually happen, and the two cases do
       -- not happen alike.**
       --
@@ -4248,7 +4250,7 @@ render st =
       -- 20 for chords. All of that was chosen behind a door labelled Trigger,
       -- so the only visible trace of it was the generated name, which looks
       -- like a name.
-      , HH.p [ HP.class_ (HH.ClassName "q-sayline") ]
+      , sentences = pure
           ( case st.kind of
             -- **A bar take is a third case, and says so.** Nothing triggers
             -- it, nothing divides it and it makes one sample, so the count,
@@ -4305,7 +4307,7 @@ render st =
       -- about the page. Grouped into the centre column here, and the MIDI
       -- report given a wrapper of its own so the right margin holds it
       -- whichever of its four shapes it takes.
-      , HH.div [ HP.class_ (HH.ClassName "q-saywarn") ]
+      , warnings =
           [ clashSays
           , collapseSays
           -- | **A remembered input that is not on this rig.** Silently falling
@@ -4322,8 +4324,8 @@ render st =
                        \aggregate loses the reference rather than pointing it \
                        \somewhere wrong.") ]
           ]
-      , HH.div [ HP.class_ (HH.ClassName "q-heard") ] [ heardSays, benchMark ]
-      ]
+      , report = [ heardSays, benchMark ]
+      }
 
   -- | **Whether anything is listening, said before the take and not after it.**
   -- |
