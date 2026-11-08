@@ -3427,8 +3427,8 @@ scoreShelf st =
         , HH.span [ HP.class_ (HH.ClassName "q-shelf-key") ]
             [ HH.text
                 ( if c.key == "" then "no key"
-                  else if Array.null c.outside then c.key
-                  else "written in " <> c.key <> " \x00b7 " <> chordsOutside c.outside <> " outside it" ) ]
+                  else if Array.null c.outside then keyWords c.key
+                  else "written in " <> keyWords c.key <> " \x00b7 " <> chordsOutside c.outside <> " outside it" ) ]
         , HH.span [ HP.class_ (HH.ClassName "q-shelf-says") ]
             [ HH.text (says
                 <> (if isPhrase c then ", " <> secs2 (Int.toNumber (phraseMs c) / 1000.0) <> " s" else "")
@@ -3508,6 +3508,30 @@ centreOfKey txt = case String.split (String.Pattern " ") (String.trim txt) of
          , "HarmonicMinor", "MelodicMinor", "LocrianNat6", "DorianSharp4"
          , "Ultralocrian", "DorianFlat2", "LocrianNat2" ]
       then "minor" else "major"
+
+-- | A published key as a reader says it: "C LydianSharp2" is "C Lydian ♯2",
+-- | "C Ionian" is "C major". A word it does not know is left as it came.
+keyWords :: String -> String
+keyWords txt = case String.split (String.Pattern " ") (String.trim txt) of
+  [ r, m ] -> r <> " " <> modeWords m
+  _ -> txt
+  where
+  modeWords = case _ of
+    "Ionian" -> "major"
+    "Aeolian" -> "minor"
+    "HarmonicMinor" -> "harmonic minor"
+    "MelodicMinor" -> "melodic minor"
+    "LocrianNat6" -> "Locrian ♮6"
+    "IonianSharp5" -> "Ionian ♯5"
+    "DorianSharp4" -> "Dorian ♯4"
+    "PhrygianDominant" -> "Phrygian dominant"
+    "LydianSharp2" -> "Lydian ♯2"
+    "DorianFlat2" -> "Dorian ♭2"
+    "LydianAugmented" -> "Lydian augmented"
+    "LydianDominant" -> "Lydian dominant"
+    "MixolydianFlat6" -> "Mixolydian ♭6"
+    "LocrianNat2" -> "Locrian ♮2"
+    m -> m
 
 -- | Which chords leave a progression's key, counted from one as a reader
 -- | counts: "chord 3", "chords 2 and 5", "chords 1, 2 and 5".
@@ -4498,12 +4522,22 @@ render st =
   -- | **The key as far as it is known.** In a key when every chord keeps to
   -- | it; *written in* one, with the chords that leave it named, when some do;
   -- | nothing when none was declared, since any key said would be a guess.
+  -- |
+  -- | The key is the clip's, said whole ("C Lydian ♯2"), and read rather than
+  -- | chosen: it is the publisher's declaration. The set keeps only its centre
+  -- | (C, major), which is all a set's key is; the mode is the clip's.
   scoreKeySays c
     | c.key == "" = [ HH.text ", which declares no key," ]
-    | Array.null c.outside = [ HH.text " in ", slotCentre ]
+    | Array.null c.outside = [ HH.text " in ", keyReading c.key ]
     | otherwise =
-        [ HH.text " written in ", slotCentre
+        [ HH.text " written in ", keyReading c.key
         , HH.text (" (" <> chordsOutside c.outside <> " outside it)") ]
+
+  keyReading k =
+    HH.span
+      [ HP.class_ (HH.ClassName "hw-statement-reading")
+      , HP.title "the key it was published in" ]
+      [ HH.text (keyWords k) ]
 
   slotScore c =
     sel "q-slot" c.hash PickScore

@@ -85,10 +85,10 @@ export const fetchDeclaredImpl = (onError) => (onSuccess) => () => {
             const groups = chordsOf(clip.events);
             return {
               hash: h,
-              // The rebus first: it is the name Triggerfish gives a published thing, and
-              // unique, where an Odonus label is "clip · <key>" for every clip (two
-              // of them read the same) and repeats the key the shelf adds anyway.
-              name: tag(label.tags, "rebus:") || label.name || clip.name || h.slice(0, 8),
+              // The publisher's name. A Vetula progression's is its own (given
+              // when it was started) and differs from its chord rebus; Odonus
+              // names a clip by its rebus.
+              name: label.name || clip.name || tag(label.tags, "rebus:") || h.slice(0, 8),
               source: tag(label.tags, "source:") || clip.source || "",
               kind: tag(label.tags, "kind:"),
               rebus: tag(label.tags, "rebus:"),
