@@ -85,7 +85,10 @@ export const fetchDeclaredImpl = (onError) => (onSuccess) => () => {
             const groups = chordsOf(clip.events);
             return {
               hash: h,
-              name: label.name || clip.name || h.slice(0, 8),
+              // The rebus first: it is the name Triggerfish gives a published thing, and
+              // unique, where an Odonus label is "clip · <key>" for every clip (two
+              // of them read the same) and repeats the key the shelf adds anyway.
+              name: tag(label.tags, "rebus:") || label.name || clip.name || h.slice(0, 8),
               source: tag(label.tags, "source:") || clip.source || "",
               kind: tag(label.tags, "kind:"),
               rebus: tag(label.tags, "rebus:"),
