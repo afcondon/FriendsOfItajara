@@ -4626,9 +4626,26 @@ render st =
   -- | Read as STRUCK, matching what the server will store: `arpeggiated` is
   -- | declared afterwards in the Library, and when it is declared the picture
   -- | changes. That is correct and is what a content identity is for.
-  benchMark = case benchChords of
-    [] -> HH.text ""
-    chords ->
+  -- |
+  -- | **A Vetula progression shows its NAME, as Vetula does** (AC,
+  -- | 2026-10-27: one picture of a progression, its name, wherever it is
+  -- | shown). Its name is icon words, drawn monochrome, the way a name is;
+  -- | its chord rebus is a different picture Vetula does not show, so drawing
+  -- | that here and calling it Vetula's was false. A take with no published
+  -- | name (played by hand) keeps the coloured chord rebus.
+  benchMark = case st.against, benchChords of
+    _, [] -> HH.text ""
+    Just c, chords | c.source == "vetula" ->
+      HH.div [ HP.class_ (HH.ClassName "q-benchmark") ]
+        [ RebusView.chip
+            { height: 21.0, mono: true
+            , title: c.name <> " \x2014 its name in Vetula" }
+            (nameIcons c.name)
+        , HH.span [ HP.class_ (HH.ClassName "q-benchalias") ] [ HH.text c.name ]
+        , HH.span [ HP.class_ (HH.ClassName "q-benchsays") ]
+            [ HH.text (chordCount chords <> " \x2014 as named in Vetula") ]
+        ]
+    _, chords ->
       let g = chordGlyph chords
       in HH.div [ HP.class_ (HH.ClassName "q-benchmark") ]
            [ RebusView.chip
@@ -4637,10 +4654,19 @@ render st =
                g.icons
            , HH.span [ HP.class_ (HH.ClassName "q-benchalias") ] [ HH.text g.alias ]
            , HH.span [ HP.class_ (HH.ClassName "q-benchsays") ]
-               [ HH.text (show (Array.length chords)
-                   <> (if Array.length chords == 1 then " chord" else " chords")
-                   <> " \x2014 the same picture in Vetula") ]
+               [ HH.text (chordCount chords <> " \x2014 these chords' picture, wherever they are") ]
            ]
+
+  chordCount chords =
+    show (Array.length chords) <> (if Array.length chords == 1 then " chord" else " chords")
+
+  -- A Vetula name's icons, a word each, as Vetula draws them: numbers (a
+  -- fork's "-2") and anything after a prime are not icons.
+  nameIcons nm =
+    map (\icon -> { icon, color: "" })
+      (Array.filter (\w -> w /= "" && Maybe.isNothing (Int.fromString w))
+        (String.split (String.Pattern "-")
+          (String.takeWhile (_ /= String.codePointFromChar '\x2032') nm)))
 
   -- **The same two ways of knowing as the set gets**, and in the same order.
   -- A declared run shows the chords it played; a hand-played one shows what
