@@ -4630,9 +4630,12 @@ render st =
         -- | **Offered only when it would help.** A door that is always there
         -- | is a door nobody reads; this one appears exactly when the input is
         -- | silent, which is the moment the question gets asked out loud.
-        , if not meterQuiet then HH.text "" else
-            HH.button
-              [ HP.class_ (HH.ClassName "q-whysilent")
+        -- | **Always there, hidden when not wanted**, so its line is
+        -- | reserved: drawn only while silent, it grew the meter's column each
+        -- | time the input dipped, and the whole page below bounced.
+        , HH.button
+              [ HP.class_ (HH.ClassName ("q-whysilent" <> if meterQuiet then "" else " is-hidden"))
+              , HP.disabled (not meterQuiet)
               , HP.title "where the inputs actually land, against the device as it is right now"
               , HE.onClick \_ -> CheckAudio ]
               [ HH.text (if st.audioBusy then "looking\x2026" else "why?") ]
