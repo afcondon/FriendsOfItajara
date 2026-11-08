@@ -168,8 +168,15 @@ initial =
 
 -- | Every action the page can cause, plus the hub's two answers.
 data Msg
-  -- | A loop box was clicked: take the loop in hand and open its Edit panel.
-  = EditLoop Int
+  -- | A loop box was clicked: the first click takes the loop in hand, a click
+  -- | on the loop already in hand opens its Edit panel.
+  = PressLoop Int
+  -- | The statement's choices: launch (beats, rig-wide), the input (one-based),
+  -- | the grid, and the length in bars, each as the sentence gives it.
+  | SetLaunch String
+  | SetSource String
+  | SetGrid Boolean
+  | SetBars String
   | Simulate LoopBanks.BankSlot Int LoopBanks.Gesture
   | ShowTwisterPage Int
   | OpenPanel (Maybe LooperPanel)
@@ -278,13 +285,22 @@ ackGap seen now
 
 handle :: forall r act slots o m. MonadAff m => (Msg -> act) -> Msg -> Loop r act slots o m
 handle wrap = case _ of
-  -- Focused the way a press focuses (here at once, and told to the daemon,
-  -- which holds the selection every surface shares), then the panel opened
-  -- the way the old Edit button opened it.
-  EditLoop loop -> do
-    H.modify_ _ { looperFocus = loop }
-    void $ liftEffect $ Socket.send (show loop)
-    H.modify_ _ { looperPanel = Just PanelEdit, looperPeaksKey = "" }
+  -- **Select, then edit.** A first click takes the loop in hand the way a
+  -- press does (here at once, and told to the daemon, which holds the
+  -- selection every surface shares); a click on the loop already in hand opens
+  -- its Edit panel. Opening the panel on every click made choosing a loop and
+  -- editing one the same gesture, and selecting is the commoner of the two.
+  PressLoop loop -> do
+    st <- H.get
+    if st.looperFocus == loop
+      then H.modify_ _ { looperPanel = Just PanelEdit, looperPeaksKey = "" }
+      else do
+        H.modify_ _ { looperFocus = loop }
+        void $ liftEffect $ Socket.send (show loop)
+  SetLaunch raw -> for_ (Int.fromString raw) \q -> focused (LoopBanks.Launch q)
+  SetSource raw -> for_ (Int.fromString raw) \n -> focused (LoopBanks.SetSource n)
+  SetGrid on -> focused (LoopBanks.OnGrid on)
+  SetBars raw -> for_ (Int.fromString raw) \n -> when (n > 0) (focused (LoopBanks.SetBars n))
   -- **The MC6's pipeline, minus the wire.** The bytes the device would have
   -- sent are built and decoded exactly as a real press is, then read against
   -- the board's layout by `Switchboard.act`. Acted on here even when the
@@ -471,7 +487,7 @@ view wrap meter st =
   parts = Page.parts handlers ports extras st
 
   handlers =
-    { editLoop: wrap <<< EditLoop
+    { pressLoop: wrap <<< PressLoop
     , simulate: \slot switch gesture -> wrap (Simulate slot switch gesture)
     , showTwisterPage: wrap <<< ShowTwisterPage
     , openPanel: wrap <<< OpenPanel
@@ -528,6 +544,10 @@ view wrap meter st =
     , setArm: wrap <<< SetArm
     , setFeedback: wrap <<< SetFeedback
     , setTone: wrap <<< SetTone
+    , setLaunch: wrap <<< SetLaunch
+    , setSource: wrap <<< SetSource
+    , setGrid: wrap <<< SetGrid
+    , setBars: wrap <<< SetBars
     }
 
   part = case _ of
@@ -558,6 +578,22 @@ view wrap meter st =
             ]
         , HH.text f.unit
         ]
+    LooperStatement.Choice c ->
+      HH.select
+        [ HP.class_ (HH.ClassName "q-slot")
+        , HP.title c.label
+        , HE.onValueChange c.intent
+        ]
+        ( map
+            ( \o -> HH.option
+                [ HP.value o.value
+                , HP.selected (o.value == c.value)
+                , HP.disabled o.off
+                ]
+                [ HH.text o.text ]
+            )
+            c.options
+        )
 
   followLine = case st.twisterFollow of
     Following { port: Just _ } -> HH.text ""

@@ -763,8 +763,12 @@ body {
 .q-layout {
   display: grid;
   grid-template-columns: minmax(0, 3fr) minmax(0, 1fr);
-  gap: 0 32px; align-items: start;
+  gap: 0; align-items: start;
 }
+/* The same margin on the main column's right as the page gives its left
+   (.q's 18px), so what is in it sits centred between the page edge and the
+   side column's rule. It was a 32px gap, and the loops read as off-centre. */
+.q-layout-main { padding-right: 18px; }
 .q-layout-side {
   position: sticky; top: 0;
   max-height: 100vh; overflow-y: auto;
@@ -872,6 +876,9 @@ body {
 .q-slot.is-num::-webkit-outer-spin-button,
 .q-slot.is-num::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .q-slot.is-name { width: auto; field-sizing: content; min-width: 5em; cursor: text; }
+/* A choice as wide as what it says, not as its longest option: otherwise
+   "on the bar" is followed by the width of "every 4 beats" before its comma. */
+select.q-slot { field-sizing: content; }
 .q-slot.is-fixed {
   color: var(--muted); border-bottom: 1px dotted var(--rule); cursor: default;
 }
