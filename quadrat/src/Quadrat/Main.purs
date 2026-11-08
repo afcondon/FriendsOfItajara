@@ -124,7 +124,11 @@ main = HA.runHalogenAff do
 -- | with the page PWYF draws (see `Quadrat.Loop`). A page rather than a mode
 -- | of the Bench, because capturing and looping are opposite uses of one
 -- | daemon and the Bench was built on keeping them apart.
-data Page = Bench | Library | JamPage | LoopPage
+-- |
+-- | **One recording page per player** (`docs/kb/plans/quadrat-recording-views.md`):
+-- | the Bench is the rig playing a transect, `Score` is Triggerfish playing what
+-- | it has published, Jam is you, Loop is you into the looper.
+data Page = Bench | Score | Library | JamPage | LoopPage
 
 derive instance Eq Page
 
@@ -276,6 +280,11 @@ type State =
   -- | rebus at save time, and re-finding it in a list that may have been
   -- | refetched since is a way to save a set against the wrong identity.
   , against :: Maybe Declared.Clip
+  -- | **The Bench's own settings, set aside while Score is open.** Choosing a
+  -- | clip rewrites the kind, the count, the key and the spacing to fit it, and
+  -- | those are the Bench's too; without this, a visit to Score left the Bench
+  -- | making "1 unpitched phrase in C minor". Restored on leaving Score.
+  , benchKept :: Maybe { kind :: Kind, divider :: Divider, sweep :: Sweep.Plan, fill :: Fill }
   -- | **The sets already on disk**, newest first. Read from the server rather
   -- | than remembered here: a set outlives the page by a long way, which is
   -- | the entire point of storing it.
@@ -553,6 +562,8 @@ data Action
   -- | boundaries and sending `msm` looking for them. Picking the one already
   -- | chosen puts it down again.
   | PlayAgainst Declared.Clip
+  -- | Score's sentence chose a published clip, by hash.
+  | PickScore String
   | PickKind Kind
   | SetBars String
   | SetName String
@@ -726,7 +737,7 @@ component = H.mkComponent
       , sweep: Sweep.emptyPlan, sweepOpen: false, sweepAt: Nothing
       , sweepFork: Nothing, midiPorts: [], midiWhy: "", swept: false, sweepEdit: Nothing
       , schedule: [], sets: [], tables: [], tablesErr: "", overran: false
-      , declared: [], against: Nothing
+      , declared: [], against: Nothing, benchKept: Nothing
       , page: Bench, fill: Swept, pivot: Nothing
       , levels: [], modal: Nothing, kept: false, confirmKeep: false
       , picked: Set.empty, confirmDrop: false, confirmWrite: Nothing, preview: Nothing
@@ -1131,7 +1142,8 @@ handleAction = case _ of
               Just c -> Array.find (\x -> x.hash == c.hash) xs
               Nothing -> if want == "" then Nothing else Array.find (\x -> x.hash == want) xs
         H.modify_ _ { declared = xs }
-        for_ keep \c -> when (map _.hash st.against /= Just c.hash) (handleAction (PlayAgainst c))
+        when (st.page == Score) $
+          for_ keep \c -> when (map _.hash st.against /= Just c.hash) (handleAction (PlayAgainst c))
       -- Never fatal: the page samples perfectly well with nothing declared, and
       -- a store that is down should not read as a page that is broken.
       Left _ -> H.modify_ _ { declared = [] }
@@ -1164,6 +1176,10 @@ handleAction = case _ of
   --
   -- And one cell means nothing to divide. `Whole` rather than a detector: a
   -- phrase cut at its loudest moments is not a phrase.
+  PickScore hash -> do
+    st0 <- H.get
+    for_ (Array.find (\x -> x.hash == hash) st0.declared) \c ->
+      when (map _.hash st0.against /= Just hash) (handleAction (PlayAgainst c))
   PlayAgainst c -> do
     st0 <- H.get
     liftEffect (Declared.rememberPick (if map _.hash st0.against == Just c.hash then "" else c.hash))
@@ -1221,6 +1237,12 @@ handleAction = case _ of
                           else st.sweep.trigger { ms = max 200 (st.sweep.spacingMs / 2) }
               }
           }
+    -- The name follows the kind, as `PickKind`'s does: a chord set was
+    -- otherwise kept under the Bench's "drum-hits-…" name.
+    st1 <- H.get
+    when (wantsAName st1) do
+      n <- liftEffect (slugFor st1.kind)
+      H.modify_ _ { name = n }
 
   PickKindNamed v -> do
     st <- H.get
@@ -2164,8 +2186,22 @@ handleAction = case _ of
   -- | the first time, and a permission dialog appearing in the middle of a run
   -- | would cost the take.
   GoTo pg -> do
+    before <- H.get
+    -- **A clip is in play only on Score.** Leaving puts it down, without
+    -- forgetting the pick; coming back picks the remembered one up again, so
+    -- a Bench run can never be quietly a run against a progression.
+    when (before.page == Score && pg /= Score) $ H.modify_ \st ->
+      case st.benchKept of
+        Just b -> st { against = Nothing, kind = b.kind, divider = b.divider
+                     , sweep = b.sweep, fill = b.fill, benchKept = Nothing }
+        Nothing -> st { against = Nothing }
+    when (pg == Score && before.page /= Score) $ H.modify_ \st ->
+      -- Triggered, always: Triggerfish plays a Score take, never your hands.
+      st { benchKept = Just { kind: st.kind, divider: st.divider, sweep: st.sweep, fill: st.fill }
+         , fill = Swept }
     H.modify_ _ { page = pg }
     when (pg == LoopPage) (Loop.start LoopMsg)
+    when (pg == Score && before.page /= Score) (handleAction FetchDeclared)
   LoopMsg msg -> Loop.handle LoopMsg msg
   SetJamName v -> H.modify_ \s0 -> s0 { jam = s0.jam { name = v } }
   SetJamSource v -> H.modify_ \s0 -> s0 { jam = s0.jam { source = v } }
@@ -3339,56 +3375,60 @@ secs2 d = show (Int.round (d * 100.0) / 100)
 -- | A MIDI note as a person would say it. Sharps rather than flats, because
 -- | the only thing naming them here is a tooltip and a consistent spelling
 -- | beats a correct enharmonic nobody asked for.
--- | **What Triggerfish has published for sampling.**
+-- | **What Triggerfish has published for sampling**: Score's side column.
 -- |
 -- | Not a MIDI route and not a file: the progressions are in Amphora, and the
 -- | page reads them there. Choosing one fills the schedule, which is the switch
 -- | between dividing a take at its own declared boundaries and sending `msm`
--- | looking for them — so this row is the difference between sampling chords
+-- | looking for them — so this list is the difference between sampling chords
 -- | you can name and sampling chords you have to identify afterwards.
-declaredRow :: forall m. State -> H.ComponentHTML Action () m
-declaredRow st =
+-- |
+-- | It was a row of chips on the Bench, labelled "declared" (the rule's name,
+-- | not the thing's), which changed the take's kind when clicked. On its own
+-- | page it is the page's material, and each card says what it is in full.
+scoreShelf :: forall m. State -> H.ComponentHTML Action () m
+scoreShelf st =
   HH.section
-    [ HP.class_ (HH.ClassName "q-declared") ]
-    ( [ HH.span [ HP.class_ (HH.ClassName "q-declared-label") ] [ HH.text "declared" ] ]
-        <> (if Array.null st.declared
-              then [ HH.span [ HP.class_ (HH.ClassName "q-declared-none") ]
-                       [ HH.text "nothing published \x2014 send a progression or a clip from Triggerfish" ] ]
-              else map chip st.declared)
-        <> [ HH.button
-               [ HP.class_ (HH.ClassName "q-declared-refresh")
-               , HP.title "re-read what Triggerfish has published"
-               , HE.onClick \_ -> FetchDeclared ]
-               [ HH.text "\x21bb" ] ]
+    [ HP.class_ (HH.ClassName "q-shelf") ]
+    ( [ HH.div [ HP.class_ (HH.ClassName "q-shelf-head") ]
+          [ HH.span [ HP.class_ (HH.ClassName "q-shelf-title") ] [ HH.text "Published by Triggerfish" ]
+          , HH.button
+              [ HP.class_ (HH.ClassName "q-declared-refresh")
+              , HP.title "re-read what Triggerfish has published"
+              , HE.onClick \_ -> FetchDeclared ]
+              [ HH.text "\x21bb" ]
+          ]
+      ]
+        <> if Array.null st.declared
+             then [ HH.p [ HP.class_ (HH.ClassName "q-shelf-none") ]
+                      [ HH.text "Nothing yet. Send a progression or a clip from Vetula or Odonus." ] ]
+             else map card st.declared
     )
   where
-  chip c =
+  card c =
     let on = map _.hash st.against == Just c.hash
         -- **What it is, on its face.** The two kinds come back completely
-        -- different — four samples you can name, or one you cannot cut — and
-        -- the count means different things in each: chords to be struck one
-        -- each, or notes to be played in order. A bare number reads as chords
-        -- either way, which is the one thing it must not do.
+        -- different — chords you can name, one each, or one phrase you cannot
+        -- cut — and the count means different things in each.
         says =
           if isPhrase c
-            then "\x266a " <> show (Array.length (phraseNotesOf c)) <> " notes, whole"
-            else show (Array.length c.chords) <> " chords"
+            then "\x266a " <> show (Array.length (phraseNotesOf c)) <> " notes, played once, kept whole"
+            else show (Array.length c.chords) <> " chords, one sample each"
     in HH.button
-        [ HP.class_ (HH.ClassName (if on then "q-declared-chip is-on" else "q-declared-chip"))
-        , HP.title (c.rebus <> " \x00b7 " <> says
-                     <> (if isPhrase c
-                           then " \x00b7 played once over " <> secs2 (Int.toNumber (phraseMs c) / 1000.0) <> " s"
-                           else "")
-                     <> (if c.key == "" then "" else " \x00b7 " <> c.key)
-                     <> " \x00b7 from " <> c.source
-                     <> (if on then " \x00b7 click to put it down" else " \x00b7 click to play the next take against it"))
+        [ HP.class_ (HH.ClassName (if on then "q-shelf-card is-on" else "q-shelf-card"))
+        , HP.title (if on then "click to put it down" else "click to play the next take against it")
         , HE.onClick \_ -> PlayAgainst c ]
-        -- The KEY on the chip's face, not only in its tooltip. It is published
+        -- The KEY on the card's face, not only in a tooltip: it is published
         -- from the sending app's workspace key, which may be a default nobody
-        -- set — and a key you can see before recording is a key you can fix,
-        -- where one you discover afterwards has already named a set wrong.
-        [ HH.text (c.name <> "  " <> says
-                    <> (if c.key == "" then "  ·  no key" else "  ·  " <> c.key)) ]
+        -- set, and a key you can see before recording is a key you can fix.
+        [ HH.span [ HP.class_ (HH.ClassName "q-shelf-name") ] [ HH.text c.name ]
+        , HH.span [ HP.class_ (HH.ClassName "q-shelf-key") ]
+            [ HH.text (if c.key == "" then "no key" else c.key) ]
+        , HH.span [ HP.class_ (HH.ClassName "q-shelf-says") ]
+            [ HH.text (says
+                <> (if isPhrase c then ", " <> secs2 (Int.toNumber (phraseMs c) / 1000.0) <> " s" else "")
+                <> " \x00b7 from " <> c.source) ]
+        ]
 
 -- | **How much room a dry run gives each cell**, whatever the performance
 -- | spacing is. Eight seconds clears a piano and most pads; anything longer is
@@ -3808,6 +3848,7 @@ render st =
         [ HH.h1_ [ HH.text "Quadrat" ]
         , HH.nav [ HP.class_ (HH.ClassName "q-nav") ]
             [ pageTab Bench "Bench" "cut a transect and look at what came back"
+            , pageTab Score "Score" "sample a progression or a clip Triggerfish has published"
             , pageTab Library "Library" "every set kept, re-runnable, and where it can go"
             , pageTab JamPage "Jam" "record a source to disk for as long as it plays"
             , pageTab LoopPage "Loop" "play the looper from here: the loops, their layers, the Edit panel"
@@ -3884,10 +3925,73 @@ render st =
         Bench ->
           Layout.layout
             { statement
-            , main:
+            , main: takeMain
+            , side:
+                [ HH.section [ HP.class_ (HH.ClassName "q-curverow is-first") ]
+                    [ SweepView.curves sweepHandlers ]
+                ]
+            }
+        -- | **Triggerfish plays.** The same take, acts and doors as the Bench;
+        -- | its own sentence, and the published shelf where the Bench has its
+        -- | curves.
+        Score ->
+          Layout.layout
+            { statement: scoreStatement
+            , main: takeMain
+            , side: [ scoreShelf st ]
+            }
+        -- | **Two places, and the transform between them.**
+        -- |
+        -- | The library on the left and the destination on the right, which
+        -- | is DropSync's geometry and for DropSync's reason: you cannot
+        -- | judge what a transfer will do from a list of sources alone. What
+        -- | it is NOT is DropSync's other half — rsync is symmetrical and
+        -- | this only goes one way. The card is compiled from the library and
+        -- | never edited; nothing comes back, so there are no arrows and no
+        -- | second direction to choose.
+        JamPage ->
+          let
+            jp = JamView.parts
+              { setName: SetJamName, setSource: SetJamSource, start: StartJam, stop: StopJam }
+              (labelFor st)
+              st.jam
+              st.looper
+          in
+            Layout.layout
+              { statement:
+                  Statement.statement Statement.defaultStatement
+                    { class_ = "q-say"
+                    , gauge = [ listening ]
+                    , sentences = [ jp.sentence ]
+                    , warnings = jp.warnings
+                    }
+              , main: jp.main
+              , side: jp.side
+              }
+        LoopPage -> Loop.view LoopMsg listening st
+        Library ->
+          HH.div [ HP.class_ (HH.ClassName "q-panes") ]
+            [ HH.div [ HP.class_ (HH.ClassName "q-pane is-library") ] [ setsView ]
+            , HH.div [ HP.class_ (HH.ClassName "q-pane is-dest") ]
+                ( [ destHead ]
+                    <> case st.dest of
+                         Dest.Rample -> [ transformPanel, cardView ]
+                         Dest.Morphagene -> [ reelPanel, destKnows Dest.Morphagene ]
+                         Dest.QuadDrum -> [ qdPanel, destKnows Dest.QuadDrum ]
+                         Dest.Arbhar -> [ arbharPanel, destKnows Dest.Arbhar ]
+                )
+            , maybe (HH.text "") setModal st.openSet
+            ]
+    , HH.section [ HP.class_ (HH.ClassName "q-log") ]
+        (map (\l -> HH.div_ [ HH.text l ]) st.log)
+    ]
+  where
+  cp = cap st
+  -- | **The take and its acts, shared by the Bench and Score**: what is about
+  -- | to fill the take differs between them, and nothing downstream of it does.
+  takeMain =
             [ HH.section [ HP.class_ (HH.ClassName "q-hero") ]
                 [ HH.div [ HP.class_ (HH.ClassName "q-actbar") ] [ goRow, transport, doors ] ]
-            , declaredRow st
             , HH.section [ HP.class_ (HH.ClassName "q-hero is-take") ]
                 [ if not (Array.null st.regions) || st.busy || hasTake
                     then caught
@@ -3941,58 +4045,7 @@ render st =
                 Just InputsModal -> modalBox "Name the inputs" inputsPanel
                 Nothing -> HH.text ""
             ]
-            , side:
-                [ HH.section [ HP.class_ (HH.ClassName "q-curverow is-first") ]
-                    [ SweepView.curves sweepHandlers ]
-                ]
-            }
-        -- | **Two places, and the transform between them.**
-        -- |
-        -- | The library on the left and the destination on the right, which
-        -- | is DropSync's geometry and for DropSync's reason: you cannot
-        -- | judge what a transfer will do from a list of sources alone. What
-        -- | it is NOT is DropSync's other half — rsync is symmetrical and
-        -- | this only goes one way. The card is compiled from the library and
-        -- | never edited; nothing comes back, so there are no arrows and no
-        -- | second direction to choose.
-        JamPage ->
-          let
-            jp = JamView.parts
-              { setName: SetJamName, setSource: SetJamSource, start: StartJam, stop: StopJam }
-              (labelFor st)
-              st.jam
-              st.looper
-          in
-            Layout.layout
-              { statement:
-                  Statement.statement Statement.defaultStatement
-                    { class_ = "q-say"
-                    , gauge = [ listening ]
-                    , sentences = [ jp.sentence ]
-                    , warnings = jp.warnings
-                    }
-              , main: jp.main
-              , side: jp.side
-              }
-        LoopPage -> Loop.view LoopMsg listening st
-        Library ->
-          HH.div [ HP.class_ (HH.ClassName "q-panes") ]
-            [ HH.div [ HP.class_ (HH.ClassName "q-pane is-library") ] [ setsView ]
-            , HH.div [ HP.class_ (HH.ClassName "q-pane is-dest") ]
-                ( [ destHead ]
-                    <> case st.dest of
-                         Dest.Rample -> [ transformPanel, cardView ]
-                         Dest.Morphagene -> [ reelPanel, destKnows Dest.Morphagene ]
-                         Dest.QuadDrum -> [ qdPanel, destKnows Dest.QuadDrum ]
-                         Dest.Arbhar -> [ arbharPanel, destKnows Dest.Arbhar ]
-                )
-            , maybe (HH.text "") setModal st.openSet
-            ]
-    , HH.section [ HP.class_ (HH.ClassName "q-log") ]
-        (map (\l -> HH.div_ [ HH.text l ]) st.log)
-    ]
-  where
-  cp = cap st
+
   wontKeep = wontKeepOf st
   -- What the daemon says the capture is doing, never a second copy of it.
   --
@@ -4360,7 +4413,12 @@ render st =
       -- about the page. Grouped into the centre column here, and the MIDI
       -- report given a wrapper of its own so the right margin holds it
       -- whichever of its four shapes it takes.
-      , warnings =
+      , warnings = sayWarnings
+      , report = [ heardSays, benchMark ]
+      }
+
+  -- | The warnings under a take's sentence, the Bench's and Score's alike.
+  sayWarnings =
           [ clashSays
           , collapseSays
           -- | **A remembered input that is not on this rig.** Silently falling
@@ -4377,8 +4435,51 @@ render st =
                        \aggregate loses the reference rather than pointing it \
                        \somewhere wrong.") ]
           ]
-      , report = [ heardSays, benchMark ]
+
+  -- | **Score's sentence: what Triggerfish will play, and into what.** The
+  -- | clip is a choice in it; everything after the clip is the Bench's own
+  -- | slots, because from the instrument on the two pages are one.
+  scoreStatement =
+    Statement.statement Statement.defaultStatement
+      { class_ = "q-say"
+      , gauge = [ listening ]
+      , sentences = [ scoreSays ]
+      , warnings = if Maybe.isJust st.against then sayWarnings else []
+      , report = [ benchMark ]
       }
+
+  scoreSays = case st.against of
+    Nothing ->
+      [ HH.text
+          ( if Array.null st.declared
+              then "Nothing is published to play. Send a progression or a clip \
+                   \from Triggerfish (Vetula or Odonus), then refresh the list beside this."
+              else "Choose what to play: a progression or a clip Triggerfish \
+                   \has published, from the list beside this." )
+      ]
+    Just c | isPhrase c ->
+      [ HH.text "Recording ", slotScore c
+      , HH.text " from ", slotSource, slotSourceName
+      , HH.text " playing ", slotVoice
+      , HH.text ", triggered by ", slotTrigger ]
+        <> holdSays
+        <> [ HH.text ", kept whole as ", slotName, HH.text "." ]
+    Just c ->
+      [ HH.text ("Making " <> show (Array.length c.chords) <> " chord hits of "), slotScore c ]
+        <> keySays
+        <> [ HH.text " from ", slotSource, slotSourceName
+           , HH.text " playing ", slotVoice
+           , HH.text ", triggered by ", slotTrigger ]
+        <> holdSays
+        <> [ HH.text ", kept as ", slotName
+           , HH.text ", laid out as ", slotEncoding
+           , HH.text ", about ", HH.text runSecs, HH.text " to record." ]
+
+  slotScore c =
+    sel "q-slot" c.hash PickScore
+      (map (\x -> { v: x.hash
+                  , t: x.name <> (if x.key == "" then "" else " \x00b7 " <> x.key) })
+        st.declared)
 
   -- | **Whether anything is listening, said before the take and not after it.**
   -- |
@@ -4959,6 +5060,7 @@ render st =
   -- | halves are not doing the same thing and should not claim to be.
   tagline = case st.page of
     Bench -> "sample an instrument at chosen points"
+    Score -> "sample what Triggerfish has written"
     Library -> "what has been kept, and where it can go"
     JamPage -> "record a source for as long as it plays"
     LoopPage -> "play the looper: the loops, their layers, the Edit panel"
