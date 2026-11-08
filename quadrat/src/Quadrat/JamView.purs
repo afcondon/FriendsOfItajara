@@ -6,13 +6,15 @@
 -- | keeps what was played. When it stops it is a take like any other, and
 -- | plays by name in Tidal (`s "<name>"`) straight away.
 -- |
--- | A view and nothing else: it reads the daemon's snapshot and the page's two
+-- | Views and nothing else: it reads the daemon's snapshot and the page's two
 -- | choices (which source, what name), and says what it wants through
--- | `Handlers`, as `SweepView` does.
+-- | `Handlers`, as `SweepView` does. Its pieces go into `Quadrat.Layout` with
+-- | the page's statement and meter, the same as the Bench's and the Loop's.
 module Quadrat.JamView
   ( Handlers
   , Choice
-  , view
+  , Parts
+  , parts
   , sourceIndex
   ) where
 
@@ -48,46 +50,75 @@ sourceIndex rig chosen =
     | chosen == "" = s.available
     | otherwise = s.name == chosen
 
-view :: forall w act. Handlers act -> Choice -> Maybe LooperState -> HH.HTML w act
-view h choice = case _ of
+-- | The page's pieces, for `Quadrat.Layout`: the statement's sentence and
+-- | warnings, the main column (the button and what the jam is doing), and the
+-- | side column (what a jam is). The meter is the page's, drawn by Main.
+-- |
+-- | `label` is the page's name for an input (the renamed one where there is
+-- | one), so the sentence says what the Bench's would.
+type Parts w act =
+  { sentence :: Array (HH.HTML w act)
+  , warnings :: Array (HH.HTML w act)
+  , main :: Array (HH.HTML w act)
+  , side :: Array (HH.HTML w act)
+  }
+
+parts :: forall w act. Handlers act -> (String -> String) -> Choice -> Maybe LooperState -> Parts w act
+parts h label choice = case _ of
   Nothing ->
-    section
-      [ HH.p [ cls "q-note" ] [ HH.text "No daemon: a jam needs Itajara running." ] ]
+    { sentence: [ HH.text "Recording nothing: a jam needs Itajara running." ]
+    , warnings: []
+    , main: []
+    , side: [ about ]
+    }
   Just rig ->
     let
       jam = rig.jam
       running = jam.on
       current = sourceIndex rig choice.source
       sourceName i = maybe "?" _.name (Array.index rig.sources (i - 1))
+      sourceSlot =
+        HH.select
+          [ cls "q-slot"
+          , HE.onValueChange h.setSource
+          , HP.disabled running
+          , HP.title "the input this jam records"
+          ]
+          ( map
+              ( \src -> HH.option
+                  [ HP.value src.name
+                  , HP.selected (Just src.name == map sourceName current)
+                  , HP.disabled (not src.available)
+                  ]
+                  [ HH.text (label src.name <> if src.available then "" else " \x2014 off") ]
+              )
+              rig.sources
+          )
+      -- While it runs, the name is the daemon's (the stamped one when none was
+      -- typed), so the sentence never claims a name the file will not have.
+      nameSlot =
+        if running then HH.span [ cls "q-slot is-fixed" ] [ HH.text jam.name ]
+        else
+          HH.input
+            [ cls "q-slot is-name"
+            , HP.type_ HP.InputText
+            , HP.value choice.name
+            , HP.placeholder "jam-MMDD-HHMMSS"
+            , HP.title "names the take; empty, it is stamped with the time it starts"
+            , HE.onValueInput h.setName
+            ]
     in
-      section
-        ( [ HH.div [ cls "q-jam-row" ]
-              [ HH.label [ cls "q-jam-field" ]
-                  [ HH.span_ [ HH.text "Source" ]
-                  , HH.select
-                      [ HE.onValueChange h.setSource, HP.disabled running ]
-                      ( map
-                          ( \s -> HH.option
-                              [ HP.value s.name
-                              , HP.selected (Just s.name == map sourceName current)
-                              , HP.disabled (not s.available)
-                              ]
-                              [ HH.text (s.name <> if s.available then "" else " (not connected)") ]
-                          )
-                          rig.sources
-                      )
-                  ]
-              , meter (current >>= \i -> Array.index rig.sources (i - 1))
-              , HH.label [ cls "q-jam-field" ]
-                  [ HH.span_ [ HH.text "Name" ]
-                  , HH.input
-                      [ HP.value choice.name
-                      , HP.placeholder "jam-MMDD-HHMMSS when it starts"
-                      , HE.onValueInput h.setName
-                      , HP.disabled running
-                      ]
-                  ]
-              , HH.button
+      { sentence:
+          [ HH.text (if running then "Recording " else "Records ")
+          , sourceSlot
+          , HH.text " to disk as "
+          , nameSlot
+          , HH.text ", for as long as it plays."
+          ]
+      , warnings: warnings jam <> behind jam
+      , main:
+          [ HH.div [ cls "q-jam-row" ]
+              [ HH.button
                   [ cls ("q-jam-go" <> if running then " is-on" else "")
                   , HE.onClick \_ -> if running then h.stop else h.start
                   , HP.disabled (not running && current == Nothing)
@@ -95,44 +126,39 @@ view h choice = case _ of
                   [ HH.text (if running then "Stop" else "Record") ]
               ]
           ]
-            <> status rig
-        )
+            <> status jam
+      , side: [ about ]
+      }
 
   where
-  section body =
-    HH.section [ cls "q-jam" ]
-      ( [ HH.p [ cls "q-note" ]
-            [ HH.text
-                "Records one source to disk as it plays, for as long as it plays: a modular jam, a rehearsal. \
-                \When it stops it is a take, and plays by name in Tidal straight away."
-            ]
-        ]
-          <> body
-      )
+  about =
+    HH.p [ cls "q-note" ]
+      [ HH.text
+          "A jam records one source to disk as it plays, for as long as it plays: a modular jam, a rehearsal. \
+          \The audio goes to disk as it is made, so an hour costs no memory and a crash keeps what was played. \
+          \When it stops it is a take, and plays by name in Tidal straight away."
+      ]
 
-  status rig =
-    let
-      jam = rig.jam
-    in
-      if jam.on then
-        [ HH.div [ cls "q-jam-status is-on" ]
-            [ HH.span [ cls "q-jam-clock" ] [ HH.text (clock jam.secs) ]
-            , HH.span_ [ HH.text ("into " <> jam.name) ]
-            , if jam.behindSecs > 1.0
-                then HH.span [ cls "q-warn" ] [ HH.text ("the disk is " <> secs1 jam.behindSecs <> " behind") ]
-                else HH.text ""
-            ]
-        ]
-          <> warnings jam
-      else if jam.name /= "" && jam.secs > 0.0 then
-        [ HH.div [ cls "q-jam-status" ]
-            [ HH.span [ cls "q-jam-clock" ] [ HH.text (clock jam.secs) ]
-            , HH.span_ [ HH.text ("kept as " <> jam.name <> ". In Tidal: ") ]
-            , HH.code_ [ HH.text ("s \"" <> jam.name <> "\"") ]
-            ]
-        ]
-          <> warnings jam
+  behind jam =
+    if jam.on && jam.behindSecs > 1.0
+      then [ HH.p [ cls "q-warn" ] [ HH.text ("the disk is " <> secs1 jam.behindSecs <> " behind") ] ]
       else []
+
+  status jam =
+    if jam.on then
+      [ HH.div [ cls "q-jam-status is-on" ]
+          [ HH.span [ cls "q-jam-clock" ] [ HH.text (clock jam.secs) ]
+          , HH.span_ [ HH.text ("into " <> jam.name) ]
+          ]
+      ]
+    else if jam.name /= "" && jam.secs > 0.0 then
+      [ HH.div [ cls "q-jam-status" ]
+          [ HH.span [ cls "q-jam-clock" ] [ HH.text (clock jam.secs) ]
+          , HH.span_ [ HH.text ("kept as " <> jam.name <> ". In Tidal: ") ]
+          , HH.code_ [ HH.text ("s \"" <> jam.name <> "\"") ]
+          ]
+      ]
+    else []
 
   warnings jam =
     (if jam.droppedSecs > 0.0
@@ -141,16 +167,6 @@ view h choice = case _ of
       <> (if jam.full
         then [ HH.p [ cls "q-warn" ] [ HH.text "The file reached what a WAV can hold, and the jam stopped itself." ] ]
         else [])
-
-  meter = case _ of
-    Nothing -> HH.span [ cls "q-jam-meter" ] []
-    Just s ->
-      let
-        -- -60 dB at the left, 0 at the right.
-        frac = max 0.0 (min 1.0 ((s.db + 60.0) / 60.0))
-      in
-        HH.span [ cls "q-jam-meter", HP.title (secs1' s.db <> " dB") ]
-          [ HH.span [ cls "q-jam-level", HP.style ("width: " <> show (frac * 100.0) <> "%") ] [] ]
 
 
 cls :: forall r i. String -> HP.IProp (class :: String | r) i

@@ -93,6 +93,7 @@ import Quadrat.Kind (Close(..), Fold(..), Kind)
 import Quadrat.Kind as Kind
 import Quadrat.Slug (slugFor, stamped)
 import Quadrat.JamView as JamView
+import Quadrat.Layout as Layout
 import Quadrat.Loop as Loop
 import Quadrat.Divider (Divider)
 import Quadrat.Divider as Divider
@@ -2897,7 +2898,26 @@ restCv = do
 -- | The chosen source's level as 0…1, from the daemon's own dB. -60 is the
 -- | floor: below it nothing is playing, and the sparkline says so by lying flat.
 levelNow :: State -> Number
-levelNow s = max 0.0 (min 1.0 ((dbNow s + 60.0) / 60.0))
+levelNow s = max 0.0 (min 1.0 ((meterDb s + 60.0) / 60.0))
+
+-- | **What the meter reads: the source this page records from.** The sweep's
+-- | input on the Bench (and the Library, which records nothing), the jam's on
+-- | Jam, the selected loop's on Loop. The meter sits in the same place on every
+-- | recording page, so it must mean the same thing on each: is anything coming
+-- | in to what this page is about to record.
+-- |
+-- | Not `dbNow`, which stays the sweep's source whatever page is showing: it
+-- | decides when a Bench take has gone quiet, and a page switch must not move
+-- | that.
+meterDb :: State -> Number
+meterDb s = case s.page of
+  JamPage -> fromRig \rig -> JamView.sourceIndex rig s.jam.source
+  LoopPage -> fromRig \rig -> map _.src (Array.index rig.loops s.looperFocus)
+  _ -> dbNow s
+  where
+  fromRig pick =
+    maybe (-120.0) _.db
+      (s.looper >>= \rig -> pick rig >>= \i -> Array.index rig.sources (i - 1))
 
 -- | **The chosen source's level in dB, unmapped and unclamped.**
 -- |
@@ -3800,7 +3820,6 @@ render st =
     -- | Library branch — so the state changed, the panel rendered, and it
     -- | rendered on a page nobody was looking at.
     , maybe (HH.text "") (audioPanel st) st.audio
-    , if st.page == Bench then statement else HH.text ""
     , case st.page of
         -- | **A notebook spread: the method on the left, the results on the
         -- | right.**
@@ -3847,13 +3866,17 @@ render st =
         -- | they move up against the acts — Andrew, 2026-09-12 — and the
         -- | grid keeps the bottom of the page, where it is the answer rather
         -- | than the question.
+        -- | **Andrew's 2/3 + 1/3** (`Quadrat.Layout`), 2026-11-08: the
+        -- | statement and meter head the main column, as on every recording
+        -- | page, and the parameter sweeps take the side column, where they
+        -- | scroll on their own. The take stays under the acts.
         Bench ->
-          HH.div_
+          Layout.layout
+            { statement
+            , main:
             [ HH.section [ HP.class_ (HH.ClassName "q-hero") ]
                 [ HH.div [ HP.class_ (HH.ClassName "q-actbar") ] [ goRow, transport, doors ] ]
             , declaredRow st
-            , HH.section [ HP.class_ (HH.ClassName "q-curverow is-first") ]
-                [ SweepView.curves sweepHandlers ]
             , HH.section [ HP.class_ (HH.ClassName "q-hero is-take") ]
                 [ if not (Array.null st.regions) || st.busy || hasTake
                     then caught
@@ -3907,6 +3930,11 @@ render st =
                 Just InputsModal -> modalBox "Name the inputs" inputsPanel
                 Nothing -> HH.text ""
             ]
+            , side:
+                [ HH.section [ HP.class_ (HH.ClassName "q-curverow is-first") ]
+                    [ SweepView.curves sweepHandlers ]
+                ]
+            }
         -- | **Two places, and the transform between them.**
         -- |
         -- | The library on the left and the destination on the right, which
@@ -3917,11 +3945,25 @@ render st =
         -- | never edited; nothing comes back, so there are no arrows and no
         -- | second direction to choose.
         JamPage ->
-          JamView.view
-            { setName: SetJamName, setSource: SetJamSource, start: StartJam, stop: StopJam }
-            st.jam
-            st.looper
-        LoopPage -> Loop.view LoopMsg st
+          let
+            jp = JamView.parts
+              { setName: SetJamName, setSource: SetJamSource, start: StartJam, stop: StopJam }
+              (labelFor st)
+              st.jam
+              st.looper
+          in
+            Layout.layout
+              { statement:
+                  Statement.statement Statement.defaultStatement
+                    { class_ = "q-say"
+                    , gauge = [ listening ]
+                    , sentences = [ jp.sentence ]
+                    , warnings = jp.warnings
+                    }
+              , main: jp.main
+              , side: jp.side
+              }
+        LoopPage -> Loop.view LoopMsg listening st
         Library ->
           HH.div [ HP.class_ (HH.ClassName "q-panes") ]
             [ HH.div [ HP.class_ (HH.ClassName "q-pane is-library") ] [ setsView ]
@@ -4575,20 +4617,20 @@ render st =
              , Wave.attr "height" (show h) ] []
     in
       HH.div
-        [ HP.class_ (HH.ClassName ("q-meter" <> if quiet then " is-quiet" else ""))
-        , HP.title (fmt srcDb <> " dB — the last two seconds of input level"
-                      <> (if quiet then ". Nothing is playing into it." else ""))
+        [ HP.class_ (HH.ClassName ("q-meter" <> if meterQuiet then " is-quiet" else ""))
+        , HP.title (fmt meterNow <> " dB — the last two seconds of input level"
+                      <> (if meterQuiet then ". Nothing is playing into it." else ""))
         ]
         [ Wave.el "svg"
             [ Wave.attr "viewBox" "0 0 1 1", Wave.attr "preserveAspectRatio" "none"
             , Wave.attr "class" "q-meterpic" ]
             (Array.mapWithIndex bar padded)
         , HH.span [ HP.class_ (HH.ClassName "q-meterword") ]
-            [ HH.text (if quiet then "silent" else fmt srcDb <> " dB") ]
+            [ HH.text (if meterQuiet then "silent" else fmt meterNow <> " dB") ]
         -- | **Offered only when it would help.** A door that is always there
         -- | is a door nobody reads; this one appears exactly when the input is
         -- | silent, which is the moment the question gets asked out loud.
-        , if not quiet then HH.text "" else
+        , if not meterQuiet then HH.text "" else
             HH.button
               [ HP.class_ (HH.ClassName "q-whysilent")
               , HP.title "where the inputs actually land, against the device as it is right now"
@@ -5087,15 +5129,15 @@ render st =
     Just top | st.sweep.source /= ""
              , Array.all (\s0 -> s0.name /= st.sweep.source) top.sources -> true
     _ -> false
-  srcDb = maybe (-120.0) _.db
-    (st.looper >>= \top -> Array.index top.sources (srcNow - 1))
   -- | **Below this nobody is playing into it.**
   -- |
   -- | Was -90, which -80 does not trip — and -80 is silence. A whole transect
   -- | went to an input with nothing patched to it while the page showed the
   -- | reading and called it fine. -60 is quiet in any room; anything a module
   -- | is actually driving sits far above it.
-  quiet = srcDb < -60.0
+  -- The meter's own reading, which follows the page (see `meterDb`).
+  meterNow = meterDb st
+  meterQuiet = meterNow < -60.0
 
   connection = case st.looper of
     Nothing -> HH.span [ HP.class_ (HH.ClassName "q-warn") ] [ HH.text "no daemon" ]

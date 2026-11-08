@@ -74,6 +74,7 @@ import Helm.Twister as HelmTwister
 import Helm.WebMIDI (MIDIAccess)
 import Helm.WebMIDI as MIDI
 import Itajara.Surface.Looper.Page as Page
+import Quadrat.Layout as PageLayout
 import Itajara.Surface.Looper.Statement as LooperStatement
 import Halogen.Widgets.Statement as Statement
 import Itajara.Surface.Looper.TwisterCard as TwisterCard
@@ -450,9 +451,20 @@ note text = H.modify_ \s -> s { looperLog = pushLog text s.looperLog }
 -- | Twister card is the looper's pages only, with a line under the tabs
 -- | whenever it is not following a device, so a card showing page 1 because
 -- | nothing told it otherwise is never mistaken for one that knows.
-view :: forall r w act. (Msg -> act) -> Record (Fields r) -> HH.HTML w act
-view wrap st = Page.render handlers ports extras st
+view :: forall r w act. (Msg -> act) -> HH.HTML w act -> Record (Fields r) -> HH.HTML w act
+view wrap meter st =
+  -- **The page's shape, not the looper's** (`Quadrat.Layout`): the statement
+  -- and meter head the main column as on every recording page, the panel
+  -- buttons and the loops follow, and the Twister card and the log take the
+  -- side column.
+  PageLayout.layout
+    { statement
+    , main: [ parts.buttons ] <> parts.notices <> parts.main <> [ parts.overlay ]
+    , side: parts.side
+    }
   where
+  parts = Page.parts handlers ports extras st
+
   handlers =
     { setFace: wrap <<< SetFace
     , simulate: \slot switch gesture -> wrap (Simulate slot switch gesture)
@@ -492,7 +504,6 @@ view wrap st = Page.render handlers ports extras st
         ]
     , banks: Nothing
     , printSheet: Nothing
-    , statement: Just statement
     }
 
   -- | **The strip's readings, said as the page's statement**, like the
@@ -501,6 +512,7 @@ view wrap st = Page.render handlers ports extras st
   statement =
     Statement.statement Statement.defaultStatement
       { class_ = "q-say is-loop"
+      , gauge = [ meter ]
       , sentences = map (map part) (LooperStatement.sentences st.looper st.looperFocus)
       }
 

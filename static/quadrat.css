@@ -710,13 +710,14 @@ body {
    words in it. */
 .q-say {
   display: grid;
-  grid-template-columns: 280px minmax(0, 640px) 280px;
+  grid-template-columns: 170px minmax(0, 680px);
   grid-template-areas:
-    "gauge say  report"
-    "gauge warn report";
-  justify-content: center;
+    "gauge say"
+    "gauge warn"
+    "gauge report";
+  justify-content: start;
   gap: 0 30px;
-  margin: 0 auto; padding: 40px 0 34px;
+  margin: 0; padding: 32px 0 28px;
 }
 /* The regions are Halogen.Widgets.Statement's: the same shape on every page,
    styled here for Quadrat. */
@@ -725,7 +726,9 @@ body {
 .q-say .hw-statement-warn { grid-area: warn; }
 /* Centred in its margin, not hard against the text: a marginal note that
    tracks the top of the prose reads as the first line of it. */
-.q-say .hw-statement-report { grid-area: report; align-self: center; }
+/* Under the sentence now, not in a third column: the statement has two thirds
+   of the page, not all of it. */
+.q-say .hw-statement-report { grid-area: report; margin-top: 12px; }
 .q-say .hw-statement-report > * { margin-top: 0; }
 .q-say .hw-statement-line {
   margin: 0; font-size: 23px; line-height: 1.55; font-weight: 300;
@@ -737,20 +740,42 @@ body {
 .q-say .hw-statement-reading.is-alarm { color: var(--hot); font-weight: 600; }
 /* The Loop page's statement sits in the looper's strip, above its buttons:
    two sentences, no margins, so less air than the Bench's. */
-.q-say.is-loop { padding: 14px 0 18px; }
+.q-say.is-loop { padding: 32px 0 18px; }
 .q-say.is-loop .hw-statement-line { font-size: 21px; margin-bottom: .3em; }
 /* Narrow enough that half of it is not a column any more. */
 /* Narrow enough that three columns is not three columns any more: the
    margins become rows, in reading order, and the meter stays first because
    it is the one you check before pressing anything. */
-@media (max-width: 1320px) {
+@media (max-width: 760px) {
   .q-say {
     grid-template-columns: minmax(0, 1fr);
     grid-template-areas: "gauge" "say" "warn" "report";
     gap: 16px 0; padding: 26px 0 22px;
   }
   .q-say .hw-statement-gauge { justify-self: start; }
-  .q-say .hw-statement-report { align-self: start; }
+}
+
+/* ── Every recording page: two thirds and one third (Quadrat.Layout) ──────
+   Andrew's drawing, 2026-11-08. The main column's head is the statement and
+   the meter, in the same place on Bench, Jam and Loop; the side column holds
+   the secondary controls and scrolls on its own, held in view while the main
+   column scrolls. */
+.q-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: 0 32px; align-items: start;
+}
+.q-layout-side {
+  position: sticky; top: 0;
+  max-height: 100vh; overflow-y: auto;
+  padding: 32px 0 32px 24px;
+  border-left: 1px solid var(--rule);
+}
+/* Narrow enough that a third is not a column: the side goes under. */
+@media (max-width: 1000px) {
+  .q-layout { grid-template-columns: minmax(0, 1fr); }
+  .q-layout-side { position: static; max-height: none; border-left: 0; padding-left: 0;
+                   border-top: 1px solid var(--rule); }
 }
 
 /* **A meter, not a word.** Twenty block characters inside the sentence read
@@ -921,6 +946,10 @@ body {
    the height to the taller of them and let four parameters fill a page. */
 .q-curverow .q-sweep { width: fit-content; max-width: 100%; margin-inline: auto; }
 .q-curverow .q-curves { display: flex; flex-wrap: wrap; gap: 14px; justify-content: center; }
+/* In the side column the cards stack, one parameter a row, full width. */
+.q-layout-side .q-curverow .q-sweep { width: auto; margin: 0; }
+.q-layout-side .q-curverow .q-curves { flex-direction: column; flex-wrap: nowrap; justify-content: flex-start; }
+.q-layout-side .q-pcard { width: 100%; }
 .q-pcard { width: 232px; display: flex; flex-direction: column; gap: 6px; }
 .q-pcard .q-curvecard { width: 100%; }
 .q-pcard .q-curveparam { width: 100%; }
