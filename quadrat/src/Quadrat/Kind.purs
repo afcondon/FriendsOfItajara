@@ -9,6 +9,7 @@
 module Quadrat.Kind
   ( Kind(..)
   , all
+  , transect
   , name
   , label
   , blurb
@@ -64,6 +65,12 @@ derive instance Eq Kind
 
 all :: Array Kind
 all = [ DrumHits, ChordHits, Bars 1, Chromatic, Longform, Phrase ]
+
+-- | **What the rig can play through a transect**, the Bench's kinds. A bar
+-- | take and a long take are played by you (Jam), and a phrase by Triggerfish
+-- | (Score): each has the page of whoever plays it.
+transect :: Array Kind
+transect = [ DrumHits, ChordHits, Chromatic ]
 
 name :: Kind -> String
 name = case _ of

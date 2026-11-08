@@ -284,7 +284,7 @@ type State =
   -- | clip rewrites the kind, the count, the key and the spacing to fit it, and
   -- | those are the Bench's too; without this, a visit to Score left the Bench
   -- | making "1 unpitched phrase in C minor". Restored on leaving Score.
-  , benchKept :: Maybe { kind :: Kind, divider :: Divider, sweep :: Sweep.Plan, fill :: Fill }
+  , benchKept :: Maybe { kind :: Kind, divider :: Divider, sweep :: Sweep.Plan, fill :: Fill, name :: String, mine :: Boolean }
   -- | **The sets already on disk**, newest first. Read from the server rather
   -- | than remembered here: a set outlives the page by a long way, which is
   -- | the entire point of storing it.
@@ -565,7 +565,6 @@ data Action
   -- | Score's sentence chose a published clip, by hash.
   | PickScore String
   | PickKind Kind
-  | SetBars String
   | SetName String
   | ArmOn Int
   | Close
@@ -659,7 +658,7 @@ data Action
   -- | Anything the Loop page does (`Quadrat.Loop`).
   | LoopMsg Loop.Msg
   | SetJamName String
-  | SetJamSource String
+  | SetJamLength String
   | StartJam
   | StopJam
   | FillBy Fill
@@ -749,7 +748,7 @@ component = H.mkComponent
       , shownSecs: Nothing, audio: Nothing, audioBusy: false
       , placeSliced: false, placeLayers: 0, placeVoices: 0
       , placeAppend: false, srcNames: []
-      , heard: [], midiIn: [], midiOk: true, jam: { source: "", name: "" }
+      , heard: [], midiIn: [], midiOk: true, jam: { name: "", length: JamView.Whole }
       , looperStatus: Loop.initial.looperStatus
       , looperSnapshotAge: Loop.initial.looperSnapshotAge
       , looperFocus: Loop.initial.looperFocus
@@ -876,6 +875,28 @@ note m s = s { log = Array.takeEnd 10 (Array.snoc s.log m) }
 -- | thirty-odd fields of which four meant anything here.
 cap :: State -> Maybe Capture
 cap st = map _.capture st.looper
+
+-- | **The Bench holds a transect and nothing else.** Swept, and of a kind the
+-- | rig can play through one; anything another page left (a bar take, a take
+-- | played by hand) is put back to the Bench's own default.
+onBench :: State -> State
+onBench st
+  | Array.elem st.kind Kind.transect && st.fill == Swept = st
+  | otherwise =
+      let k = if Array.elem st.kind Kind.transect then st.kind else Kind.DrumHits
+      in st { kind = k, divider = Divider.defaultFor k, fill = Swept }
+
+-- | **A jam's length, as a take.** A bar count is the Bench's bar take; a cut
+-- | is a take you play by hand, divided at its onsets. The streamed jam needs
+-- | nothing set: it is the daemon's, not the take's.
+jamTake :: forall o m. MonadAff m => JamView.Length -> H.HalogenM State Action () o m Unit
+jamTake l = for_ (JamView.kindOf l) \k -> do
+  case k of
+    Kind.Bars n -> H.modify_ _ { bars = n }
+    _ -> pure unit
+  handleAction (PickKind k)
+  st <- H.get
+  when (st.fill /= Played) (handleAction (FillBy Played))
 
 handleAction :: forall o m. MonadAff m => Action -> H.HalogenM State Action () o m Unit
 handleAction = case _ of
@@ -1275,11 +1296,6 @@ handleAction = case _ of
     when (wantsAName st) do
       n <- liftEffect (slugFor k)
       H.modify_ _ { name = n }
-  SetBars v -> H.modify_ \s ->
-    let n = clamp 1 64 (fromMaybe s.bars (Int.fromString v))
-    in s { bars = n, kind = case s.kind of
-                             Kind.Bars _ -> Kind.Bars n
-                             other -> other }
   -- **The loop's source is the loop's, not the page's.**
   --
   -- Held here once, and asserted again at Arm, it silently overrode whatever
@@ -1432,7 +1448,7 @@ handleAction = case _ of
                     -- rather than with a row of numbers from the last run.
                     sp <- H.liftAff (attempt (toAffE (Http.loadSpec nm)))
                     let n = Array.length v.regions
-                    H.modify_ \st -> st
+                    H.modify_ \st -> onBench $ st
                       { regions = v.regions
                       , keep = if n <= 0 then Set.empty
                                else Set.fromFoldable (Array.range 0 (n - 1))
@@ -2187,32 +2203,49 @@ handleAction = case _ of
   -- | Asked once, on opening, rather than at Run: `requestMIDIAccess` prompts
   -- | the first time, and a permission dialog appearing in the middle of a run
   -- | would cost the take.
+  -- |
+  -- | **Each recording page sets the take up its own way**, and the Bench's
+  -- | settings are the only ones worth keeping: Score's come from the pick
+  -- | and Jam's from its length. So the Bench's are set aside on leaving it
+  -- | and put back on returning, whichever page rewrote them meanwhile. The
+  -- | input is the exception, and is not put back: it is one rig, and the
+  -- | input chosen last is the one plugged in.
   GoTo pg -> do
     before <- H.get
+    when (before.page == Bench && pg /= Bench) $ H.modify_ \st ->
+      st { benchKept = Just { kind: st.kind, divider: st.divider, sweep: st.sweep, fill: st.fill
+                            , name: st.name, mine: st.mine } }
     -- **A clip is in play only on Score.** Leaving puts it down, without
     -- forgetting the pick; coming back picks the remembered one up again, so
-    -- a Bench run can never be quietly a run against a progression.
-    when (before.page == Score && pg /= Score) $ H.modify_ \st ->
+    -- a Bench or Jam take can never be quietly a run against a progression.
+    when (before.page == Score && pg /= Score) $ H.modify_ _ { against = Nothing }
+    when (pg == Bench && before.page /= Bench) $ H.modify_ \st -> onBench $
       case st.benchKept of
-        Just b -> st { against = Nothing, kind = b.kind, divider = b.divider
-                     , sweep = b.sweep, fill = b.fill, benchKept = Nothing }
-        Nothing -> st { against = Nothing }
-    when (pg == Score && before.page /= Score) $ H.modify_ \st ->
-      -- Triggered, always: Triggerfish plays a Score take, never your hands.
-      st { benchKept = Just { kind: st.kind, divider: st.divider, sweep: st.sweep, fill: st.fill }
-         , fill = Swept }
+        Just b -> st { kind = b.kind, divider = b.divider, fill = b.fill
+                     , sweep = b.sweep { source = st.sweep.source }
+                     , name = b.name, mine = b.mine, benchKept = Nothing }
+        Nothing -> st
+    -- Triggered, always: Triggerfish plays a Score take, never your hands.
+    when (pg == Score && before.page /= Score) $ H.modify_ _ { fill = Swept }
     H.modify_ _ { page = pg }
     when (pg == LoopPage) (Loop.start LoopMsg)
     when (pg == Score && before.page /= Score) (handleAction FetchDeclared)
+    when (pg == JamPage && before.page /= JamPage) do
+      st <- H.get
+      jamTake st.jam.length
   LoopMsg msg -> Loop.handle LoopMsg msg
   SetJamName v -> H.modify_ \s0 -> s0 { jam = s0.jam { name = v } }
-  SetJamSource v -> H.modify_ \s0 -> s0 { jam = s0.jam { source = v } }
+  -- | **The length decides the take.** The streamed jam is not a take until
+  -- | it stops; a bar count or a cut is one, set up as the Bench would set it.
+  SetJamLength v -> for_ (JamView.lengthOf v) \l -> do
+    H.modify_ \s0 -> s0 { jam = s0.jam { length = l } }
+    jamTake l
   -- | **Name it, then start it.** An empty name is stamped now, as a take's
   -- | is, so a jam can never land on another; the field is cleared after, so
   -- | the next jam gets its own stamp rather than this one's name.
   StartJam -> do
     st <- H.get
-    case st.looper >>= \rig -> JamView.sourceIndex rig st.jam.source of
+    case st.looper >>= \rig -> JamView.sourceIndex rig st.sweep.source of
       Nothing -> H.modify_ (note "no source to jam from")
       Just src -> do
         name <- if String.trim st.jam.name == "" then liftEffect (stamped "jam") else pure (String.trim st.jam.name)
@@ -2949,7 +2982,8 @@ levelNow s = max 0.0 (min 1.0 ((meterDb s + 60.0) / 60.0))
 -- | that.
 meterDb :: State -> Number
 meterDb s = case s.page of
-  JamPage -> fromRig \rig -> JamView.sourceIndex rig s.jam.source
+  -- A running jam's own source; otherwise the input the page will record.
+  JamPage | maybe false (_.jam.on) s.looper -> fromRig \rig -> Just rig.jam.src
   LoopPage -> fromRig \rig -> map _.src (Array.index rig.loops s.looperFocus)
   _ -> dbNow s
   where
@@ -3894,7 +3928,7 @@ render st =
             [ pageTab Bench "Bench" "cut a transect and look at what came back"
             , pageTab Score "Score" "sample a progression or a clip Triggerfish has published"
             , pageTab Library "Library" "every set kept, re-runnable, and where it can go"
-            , pageTab JamPage "Jam" "record a source to disk for as long as it plays"
+            , pageTab JamPage "Jam" "you play: for as long as it plays, for some bars, or cut at each hit"
             , pageTab LoopPage "Loop" "play the looper from here: the loops, their layers, the Edit panel"
             ]
         , HH.span [ HP.class_ (HH.ClassName "q-sub") ] [ HH.text tagline ]
@@ -3993,24 +4027,48 @@ render st =
         -- | this only goes one way. The card is compiled from the library and
         -- | never edited; nothing comes back, so there are no arrows and no
         -- | second direction to choose.
-        JamPage ->
-          let
-            jp = JamView.parts
-              { setName: SetJamName, setSource: SetJamSource, start: StartJam, stop: StopJam }
-              (labelFor st)
-              st.jam
-              st.looper
-          in
+        -- | **You play.** Streamed to disk for as long as it plays, or a take
+        -- | of N bars, or a take cut at each hit: the length is chosen in the
+        -- | sentence, and the last two are the Bench's take.
+        JamPage -> case st.jam.length of
+          JamView.Whole ->
+            let
+              jamOn = maybe false (_.jam.on) st.looper
+              jp = JamView.whole
+                { setName: SetJamName, start: StartJam, stop: StopJam }
+                { source:
+                    if jamOn
+                      then [ HH.span [ HP.class_ (HH.ClassName "q-slot is-fixed") ] [ HH.text (labelFor st srcName) ] ]
+                      else [ slotSource, slotSourceName ]
+                , length: if jamOn then HH.text "for as long as it plays" else slotJamLength
+                , sourceOk: Maybe.isJust (st.looper >>= \rig -> JamView.sourceIndex rig st.sweep.source)
+                }
+                st.jam
+                st.looper
+            in
+              Layout.layout
+                { statement:
+                    Statement.statement Statement.defaultStatement
+                      { class_ = "q-say"
+                      , gauge = [ listening ]
+                      , sentences = [ jp.sentence ]
+                      , warnings = jp.warnings
+                      }
+                , main: jp.main
+                , side: jp.side
+                }
+          l ->
             Layout.layout
               { statement:
                   Statement.statement Statement.defaultStatement
                     { class_ = "q-say"
                     , gauge = [ listening ]
-                    , sentences = [ jp.sentence ]
-                    , warnings = jp.warnings
+                    , sentences = [ jamSays l ]
+                    , warnings = sayWarnings
+                    , report = [ heardSays, benchMark ]
                     }
-              , main: jp.main
-              , side: jp.side
+              , main: takeMain
+              , side: [ JamView.about l ]
               }
         LoopPage -> Loop.view LoopMsg listening st
         Library ->
@@ -4400,55 +4458,28 @@ render st =
       -- 20 for chords. All of that was chosen behind a door labelled Trigger,
       -- so the only visible trace of it was the generated name, which looks
       -- like a name.
+      -- **The Bench is the rig playing a transect**, so its sentence has one
+      -- case. A bar take and a take played by hand are Jam's, and say so
+      -- there.
       , sentences = pure
-          ( case st.kind of
-            -- **A bar take is a third case, and says so.** Nothing triggers
-            -- it, nothing divides it and it makes one sample, so the count,
-            -- the trigger and the hold are all questions without answers. What
-            -- IS dispositive is where it starts and how long it runs, and both
-            -- are the rig's: the next bar line, and a count of its bars. So
-            -- the sentence says those, with the length in seconds at the
-            -- tempo it will actually be recorded at.
-            Kind.Bars n ->
-              [ HH.text "Recording ", slotBars, HH.text " ", slotKind ]
-                <> keySays
-                <> [ HH.text " from ", slotSource, slotSourceName
-                   , HH.text " playing ", slotVoice
-                   , HH.text ", from the next bar line", HH.text (barSays n)
-                   , HH.text ", kept as ", slotName
-                   , HH.text ", laid out as ", slotEncoding, HH.text "."
-                   ]
-            _ -> case st.fill of
-              Played ->
-                [ HH.text "Making ", slotKind ]
-                  <> keySays
-                  <> [ HH.text " from ", slotSource, slotSourceName
-                     , HH.text " playing ", slotVoice
-                     , HH.text ", triggered by ", slotTrigger ]
-                  <> holdSays
-                  <> [ HH.text ", kept as ", slotName
-                     , HH.text ", laid out as ", slotEncoding
-                     , HH.text ". As many as you play."
-                     ]
-              Swept ->
-                [ HH.text "Making ", slotExtent
-                , HH.text " ", slotPitched
-                , HH.text " ", slotKind
-                ]
-                  <> keySays
-                  <> [ HH.text " from ", slotSource, slotSourceName
-                     , HH.text " playing ", slotVoice
-                     , HH.text ", triggered by ", slotTrigger ]
-                  <> holdSays
-                  <> [ HH.text ", kept as ", slotName
-                     , HH.text ", laid out as ", slotEncoding
-                     ]
-                  -- Named only when there IS one to name: "tuned by nothing"
-                  -- is a clause about an absence, and an unpitched run is not
-                  -- missing anything.
-                  <> (if Sweep.pitched st.sweep
-                        then [ HH.text ", tuned by ", slotCalib ] else [])
-                  <> [ HH.text ", about ", HH.text runSecs, HH.text " to record." ] )
+          ( [ HH.text "Making ", slotExtent
+            , HH.text " ", slotPitched
+            , HH.text " ", slotKind
+            ]
+              <> keySays
+              <> [ HH.text " from ", slotSource, slotSourceName
+                 , HH.text " playing ", slotVoice
+                 , HH.text ", triggered by ", slotTrigger ]
+              <> holdSays
+              <> [ HH.text ", kept as ", slotName
+                 , HH.text ", laid out as ", slotEncoding
+                 ]
+              -- Named only when there IS one to name: "tuned by nothing"
+              -- is a clause about an absence, and an unpitched run is not
+              -- missing anything.
+              <> (if Sweep.pitched st.sweep
+                    then [ HH.text ", tuned by ", slotCalib ] else [])
+              <> [ HH.text ", about ", HH.text runSecs, HH.text " to record." ] )
       -- **The warnings under the sentence; the report beside it.**
       --
       -- These were siblings in what the CSS made a flex ROW, so a clash about
@@ -4526,6 +4557,35 @@ render st =
   -- | The key is the clip's, said whole ("C Lydian ♯2"), and read rather than
   -- | chosen: it is the publisher's declaration. The set keeps only its centre
   -- | (C, major), which is all a set's key is; the mode is the clip's.
+  -- | **The length, chosen in the sentence**, and fixed while a take is
+  -- | being made: changing it then would change what the take is.
+  slotJamLength =
+    if st.armed || writing
+      then HH.span [ HP.class_ (HH.ClassName "q-slot is-fixed") ]
+             [ HH.text (maybe "" _.t (Array.find (\o -> o.v == JamView.lengthValue st.jam.length)
+                                        (JamView.lengthChoices st.bars))) ]
+      else sel "q-slot" (JamView.lengthValue st.jam.length) SetJamLength
+             (JamView.lengthChoices st.bars)
+
+  -- | **A jam that is a take.** A bar take says where it starts and how long
+  -- | it runs, both the rig's; a cut take says it makes as many as you play.
+  -- | Neither has a trigger, a count or a running time to promise.
+  jamSays = case _ of
+    JamView.ForBars n ->
+      [ HH.text "Records ", slotSource, slotSourceName
+      , HH.text " playing ", slotVoice, HH.text " ", slotJamLength
+      , HH.text (barSays n <> ",") ]
+        <> keySays
+        <> [ HH.text ", kept whole as ", slotName
+           , HH.text ", laid out as ", slotEncoding, HH.text "." ]
+    _ ->
+      [ HH.text "Records ", slotSource, slotSourceName
+      , HH.text " playing ", slotVoice, HH.text ", ", slotJamLength ]
+        <> keySays
+        <> [ HH.text ", kept as ", slotName
+           , HH.text ", laid out as ", slotEncoding
+           , HH.text ". As many as you play." ]
+
   scoreKeySays c
     | c.key == "" = [ HH.text ", which declares no key," ]
     | Array.null c.outside = [ HH.text " in ", keyReading c.key ]
@@ -4877,16 +4937,10 @@ render st =
   -- | was a row of chips behind the Trigger door, where nothing about it could
   -- | be seen without opening one; the generated name was the only evidence,
   -- | and a name reads as a name.
+  -- | The Bench's kinds: what the rig can play through a transect.
   slotKind =
     sel "q-slot" (Kind.name st.kind) PickKindNamed
-      -- `Kind.all` carries `Bars 1` as the representative, so the bar entry has
-      -- to be labelled with the count the page is actually holding — otherwise
-      -- a four-bar take reads "one bar" in its own sentence.
-      (map (\k -> { v: Kind.name k
-                  , t: sentenceKind (case k of
-                          Kind.Bars _ -> Kind.Bars st.bars
-                          other -> other) })
-        Kind.all)
+      (map (\k -> { v: Kind.name k, t: sentenceKind k }) Kind.transect)
 
   -- | The kind as it reads mid-sentence: "12 pitched chord hits from …".
   -- | `Kind.label` is a heading and is capitalised for one.
@@ -4894,20 +4948,6 @@ render st =
     Kind.Bars n -> if n == 1 then "bar" else "bars"
     other -> String.toLower (Kind.label other)
 
-  -- | **How many bars**, in the sentence where the count is read. It was a
-  -- | field behind the Trigger door while the sentence printed a sample count
-  -- | — "Making 2 unpitched one bar" — which was the count of something else.
-  slotBars =
-    HH.input
-      [ HP.class_ (HH.ClassName "q-slot is-num"), HP.type_ HP.InputNumber
-      , HP.value (show st.bars), HP.min 1.0, HP.max 64.0
-      , HP.disabled (st.armed || writing)
-      , HP.title "how many of the rig's bars — counted by the daemon from the \
-                 \bar line the take starts on"
-      , HE.onValueInput SetBars
-      ]
-
-  -- | The length at the tempo it will be recorded at, or why there is none.
   barSays n = case st.looper of
     Just top | top.barFrames > 0 && top.sampleRate > 0 ->
       " — " <> fmt (Int.toNumber (n * top.barFrames) / Int.toNumber top.sampleRate)
@@ -5002,8 +5042,7 @@ render st =
   slotTrigger =
     sel "q-slot" triggerBy SetTriggerBy
       [ { v: "es9", t: "the ES-9" }, { v: "es5", t: "the ES-5" }
-      , { v: "fh2", t: "the FH-2" }, { v: "midi", t: "MIDI" }
-      , { v: "hand", t: "my own hands" } ]
+      , { v: "fh2", t: "the FH-2" }, { v: "midi", t: "MIDI" } ]
 
   triggerBy
     | st.fill == Played = "hand"
@@ -5152,7 +5191,7 @@ render st =
     Bench -> "sample an instrument at chosen points"
     Score -> "sample what Triggerfish has written"
     Library -> "what has been kept, and where it can go"
-    JamPage -> "record a source for as long as it plays"
+    JamPage -> "record what you play"
     LoopPage -> "play the looper: the loops, their layers, the Edit panel"
 
   pageTab pg label why =
@@ -6185,20 +6224,10 @@ render st =
   -- | mean. Nothing here says Record — the column's Go row does that, the
   -- | same one a transect uses.
   handPanel =
+    -- The kind is Jam's length, chosen in its sentence; this says what it
+    -- means and what is deliberately absent.
     HH.div [ HP.class_ (HH.ClassName "q-hand") ]
-      [ HH.div [ HP.class_ (HH.ClassName "q-kinds") ]
-          (map kindBtn Kind.all)
-      , case st.kind of
-          Kind.Bars _ ->
-            HH.label [ HP.class_ (HH.ClassName "q-field is-tight") ]
-              [ HH.span_ [ HH.text "bars" ]
-              , HH.input
-                  [ HP.type_ HP.InputText, HP.value (show st.bars)
-                  , HP.disabled (st.armed || writing)
-                  , HE.onValueInput SetBars ]
-              ]
-          _ -> HH.text ""
-      , HH.p [ HP.class_ (HH.ClassName "q-blurb") ]
+      [ HH.p [ HP.class_ (HH.ClassName "q-blurb") ]
           [ HH.text (Kind.blurb st.kind)
           , HH.text (" Captured from " <> labelFor st srcName <> " as it comes"
               <> ", and folded to "
@@ -7967,16 +7996,6 @@ render st =
     -- than guessed: the mild reading of an unknown verdict is the dangerous
     -- one.
     Http.Unknown w -> "unrecognised (" <> w <> ")"
-
-  kindBtn k =
-    HH.button
-      [ HP.class_ (HH.ClassName ("q-kind" <> if Kind.name k == Kind.name st.kind then " on" else ""))
-      , HP.disabled (st.armed || writing)
-      , HE.onClick \_ -> PickKind (case k of
-                                     Kind.Bars _ -> Kind.Bars st.bars
-                                     other -> other)
-      ]
-      [ HH.text (Kind.label k) ]
 
 -- | **Move one entry of the card plan by one place**, keeping everything else
 -- | in order. Arrows rather than drag: the list is short, the intent is exact,
