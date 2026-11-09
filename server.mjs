@@ -35,6 +35,9 @@
 //                                    module picks between. Absent means the
 //                                    sweep's own extent decides.
 //                                  → put a set ALREADY ON DISK onto a voice
+//   POST /api/set/save             { take, set, kind, regions, spec, … } → cut
+//                                  the kept regions into a set and describe it;
+//                                  never places it (Quadrat's one write)
 //   GET  /api/sets                 every stored sample set, newest first
 //   GET  /api/sets/:name           one set whole: spec, schedule, measurements,
 //                                  and what each sample meant
@@ -2768,8 +2771,11 @@ const server = http.createServer(async (req, res) => {
       const r = await runJson(["kit", "build", CARD_TOML, dest, "--json"]);
       return json(res, 200, r);
     }
-    if (url.pathname === "/api/card/add" && req.method === "POST") {
-      return json(res, 200, await addToCard(await readBody(req)));
+    // **Save a set, and only save it.** Quadrat's one write: placing a set on
+    // a card is Pinakes' (2026-11-09), so this route cannot place whatever
+    // the body says.
+    if (url.pathname === "/api/set/save" && req.method === "POST") {
+      return json(res, 200, await addToCard({ ...(await readBody(req)), place: false }));
     }
     if (url.pathname === "/api/card/write" && req.method === "POST") {
       const body = await readBody(req);

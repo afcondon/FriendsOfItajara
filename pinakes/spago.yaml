@@ -1,0 +1,32 @@
+package:
+  name: pinakes
+  description: |
+    Pinakes — the sets Quadrat has kept, and getting them onto a module: a
+    Rample card, a Morphagene reel, a QuadDrum card, an Arbhar stick.
+
+    Named for Callimachus's catalogue of the Library of Alexandria; a pinax is
+    a tablet, which is what a card is. Quadrat makes sets and Pinakes places
+    them: one app owns every write to a card, and neither app imports the
+    other. What they share is `quadrat-common` and the sample store.
+  dependencies:
+    - aff
+    - aff-promise
+    - arrays
+    - effect
+    - either
+    - foldable-traversable
+    - halogen
+    - integers
+    - maybe
+    - numbers
+    - ordered-collections
+    - prelude
+    - quadrat-common
+    - strings
+    - tuples
+  build:
+    strict: true
+  bundle:
+    module: Pinakes.Main
+    outfile: ../static/pinakes.js
+    platform: browser

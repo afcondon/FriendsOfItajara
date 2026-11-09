@@ -31,6 +31,31 @@
           "dependencies": []
         }
       },
+      "pinakes": {
+        "path": "pinakes",
+        "core": {
+          "dependencies": [
+            "aff",
+            "aff-promise",
+            "arrays",
+            "effect",
+            "either",
+            "foldable-traversable",
+            "halogen",
+            "integers",
+            "maybe",
+            "numbers",
+            "ordered-collections",
+            "prelude",
+            "quadrat-common",
+            "strings",
+            "tuples"
+          ]
+        },
+        "test": {
+          "dependencies": []
+        }
+      },
       "quadrat": {
         "path": "quadrat",
         "core": {
@@ -55,12 +80,36 @@
             "numbers",
             "ordered-collections",
             "prelude",
+            "quadrat-common",
             "rebus",
             "strings",
             "tuples",
             "web-dom",
             "web-html",
             "web-uievents"
+          ]
+        },
+        "test": {
+          "dependencies": []
+        }
+      },
+      "quadrat-common": {
+        "path": "common",
+        "core": {
+          "dependencies": [
+            "aff-promise",
+            "arrays",
+            "effect",
+            "halogen",
+            "integers",
+            "maybe",
+            "nullable",
+            "numbers",
+            "ordered-collections",
+            "prelude",
+            "rebus",
+            "strings",
+            "tuples"
           ]
         },
         "test": {
@@ -1330,6 +1379,8 @@
         "ordered-collections",
         "prelude",
         "strings",
+        "web-dom",
+        "web-events",
         "web-uievents"
       ]
     },

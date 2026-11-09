@@ -21,7 +21,7 @@
 -- | failure this project keeps meeting: **the act succeeded and the report of
 -- | it was wrong**. So an unbuilt tab says what the module imposes — which is
 -- | measured and useful today — and says plainly that nothing here writes it.
-module Quadrat.Dest
+module Pinakes.Dest
   ( Dest(..)
   , all
   , Facts

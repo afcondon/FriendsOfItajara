@@ -17,7 +17,7 @@ module Quadrat.Http
   , Preview
   , previewCard
   , Meant
-  , addToCard
+  , saveSet
   , SetRow
   , Centre
   , setCentre
@@ -300,21 +300,19 @@ type Meant =
   , struck :: Array (Array Int)
   }
 
--- | Cut the kept regions into a named set and put that set on a voice — and
--- | write the set's own description into the same directory.
+-- | **Cut the kept regions into a named set**, and write the set's own
+-- | description into the same directory. Saving never places: where a set
+-- | goes on a card is Pinakes' business (2026-11-09), and the server is told
+-- | so on the wire (`/api/set/save` sends `place: false`).
 -- |
 -- | `spec` is polymorphic on purpose: this module is the wire and has no
 -- | business knowing the shape of a sweep plan. It is `Quadrat.Sweep.Plain`
 -- | at the one call site, and JSON on the far side.
-foreign import addToCard
+foreign import saveSet
   :: forall spec
-   . { take :: String, set :: String, bank :: String, letter :: String
-     , kit :: String
-     , voice :: Int, kind :: String, stereo :: Boolean, join :: Boolean
-     , append :: Boolean, layerMode :: String, regions :: Array Region
-     -- | **Cut it, or cut it and put it on a voice.** Two acts, and they were
-     -- | one until SuperDirt arrived with no voices to be placed in.
-     , place :: Boolean
+   . { take :: String, set :: String
+     , kind :: String, stereo :: Boolean, join :: Boolean
+     , regions :: Array Region
      -- | **What a bars take is as a tape**: the Link tempo it was captured at
      -- | and how many bars the daemon counted. Null for any other kind. The
      -- | server writes it beside the take (`takes/<take>/tape.json`), where a

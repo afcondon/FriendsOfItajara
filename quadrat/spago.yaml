@@ -34,6 +34,7 @@ package:
     - halogen-subscriptions
     - halogen-widgets
     - helm
+    - quadrat-common
     - integers
     - itajara-client
     - itajara-controllers

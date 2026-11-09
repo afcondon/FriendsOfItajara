@@ -1,0 +1,21 @@
+package:
+  name: quadrat-common
+  description: |
+    What Quadrat and Pinakes both speak: the server's API over the sample
+    store (`~/.itajara/quadrat/samples`), a set's identity and its pictures
+    (rebus, stave, waveform), the Tidal line a set plays as, and auditioning.
+    Quadrat makes sets and Pinakes places them; neither imports the other.
+  dependencies:
+    - aff-promise
+    - arrays
+    - effect
+    - halogen
+    - integers
+    - maybe
+    - nullable
+    - numbers
+    - ordered-collections
+    - prelude
+    - rebus
+    - strings
+    - tuples
