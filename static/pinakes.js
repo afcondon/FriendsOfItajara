@@ -10678,7 +10678,7 @@
           return fallback;
         }
         ;
-        throw new Error("Failed pattern match at Pinakes.Main (line 2487, column 5 - line 2489, column 26): " + [v.constructor.name]);
+        throw new Error("Failed pattern match at Pinakes.Main (line 2491, column 5 - line 2493, column 26): " + [v.constructor.name]);
       };
     };
   };
@@ -10760,7 +10760,7 @@
           }));
         }
         ;
-        throw new Error("Failed pattern match at Pinakes.Main (line 2432, column 3 - line 2440, column 47): " + [v.constructor.name]);
+        throw new Error("Failed pattern match at Pinakes.Main (line 2436, column 3 - line 2444, column 47): " + [v.constructor.name]);
       };
     };
   };
@@ -10780,7 +10780,7 @@
       return new Just("background: hsl(" + (show5(pc * 30 | 0) + ("deg 48% " + (show5(light) + "%)"))));
     }
     ;
-    throw new Error("Failed pattern match at Pinakes.Main (line 2563, column 1 - line 2563, column 33): " + [n.constructor.name]);
+    throw new Error("Failed pattern match at Pinakes.Main (line 2567, column 1 - line 2567, column 33): " + [n.constructor.name]);
   };
   var pcName = function(pc) {
     var names = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
@@ -12936,7 +12936,7 @@
       return pcName(c.root) + (" " + c.tonality);
     }
     ;
-    throw new Error("Failed pattern match at Pinakes.Main (line 2615, column 1 - line 2615, column 36): " + [c.constructor.name]);
+    throw new Error("Failed pattern match at Pinakes.Main (line 2619, column 1 - line 2619, column 36): " + [c.constructor.name]);
   };
   var centreSays = function(c) {
     if (c.root < 0) {
@@ -12957,7 +12957,7 @@
       })());
     }
     ;
-    throw new Error("Failed pattern match at Pinakes.Main (line 2587, column 1 - line 2587, column 36): " + [c.constructor.name]);
+    throw new Error("Failed pattern match at Pinakes.Main (line 2591, column 1 - line 2591, column 36): " + [c.constructor.name]);
   };
   var atOf = function(d) {
     return clampN(0)(1)(log(max1(0.05)(d) / 0.05) / log(300 / 0.05));
@@ -12971,7 +12971,7 @@
       return "width: " + (show5(round2(5 + 26 * atOf(d))) + "px");
     }
     ;
-    throw new Error("Failed pattern match at Pinakes.Main (line 2538, column 1 - line 2538, column 28): " + [d.constructor.name]);
+    throw new Error("Failed pattern match at Pinakes.Main (line 2542, column 1 - line 2542, column 28): " + [d.constructor.name]);
   };
   var arpSays = function(r) {
     var n = length3(filter2(function($794) {
@@ -13012,7 +13012,7 @@
         return Nothing.value;
       }
       ;
-      throw new Error("Failed pattern match at Pinakes.Main (line 809, column 3 - line 815, column 21): ");
+      throw new Error("Failed pattern match at Pinakes.Main (line 813, column 3 - line 819, column 21): ");
     })();
     var small2 = function(lbl) {
       return function(v) {
@@ -13155,7 +13155,7 @@
         return fromMaybe("?")(index2(reelLetters)(n - 10 | 0));
       }
       ;
-      throw new Error("Failed pattern match at Pinakes.Main (line 1197, column 3 - line 1199, column 67): " + [n.constructor.name]);
+      throw new Error("Failed pattern match at Pinakes.Main (line 1201, column 3 - line 1203, column 67): " + [n.constructor.name]);
     };
     var reelFile = function(n) {
       return "mg" + (reelLabel(n) + ".wav");
@@ -13214,7 +13214,7 @@
         })()]);
       }
       ;
-      throw new Error("Failed pattern match at Pinakes.Main (line 968, column 9 - line 990, column 16): " + [st.qd.constructor.name]);
+      throw new Error("Failed pattern match at Pinakes.Main (line 972, column 9 - line 994, column 16): " + [st.qd.constructor.name]);
     })(), div3([class_("q-send")])([span3([class_("q-arm-label")])([text5("Card")]), (function() {
       var $578 = $$null2(st.volumes);
       if ($578) {
@@ -13255,7 +13255,7 @@
             return show5(item.reel.value0.splices) + (" splices \xB7 " + (secs2(item.reel.value0.secs) + "s"));
           }
           ;
-          throw new Error("Failed pattern match at Pinakes.Main (line 1101, column 25 - line 1104, column 96): " + [item.reel.constructor.name]);
+          throw new Error("Failed pattern match at Pinakes.Main (line 1105, column 25 - line 1108, column 96): " + [item.reel.constructor.name]);
         })())]), (function() {
           if (item.reel instanceof Just && (item.reel.value0.ok && !$$null2(item.reel.value0.starts))) {
             return reelStrip(item.reel.value0);
@@ -13286,7 +13286,7 @@
         return false;
       }
       ;
-      throw new Error("Failed pattern match at Pinakes.Main (line 1189, column 19 - line 1191, column 21): " + [i2.reel.constructor.name]);
+      throw new Error("Failed pattern match at Pinakes.Main (line 1193, column 19 - line 1195, column 21): " + [i2.reel.constructor.name]);
     };
     var planList = (function() {
       if ($$null2(st.reelPlan)) {
@@ -13297,7 +13297,7 @@
         return div3([class_("q-plan")])(mapWithIndex2(planRow)(st.reelPlan));
       }
       ;
-      throw new Error("Failed pattern match at Pinakes.Main (line 1085, column 3 - line 1092, column 51): ");
+      throw new Error("Failed pattern match at Pinakes.Main (line 1089, column 3 - line 1096, column 51): ");
     })();
     var pickedWide = any2(function(r) {
       return member3(r.name)(st.picked) && r.stereo;
@@ -13373,7 +13373,7 @@
           return "plain";
         }
         ;
-        throw new Error("Failed pattern match at Pinakes.Main (line 1609, column 3 - line 1612, column 26): " + [r.constructor.name, i2.constructor.name]);
+        throw new Error("Failed pattern match at Pinakes.Main (line 1613, column 3 - line 1616, column 26): " + [r.constructor.name, i2.constructor.name]);
       };
     };
     var sampleCell = function(r) {
@@ -13513,7 +13513,7 @@
               })()))))])([]);
             }
             ;
-            throw new Error("Failed pattern match at Pinakes.Main (line 2238, column 14 - line 2255, column 13): " + [v.constructor.name]);
+            throw new Error("Failed pattern match at Pinakes.Main (line 2242, column 14 - line 2259, column 13): " + [v.constructor.name]);
           };
           var layerRow = function(y) {
             return div3([class_("q-vrow")])(map29(function(x) {
@@ -13605,7 +13605,7 @@
             return !mine && contains(c)(freeOn.value0) === false;
           }
           ;
-          throw new Error("Failed pattern match at Pinakes.Main (line 2156, column 17 - line 2158, column 78): " + [freeOn.constructor.name]);
+          throw new Error("Failed pattern match at Pinakes.Main (line 2160, column 17 - line 2162, column 78): " + [freeOn.constructor.name]);
         })();
         return button([class_("q-letter" + ((function() {
           var $622 = c === st.letter;
@@ -13643,7 +13643,7 @@
             return " \u2014 free";
           }
           ;
-          throw new Error("Failed pattern match at Pinakes.Main (line 2168, column 34 - line 2170, column 55): " + [freeOn.constructor.name]);
+          throw new Error("Failed pattern match at Pinakes.Main (line 2172, column 34 - line 2174, column 55): " + [freeOn.constructor.name]);
         })()), onClick(function(v) {
           return new SetLetter(c);
         })])([text5(c)]);
@@ -13696,7 +13696,7 @@
         ;
       }
       ;
-      throw new Error("Failed pattern match at Pinakes.Main (line 790, column 7 - line 797, column 63): " + [named.constructor.name]);
+      throw new Error("Failed pattern match at Pinakes.Main (line 794, column 7 - line 801, column 63): " + [named.constructor.name]);
     })();
     var fateSays = function(s) {
       var v = fateOf(s.fate);
@@ -13716,7 +13716,7 @@
         return "unrecognised (" + (v.value0 + ")");
       }
       ;
-      throw new Error("Failed pattern match at Pinakes.Main (line 2418, column 16 - line 2425, column 51): " + [v.constructor.name]);
+      throw new Error("Failed pattern match at Pinakes.Main (line 2422, column 16 - line 2429, column 51): " + [v.constructor.name]);
     };
     var previewSlot = function(s) {
       return div3([class_("q-wslot is-" + s.fate)])([div3([class_("q-slotname")])([strong_([text5(s.slot)]), span3([class_("q-fate")])([text5(fateSays(s))])]), (function() {
@@ -13772,7 +13772,7 @@
             })(pv.slots))) + " kits");
           }
           ;
-          throw new Error("Failed pattern match at Pinakes.Main (line 2349, column 5 - line 2354, column 33): ");
+          throw new Error("Failed pattern match at Pinakes.Main (line 2353, column 5 - line 2358, column 33): ");
         })();
         return div3([class_("q-preview")])([(function() {
           var $637 = pv.unreadable === "";
@@ -13834,7 +13834,7 @@
           return previewPanel(c)(st.preview.value0);
         }
         ;
-        throw new Error("Failed pattern match at Pinakes.Main (line 2298, column 13 - line 2302, column 43): " + [st.preview.constructor.name]);
+        throw new Error("Failed pattern match at Pinakes.Main (line 2302, column 13 - line 2306, column 43): " + [st.preview.constructor.name]);
       })()])]);
     };
     var dirt = function(r) {
@@ -13850,7 +13850,7 @@
         return 's "' + (r.name + ('" # n "0..' + (show5(r.count - 1 | 0) + '"')));
       }
       ;
-      throw new Error("Failed pattern match at Pinakes.Main (line 1334, column 3 - line 1340, column 78): " + [r.constructor.name]);
+      throw new Error("Failed pattern match at Pinakes.Main (line 1338, column 3 - line 1344, column 78): " + [r.constructor.name]);
     };
     var setModal = function(nm) {
       var transferable = function(lab) {
@@ -13865,7 +13865,7 @@
             })])([text5("copy")])]), code([class_("q-set-dirt")])([text5(text6)])]);
           }
           ;
-          throw new Error("Failed pattern match at Pinakes.Main (line 1955, column 5 - line 1968, column 14): " + [lab.constructor.name, text6.constructor.name]);
+          throw new Error("Failed pattern match at Pinakes.Main (line 1959, column 5 - line 1972, column 14): " + [lab.constructor.name, text6.constructor.name]);
         };
       };
       var staveCell = function(r) {
@@ -13900,7 +13900,7 @@
                 }))(chords)), div3([class_("q-staveno")])([text5(show5(k + 1 | 0))])]);
               }
               ;
-              throw new Error("Failed pattern match at Pinakes.Main (line 1851, column 5 - line 1869, column 14): " + [r.constructor.name, ext.constructor.name, k.constructor.name, chords.constructor.name]);
+              throw new Error("Failed pattern match at Pinakes.Main (line 1855, column 5 - line 1873, column 14): " + [r.constructor.name, ext.constructor.name, k.constructor.name, chords.constructor.name]);
             };
           };
         };
@@ -13997,7 +13997,7 @@
           return r.notesFrom + (" \xB7 channel " + show5(r.notesChan));
         }
         ;
-        throw new Error("Failed pattern match at Pinakes.Main (line 1982, column 5 - line 1985, column 74): " + [r.constructor.name]);
+        throw new Error("Failed pattern match at Pinakes.Main (line 1986, column 5 - line 1989, column 74): " + [r.constructor.name]);
       };
       var lengthsSays = function(r) {
         var ds = filter2(function(v3) {
@@ -14084,7 +14084,7 @@
           }]))]), div3([class_("q-set-what")])([text5(centreSays(r.centre) + (" \xB7 " + arpSays(r)))])]);
         }
         ;
-        throw new Error("Failed pattern match at Pinakes.Main (line 1887, column 5 - line 1946, column 14): " + [r.constructor.name]);
+        throw new Error("Failed pattern match at Pinakes.Main (line 1891, column 5 - line 1950, column 14): " + [r.constructor.name]);
       };
       var audioFacts = (function() {
         if (st.openSetInfo instanceof Nothing) {
@@ -14150,7 +14150,7 @@
         })(join4(v.value0.voicings)))), div3([class_("q-set-do")])(setVerbs(v.value0))])])]);
       }
       ;
-      throw new Error("Failed pattern match at Pinakes.Main (line 1726, column 5 - line 1787, column 12): " + [v.constructor.name]);
+      throw new Error("Failed pattern match at Pinakes.Main (line 1730, column 5 - line 1791, column 12): " + [v.constructor.name]);
     };
     var digitsOfLength = function(n) {
       return function(t) {
@@ -14176,7 +14176,7 @@
         return r.name;
       }
       ;
-      throw new Error("Failed pattern match at Pinakes.Main (line 1356, column 3 - line 1358, column 25): " + [r.constructor.name]);
+      throw new Error("Failed pattern match at Pinakes.Main (line 1360, column 3 - line 1362, column 25): " + [r.constructor.name]);
     };
     var shownSets = (function() {
       var terms = filter2(function(v) {
@@ -14215,7 +14215,7 @@
           });
         }
         ;
-        throw new Error("Failed pattern match at Pinakes.Main (line 745, column 15 - line 750, column 75): " + [st.setSort.constructor.name]);
+        throw new Error("Failed pattern match at Pinakes.Main (line 749, column 15 - line 754, column 75): " + [st.setSort.constructor.name]);
       })();
       var hay = function(r) {
         return toLower(joinWith(" ")(append12([r.name, r.kind, r.voice, r.made, r.take, (function() {
@@ -14292,7 +14292,7 @@
         return r.name;
       }
       ;
-      throw new Error("Failed pattern match at Pinakes.Main (line 1389, column 3 - line 1393, column 25): " + [r.constructor.name]);
+      throw new Error("Failed pattern match at Pinakes.Main (line 1393, column 3 - line 1397, column 25): " + [r.constructor.name]);
     };
     var destTab = function(d) {
       var f = factsOf(d);
@@ -14312,7 +14312,7 @@
           return " is-unbuilt";
         }
         ;
-        throw new Error("Failed pattern match at Pinakes.Main (line 936, column 18 - line 938, column 43): " + [f.unbuilt.constructor.name]);
+        throw new Error("Failed pattern match at Pinakes.Main (line 940, column 18 - line 942, column 43): " + [f.unbuilt.constructor.name]);
       })()))), title2(f.shape + (function() {
         if (f.unbuilt instanceof Nothing) {
           return "";
@@ -14322,7 +14322,7 @@
           return " \u2014 nothing here writes it yet";
         }
         ;
-        throw new Error("Failed pattern match at Pinakes.Main (line 939, column 34 - line 941, column 82): " + [f.unbuilt.constructor.name]);
+        throw new Error("Failed pattern match at Pinakes.Main (line 943, column 34 - line 945, column 82): " + [f.unbuilt.constructor.name]);
       })()), onClick(function(v) {
         return new SetDest(d);
       })])([text5(f.name)]);
@@ -14368,7 +14368,7 @@
         ;
       }
       ;
-      throw new Error("Failed pattern match at Pinakes.Main (line 1474, column 9 - line 1500, column 20): " + [st.cardView.constructor.name]);
+      throw new Error("Failed pattern match at Pinakes.Main (line 1478, column 9 - line 1504, column 20): " + [st.cardView.constructor.name]);
     })(), (function() {
       if (st.confirmWrite instanceof Nothing) {
         return text5("");
@@ -14378,7 +14378,7 @@
         return writeModal(st.confirmWrite.value0);
       }
       ;
-      throw new Error("Failed pattern match at Pinakes.Main (line 1501, column 9 - line 1503, column 33): " + [st.confirmWrite.constructor.name]);
+      throw new Error("Failed pattern match at Pinakes.Main (line 1505, column 9 - line 1507, column 33): " + [st.confirmWrite.constructor.name]);
     })()]);
     var cardTarget = div_([div3([class_("q-send")])([span3([class_("q-arm-label")])([text5("Card")]), (function() {
       var $709 = $$null2(st.volumes);
@@ -14423,7 +14423,7 @@
         })())])]), p([class_("q-muted")])([text5("the Morphagene stores its own recordings and splices back to the card, so take the card out once the reel is loaded if you want to keep it as written")])]);
       }
       ;
-      throw new Error("Failed pattern match at Pinakes.Main (line 1153, column 9 - line 1186, column 16): " + [st.reelDest.constructor.name]);
+      throw new Error("Failed pattern match at Pinakes.Main (line 1157, column 9 - line 1190, column 16): " + [st.reelDest.constructor.name]);
     })()]);
     var reelPanel = div3([class_("q-transform q-reel")])([div3([class_("q-reelmove")])([button([class_("q-chip is-arm"), disabled10(isEmpty2(st.picked)), title2("put the ticked sets on the card, in the order they are listed"), onClick(function(v) {
       return PlanAdd.value;
@@ -14485,7 +14485,7 @@
             return show5(a2.layers) + (" \xD7 " + show5(a2.slices));
           }
           ;
-          throw new Error("Failed pattern match at Pinakes.Main (line 1707, column 5 - line 1717, column 65): " + [r.constructor.name, a2.constructor.name]);
+          throw new Error("Failed pattern match at Pinakes.Main (line 1711, column 5 - line 1721, column 65): " + [r.constructor.name, a2.constructor.name]);
         };
       };
       var natural = function(r) {
@@ -14506,7 +14506,7 @@
             return false;
           }
           ;
-          throw new Error("Failed pattern match at Pinakes.Main (line 1704, column 18 - line 1706, column 23): " + [v3.constructor.name]);
+          throw new Error("Failed pattern match at Pinakes.Main (line 1708, column 18 - line 1710, column 23): " + [v3.constructor.name]);
         };
       };
       var opt = function(r) {
@@ -14673,7 +14673,7 @@
         })])([text5("Onto the card")])])]);
       }
       ;
-      throw new Error("Failed pattern match at Pinakes.Main (line 1233, column 3 - line 1330, column 12): ");
+      throw new Error("Failed pattern match at Pinakes.Main (line 1237, column 3 - line 1334, column 12): ");
     })();
     var arbharPanel = p([class_("q-muted")])([text5("Open a set and send it: Onto the stick. Each six samples take a library bank and a scene, the first ones that hold nothing; a taken slot is left alone.")]);
     var ambiguous = function(r) {
@@ -14735,9 +14735,9 @@
         })()));
       }
       ;
-      throw new Error("Failed pattern match at Pinakes.Main (line 659, column 3 - line 685, column 12): ");
+      throw new Error("Failed pattern match at Pinakes.Main (line 663, column 3 - line 689, column 12): ");
     })();
-    return div3([class_("q")])([header([class_("q-head")])([h1_([text5("Pinakes")]), span3([class_("q-sub")])([text5("every set kept, and where it can go")]), a([class_("q-sub"), href4("quadrat.html")])([text5("Quadrat \u2192")])]), div3([class_("q-panes")])([div3([class_("q-pane is-library")])([setsView]), div3([class_("q-pane is-dest")])(append12([destHead])((function() {
+    return div3([class_("q")])([header([class_("q-head")])([div3([class_("q-brand")])([h1_([text5("Pinakes")]), span3([class_("q-sub")])([text5("every set kept, and where it can go")])]), div3([class_("q-headright")])([a([class_("q-elsewhere"), href4("quadrat.html")])([text5("Quadrat \u2197")])])]), div3([class_("q-panes")])([div3([class_("q-pane is-library")])([setsView]), div3([class_("q-pane is-dest")])(append12([destHead])((function() {
       if (st.dest instanceof Rample) {
         return [transformPanel, cardView];
       }
@@ -14754,7 +14754,7 @@
         return [arbharPanel, destKnows(Arbhar.value)];
       }
       ;
-      throw new Error("Failed pattern match at Pinakes.Main (line 635, column 20 - line 639, column 75): " + [st.dest.constructor.name]);
+      throw new Error("Failed pattern match at Pinakes.Main (line 639, column 20 - line 643, column 75): " + [st.dest.constructor.name]);
     })())), maybe(text5(""))(setModal)(st.openSet)]), section([class_("q-log")])(map29(function(l) {
       return div_([text5(l)]);
     })(st.log))]);

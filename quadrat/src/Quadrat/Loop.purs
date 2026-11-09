@@ -472,10 +472,11 @@ note text = H.modify_ \s -> s { looperLog = pushLog text s.looperLog }
 -- | Twister card is the looper's pages only, with a line under the tabs
 -- | whenever it is not following a device, so a card showing page 1 because
 -- | nothing told it otherwise is never mistaken for one that knows.
-view :: forall r w act. (Msg -> act) -> HH.HTML w act -> Record (Fields r) -> HH.HTML w act
-view wrap meter st =
+view :: forall r w act. (Msg -> act) -> Record (Fields r) -> HH.HTML w act
+view wrap st =
   -- **The page's shape, not the looper's** (`Quadrat.Layout`): the statement
-  -- and meter head the main column as on every recording page, the panel
+  -- heads the main column as on every recording page (the meter is in the
+  -- page's header since 2026-11-09), the panel
   -- buttons and the loops follow, and the Twister card and the log take the
   -- side column.
   PageLayout.layout
@@ -533,7 +534,6 @@ view wrap meter st =
   statement =
     Statement.statement Statement.defaultStatement
       { class_ = "q-say is-loop"
-      , gauge = [ meter ]
       , sentences = map (map part) (LooperStatement.sentences settings st.looper st.looperFocus)
       , warnings = map (\w -> HH.p [ HP.class_ (HH.ClassName "q-clash is-soft") ] [ HH.text w ])
           (LooperStatement.warnings st.looper)

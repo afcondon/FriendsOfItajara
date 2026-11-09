@@ -2916,6 +2916,15 @@ rateSays st = do
 
 
 
+-- | A page's name in class names (`q is-bench`, `q-pill is-score`), which is
+-- | how its colour is chosen in `quadrat.css`.
+pageKey :: Page -> String
+pageKey = case _ of
+  Bench -> "bench"
+  Score -> "score"
+  JamPage -> "jam"
+  LoopPage -> "loop"
+
 -- | **Why nothing is arriving**, in the order the answers are worth reading.
 -- |
 -- | An aggregate device is a fact about TODAY, not about its name. Power one
@@ -3039,22 +3048,24 @@ fmt n = show (Int.round (n * 100.0) # \k -> Int.toNumber k / 100.0)
 
 render :: forall m. State -> H.ComponentHTML Action () m
 render st =
-  HH.div [ HP.class_ (HH.ClassName "q") ]
+  HH.div [ HP.class_ (HH.ClassName ("q is-" <> pageKey st.page)) ]
     [ HH.header [ HP.class_ (HH.ClassName "q-head") ]
-        [ HH.h1_ [ HH.text "Quadrat" ]
-        , HH.nav [ HP.class_ (HH.ClassName "q-nav") ]
-            [ pageTab Bench "Bench" "cut a transect and look at what came back"
-            , pageTab Score "Score" "sample a progression or a clip Triggerfish has published"
-            , HH.a
-                [ HP.class_ (HH.ClassName "q-tab")
-                , HP.href "pinakes.html"
-                , HP.title "Pinakes: every set kept, and where it can go"
-                ]
-                [ HH.text "Pinakes \x2197" ]
-            , pageTab JamPage "Jam" "you play: for as long as it plays, for some bars, or cut at each hit"
-            , pageTab LoopPage "Loop" "play the looper from here: the loops, their layers, the Edit panel"
+        -- | **The meter first, on every page** (AC, 2026-11-09): it reads the
+        -- | input the page will record from, and it is the thing checked before
+        -- | anything is pressed, so it heads the page rather than each
+        -- | statement. The app's name beside it, then the four views as pills,
+        -- | each in its page's colour, which the statement's field repeats.
+        [ listening
+        , HH.div [ HP.class_ (HH.ClassName "q-brand") ]
+            [ HH.h1_ [ HH.text "Quadrat" ]
+            , HH.span [ HP.class_ (HH.ClassName "q-sub") ] [ HH.text tagline ]
             ]
-        , HH.span [ HP.class_ (HH.ClassName "q-sub") ] [ HH.text tagline ]
+        , HH.nav [ HP.class_ (HH.ClassName "q-nav") ]
+            [ pageTab Bench "Bench" "the rig plays: cut a transect and look at what came back"
+            , pageTab Score "Score" "Triggerfish plays: sample a progression or a clip it has published"
+            , pageTab JamPage "Jam" "you play: for as long as it plays, for some bars, or cut at each hit"
+            , pageTab LoopPage "Loop" "you play into the looper: the loops, their layers, the Edit panel"
+            ]
         -- | **Help in the nav, for the page that has some.** The looper's
         -- | recipes were one of a row of buttons above the loops; as a "?"
         -- | beside the page's own name they cost no row at all.
@@ -3066,7 +3077,17 @@ render st =
               , HE.onClick \_ -> LoopMsg (Loop.OpenPanel (Just PanelRecipes))
               ]
               [ HH.text "?" ]
-        , connection
+        -- | The other app, and the rig, at the right: neither is a view of this
+        -- | one. Pinakes places the sets this app saves.
+        , HH.div [ HP.class_ (HH.ClassName "q-headright") ]
+            [ HH.a
+                [ HP.class_ (HH.ClassName "q-elsewhere")
+                , HP.href "pinakes.html"
+                , HP.title "Pinakes: every set kept, and where it can go"
+                ]
+                [ HH.text "Pinakes \x2197" ]
+            , connection
+            ]
         ]
     -- | Outside the page switch on purpose. It is reached from the input
     -- | meter, which is on the Bench, and it was first mounted inside the
@@ -3173,7 +3194,6 @@ render st =
                 { statement:
                     Statement.statement Statement.defaultStatement
                       { class_ = "q-say"
-                      , gauge = [ listening ]
                       , sentences = [ jp.sentence ]
                       , warnings = jp.warnings
                       }
@@ -3185,7 +3205,6 @@ render st =
               { statement:
                   Statement.statement Statement.defaultStatement
                     { class_ = "q-say"
-                    , gauge = [ listening ]
                     , sentences = [ jamSays l ]
                     , warnings = sayWarnings
                     , report = [ heardSays, benchMark ]
@@ -3193,7 +3212,7 @@ render st =
               , main: takeMain
               , side: [ JamView.about l ]
               }
-        LoopPage -> Loop.view LoopMsg listening st
+        LoopPage -> Loop.view LoopMsg st
     , HH.section [ HP.class_ (HH.ClassName "q-log") ]
         (map (\l -> HH.div_ [ HH.text l ]) st.log)
     ]
@@ -3548,7 +3567,6 @@ render st =
   statement =
     Statement.statement Statement.defaultStatement
       { class_ = "q-say"
-      , gauge = [ listening ]
       -- **The sentence says what will actually happen, and the two cases do
       -- not happen alike.**
       --
@@ -3627,7 +3645,6 @@ render st =
   scoreStatement =
     Statement.statement Statement.defaultStatement
       { class_ = "q-say"
-      , gauge = [ listening ]
       , sentences = [ scoreSays ]
       , warnings = if Maybe.isJust st.against then sayWarnings else []
       , report = [ benchMark ]
@@ -4301,11 +4318,11 @@ render st =
     Bench -> "sample an instrument at chosen points"
     Score -> "sample what Triggerfish has written"
     JamPage -> "record what you play"
-    LoopPage -> "play the looper: the loops, their layers, the Edit panel"
+    LoopPage -> "play into the looper"
 
   pageTab pg label why =
     HH.button
-      [ HP.class_ (HH.ClassName ("q-tab" <> if st.page == pg then " on" else ""))
+      [ HP.class_ (HH.ClassName ("q-pill is-" <> pageKey pg <> if st.page == pg then " on" else ""))
       , HP.title why
       , HE.onClick \_ -> GoTo pg
       ]

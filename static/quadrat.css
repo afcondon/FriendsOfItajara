@@ -37,10 +37,40 @@ body {
 
 /* The masthead as a bar: thin, full width, and the only horizontal rule the
    page needs above the spread. */
-.q-head { display: flex; align-items: baseline; gap: 18px; border-bottom: 2px solid var(--ink);
-  padding: 16px 0 9px; margin-bottom: 22px; }
-.q-head h1 { margin: 0; font-size: 26px; font-weight: 600; letter-spacing: -0.01em; }
-.q-sub { color: var(--muted); font-size: 13px; flex: 1; }
+/* **The head: the meter, the name, the four views, and elsewhere.**
+   AC, 2026-11-09. The meter leads because it is read before anything is
+   pressed; the views are pills in their pages' colours, and the statement
+   under them sits on a field of the same colour, so which page this is can
+   be seen before anything is read. Pinakes and the daemon are at the right:
+   neither is a view of this app. */
+.q-head { display: flex; align-items: center; gap: 22px; border-bottom: 2px solid var(--ink);
+  padding: 14px 0 12px; margin-bottom: 22px; }
+.q-head h1 { margin: 0; font-size: 26px; font-weight: 600; letter-spacing: -0.01em; line-height: 1.1; }
+/* A fixed width, so the pills never move when the tagline changes with the
+   page: a nav that shifts under the pointer is one you mis-click. */
+.q-brand { display: flex; flex-direction: column; gap: 2px; width: 260px; flex: none; }
+.q-sub { color: var(--muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.q-headright { margin-left: auto; display: flex; align-items: center; gap: 18px; }
+.q-elsewhere { font-size: 13px; color: var(--ink); text-decoration: none;
+  border-bottom: 1px solid var(--rule); padding-bottom: 1px; }
+.q-elsewhere:hover { border-bottom-color: var(--ink); }
+
+/* The four views, and their colours. Four muted hues kept clear of --hot
+   (damage), --live (running) and --pick (a choice you can make). */
+.q.is-bench { --page: #a2782a; --field: #f6f0e3; }
+.q.is-score { --page: #74508f; --field: #f2edf6; }
+.q.is-jam   { --page: #a3566d; --field: #f7edf0; }
+.q.is-loop  { --page: #2c7a80; --field: #e8f2f2; }
+.q-pill { border: 0; border-radius: 4px; padding: 7px 13px; cursor: pointer;
+  font: inherit; font-size: 14px; font-weight: 700; line-height: 1; color: #fff;
+  transition: opacity .1s; }
+.q-pill:hover { opacity: .82; }
+.q-pill.on { box-shadow: 0 0 0 2px var(--ground), 0 0 0 4px var(--ink); }
+.q-pill.on:hover { opacity: 1; }
+.q-pill.is-bench { background: #a2782a; }
+.q-pill.is-score { background: #74508f; }
+.q-pill.is-jam   { background: #a3566d; }
+.q-pill.is-loop  { background: #2c7a80; }
 .q-ok { color: var(--live); font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; }
 .q-warn { color: var(--hot); font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; }
 
@@ -343,7 +373,7 @@ body {
 
 /* Two pages, named. A text nav rather than boxed tabs: the rule under the
    masthead is the only frame it needs. */
-.q-nav { display: flex; gap: 16px; }
+.q-nav { display: flex; gap: 8px; }
 
 /* **What it is listening to, directly above the button that spends it.**
    
@@ -370,15 +400,6 @@ body {
 /* The whole take, end to end — the one listen the tiles cannot give you. */
 .q-wholebar { display: flex; align-items: center; gap: 8px; padding: 6px 2px 0; }
 
-.q-tab { border: 0; background: none; padding: 0 0 2px; font: inherit; font-size: 13px;
-  color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -12px; }
-.q-tab:hover { color: var(--ink); }
-.q-tab.on { color: var(--ink); font-weight: 600; border-bottom-color: var(--ink); }
-
-/* Two ways to fill a take, and nothing else on the page moves. */
-/* `:not(.on)` earns its keep: without it the hover rule out-specifies `.on`
-   and the selected tab goes black text on a black ground — invisible, and
-   only while the pointer is on it, which is exactly when you look. */
 
 .q-hand { margin-bottom: 4px; }
 .q-go { display: flex; align-items: center; flex-wrap: wrap; gap: 12px;
@@ -710,18 +731,16 @@ body {
    words in it. */
 .q-say {
   display: grid;
-  grid-template-columns: 170px minmax(0, 680px);
-  grid-template-areas:
-    "gauge say"
-    "gauge warn"
-    "gauge report";
+  grid-template-columns: minmax(0, 760px);
+  grid-template-areas: "say" "warn" "report";
   justify-content: start;
-  gap: 0 30px;
-  margin: 0; padding: 32px 0 28px;
+  gap: 0;
+  margin: 0 0 6px; padding: 26px 32px 24px;
+  background: var(--field, #fff); border-radius: 4px;
+  border-left: 5px solid var(--page, var(--rule));
 }
 /* The regions are Halogen.Widgets.Statement's: the same shape on every page,
    styled here for Quadrat. */
-.q-say .hw-statement-gauge { grid-area: gauge; align-self: center; justify-self: center; }
 .q-say .hw-statement-say { grid-area: say; }
 .q-say .hw-statement-warn { grid-area: warn; }
 /* Centred in its margin, not hard against the text: a marginal note that
@@ -740,7 +759,7 @@ body {
 .q-say .hw-statement-reading.is-alarm { color: var(--hot); font-weight: 600; }
 /* The Loop page's statement sits in the looper's strip, above its buttons:
    two sentences, no margins, so less air than the Bench's. */
-.q-say.is-loop { padding: 32px 0 18px; }
+.q-say.is-loop { padding: 24px 32px 18px; }
 .q-say.is-loop .hw-statement-line { font-size: 21px; margin-bottom: .3em; }
 /* Narrow enough that half of it is not a column any more. */
 /* Narrow enough that three columns is not three columns any more: the
@@ -749,10 +768,9 @@ body {
 @media (max-width: 760px) {
   .q-say {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-areas: "gauge" "say" "warn" "report";
-    gap: 16px 0; padding: 26px 0 22px;
+    padding: 20px 18px 18px;
   }
-  .q-say .hw-statement-gauge { justify-self: start; }
+  .q-head { flex-wrap: wrap; }
 }
 
 /* ── Every recording page: three quarters and one quarter (Quadrat.Layout) ─
@@ -791,15 +809,15 @@ body {
    against the sentence. It is the one instrument on the page that is read
    WHILE playing — at 72 x 34 in the gutter it was a punctuation mark. */
 .q-meter {
-  width: 150px; text-align: center;
+  width: 120px; text-align: center; flex: none;
 }
 .q-meterpic {
-  display: block; width: 100%; height: 68px;
+  display: block; width: 100%; height: 42px;
   background: #fff; border: 1px solid var(--rule); border-radius: 2px;
 }
 .q-meterpic rect { fill: var(--live); }
 .q-meterword {
-  display: block; margin-top: 6px; font-size: 11px; letter-spacing: .03em;
+  display: block; margin-top: 4px; font-size: 11px; letter-spacing: .03em;
   color: var(--muted); font-variant-numeric: tabular-nums; text-align: center;
 }
 /* Silence is the reading that costs a whole transect, so it is the one that
