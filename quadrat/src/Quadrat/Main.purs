@@ -40,6 +40,12 @@
 module Quadrat.Main where
 
 import Quadrat.Arrival as Arrival
+import Quadrat.SideWidth as SideWidth
+import Halogen.Widgets.Drawer as Drawer
+import Data.Map as Map
+import Data.Tuple (Tuple(..))
+import Data.Traversable (traverse)
+import Type.Proxy (Proxy(..))
 import Quadrat.Bus as Bus
 import Prelude
 
@@ -354,6 +360,9 @@ type State =
   , midiOk :: Boolean
   -- | The next jam's source and name (`Quadrat.JamView`).
   , jam :: JamView.Choice
+  -- | **Each page's side drawer**, open or not and how wide, by `pageKey`.
+  -- | Pages load closed; the widths come back from `Quadrat.SideWidth`.
+  , sides :: Map.Map String { open :: Boolean, width :: Number }
   -- | The Loop page's own fields, the daemon's snapshot (`looper`) among them:
   -- | see `Quadrat.Loop.Fields`.
   | Loop.Fields ()
@@ -431,6 +440,8 @@ data Action
   | GoTo Page
   -- | Anything the Loop page does (`Quadrat.Loop`).
   | LoopMsg Loop.Msg
+  -- | A page's side drawer was toggled or resized.
+  | FromSide Page Drawer.Output
   | SetJamName String
   | SetJamLength String
   | StartJam
@@ -475,6 +486,7 @@ component = H.mkComponent
       , levels: [], modal: Nothing, kept: false, confirmKeep: false
       , shownSecs: Nothing, audio: Nothing, audioBusy: false, srcNames: []
       , heard: [], midiIn: [], midiOk: true, jam: { name: "", length: JamView.Whole }
+      , sides: Map.empty
       , looperStatus: Loop.initial.looperStatus
       , looperSnapshotAge: Loop.initial.looperSnapshotAge
       , looperFocus: Loop.initial.looperFocus
@@ -501,7 +513,7 @@ component = H.mkComponent
 -- | there is no number in front of it. Which also means a pedalboard session
 -- | on loops 1–6 is untouched by Quadrat and Quadrat by it — the
 -- | separation the scratch loop was standing in for, without a loop.
-send :: forall o m. MonadAff m => Verb -> H.HalogenM State Action () o m Unit
+send :: forall o m. MonadAff m => Verb -> H.HalogenM State Action Slots o m Unit
 send v = do
   let c = Verb.render v
   ok <- liftEffect (Socket.send (c <> "@0"))
@@ -615,7 +627,7 @@ onBench st
 -- | **A jam's length, as a take.** A bar count is the Bench's bar take; a cut
 -- | is a take you play by hand, divided at its onsets. The streamed jam needs
 -- | nothing set: it is the daemon's, not the take's.
-jamTake :: forall o m. MonadAff m => JamView.Length -> H.HalogenM State Action () o m Unit
+jamTake :: forall o m. MonadAff m => JamView.Length -> H.HalogenM State Action Slots o m Unit
 jamTake l = for_ (JamView.kindOf l) \k -> do
   case k of
     Kind.Bars n -> H.modify_ _ { bars = n }
@@ -624,7 +636,7 @@ jamTake l = for_ (JamView.kindOf l) \k -> do
   st <- H.get
   when (st.fill /= Played) (handleAction (FillBy Played))
 
-handleAction :: forall o m. MonadAff m => Action -> H.HalogenM State Action () o m Unit
+handleAction :: forall o m. MonadAff m => Action -> H.HalogenM State Action Slots o m Unit
 handleAction = case _ of
   -- | Fetch the table and hang it on the parameter — or, with an empty label,
   -- | take it off. The table is stored IN THE PLAN rather than fetched per
@@ -765,6 +777,12 @@ handleAction = case _ of
     lab <- H.liftAff (attempt (toAffE Http.sourceLabels))
     H.modify_ _ { srcNames = either (const []) identity lab }
     handleAction RefreshSets
+    -- Each page's drawer width as it was left; every drawer loads closed.
+    widths <- liftEffect $ traverse
+      (\pg -> map (\w -> Tuple (pageKey pg) { open: false, width: w })
+                 (SideWidth.loadWidth (pageKey pg) sideWidth))
+      [ Bench, Score, JamPage, LoopPage ]
+    H.modify_ _ { sides = Map.fromFoldable widths }
     liftEffect $ Socket.connect Socket.defaultUrl
     liftEffect Bus.start
     void $ H.subscribe $ HS.makeEmitter \emit -> do
@@ -1597,6 +1615,17 @@ handleAction = case _ of
       st <- H.get
       jamTake st.jam.length
   LoopMsg msg -> Loop.handle LoopMsg msg
+  FromSide pg out -> do
+    st <- H.get
+    let d = sideState st pg
+        d' = case out of
+          Drawer.Toggled open -> d { open = open }
+          Drawer.Resizing w -> d { width = w }
+          Drawer.Resized w -> d { width = w }
+    H.modify_ _ { sides = Map.insert (pageKey pg) d' st.sides }
+    case out of
+      Drawer.Resized w -> liftEffect (SideWidth.saveWidth (pageKey pg) w)
+      _ -> pure unit
   SetJamName v -> H.modify_ \s0 -> s0 { jam = s0.jam { name = v } }
   -- | **The length decides the take.** The streamed jam is not a take until
   -- | it stops; a bar count or a cut is one, set up as the Bench would set it.
@@ -1764,7 +1793,7 @@ handleAction = case _ of
 -- | in the same instant. A run does not: the schedule declares its own start.
 -- | **Declared beats inferred**, which is the rule this project keeps
 -- | rediscovering.
-captureOn :: forall o m. MonadAff m => Boolean -> Int -> H.HalogenM State Action () o m Unit
+captureOn :: forall o m. MonadAff m => Boolean -> Int -> H.HalogenM State Action Slots o m Unit
 captureOn trimHead src = do
   st <- H.get
   -- **Choosing the input is the act of arming.** Kept apart, the page had its
@@ -1849,7 +1878,7 @@ captureOn trimHead src = do
 
 -- | Take back whatever of a phrase has not sounded yet, and silence what has.
 -- | A no-op unless a phrase is what is playing, and harmless either way.
-hushPhrase :: forall o m. MonadAff m => State -> H.HalogenM State Action () o m Unit
+hushPhrase :: forall o m. MonadAff m => State -> H.HalogenM State Action Slots o m Unit
 hushPhrase st =
   for_ st.against \c ->
     when (isPhrase c && st.sweep.port /= "") $ liftEffect $
@@ -1920,7 +1949,7 @@ phraseNotesOf c =
 -- | cannot show, since a blend looks exactly like a value.
 -- |
 -- | Forked, so Stop is a button rather than a wish.
-runSweep :: forall o m. MonadAff m => H.HalogenM State Action () o m Unit
+runSweep :: forall o m. MonadAff m => H.HalogenM State Action Slots o m Unit
 runSweep = do
   -- The chords this run is playing, if it is playing a declared progression at
   -- all. Read once: the list cannot change mid-run, and re-reading state inside
@@ -2295,7 +2324,7 @@ runSweep = do
 -- |
 -- | Read from `Sweep.steps` rather than recomputed, so a preset previewed and
 -- | the same preset recorded cannot disagree about what they mean.
-setCellCv :: forall o m. MonadAff m => Int -> H.HalogenM State Action () o m Unit
+setCellCv :: forall o m. MonadAff m => Int -> H.HalogenM State Action Slots o m Unit
 setCellCv j = do
   st <- H.get
   for_ (Array.index (Sweep.steps st.sweep) j) \step -> do
@@ -2310,7 +2339,7 @@ setCellCv j = do
 -- | position twelve and walking away leaves the instrument held at the top of
 -- | the sweep, which is a thing you then hear in every unrelated patch and
 -- | blame on something else.
-restCv :: forall o m. MonadAff m => H.HalogenM State Action () o m Unit
+restCv :: forall o m. MonadAff m => H.HalogenM State Action Slots o m Unit
 restCv = do
   st <- H.get
   let buses = Array.nub
@@ -2378,7 +2407,7 @@ dbNow s =
   in
     maybe (-120.0) _.db (s.looper >>= \t -> Array.index t.sources (ix - 1))
 
-analyse :: forall o m. MonadAff m => Boolean -> H.HalogenM State Action () o m Unit
+analyse :: forall o m. MonadAff m => Boolean -> H.HalogenM State Action Slots o m Unit
 analyse write = do
   st <- H.get
   case cap st of
@@ -2643,7 +2672,7 @@ secs2 d = show (Int.round (d * 100.0) / 100)
 -- | It was a row of chips on the Bench, labelled "declared" (the rule's name,
 -- | not the thing's), which changed the take's kind when clicked. On its own
 -- | page it is the page's material, and each card says what it is in full.
-scoreShelf :: forall m. State -> H.ComponentHTML Action () m
+scoreShelf :: forall m. State -> H.ComponentHTML Action Slots m
 scoreShelf st =
   HH.section
     [ HP.class_ (HH.ClassName "q-shelf") ]
@@ -2916,6 +2945,24 @@ rateSays st = do
 
 
 
+-- | The pages' side drawers (`Quadrat.Layout`), one rail per page.
+type Slots = ( drawer :: Drawer.Slot String )
+
+-- | What each page's drawer holds, as its rail says it.
+sideName :: Page -> String
+sideName = case _ of
+  Bench -> "Sweeps"
+  Score -> "Published"
+  JamPage -> "About"
+  LoopPage -> "Controllers"
+
+-- | A page's drawer as held, or closed at the default width.
+sideState :: State -> Page -> { open :: Boolean, width :: Number }
+sideState st pg = fromMaybe { open: false, width: sideWidth } (Map.lookup (pageKey pg) st.sides)
+
+sideWidth :: Number
+sideWidth = 340.0
+
 -- | A page's name in class names (`q is-bench`, `q-pill is-score`), which is
 -- | how its colour is chosen in `quadrat.css`.
 pageKey :: Page -> String
@@ -2947,7 +2994,7 @@ pageKey = case _ of
 -- | that is a restart rather than a patching problem. Nothing else here is
 -- | inferred: the rest is the tool's own report, which already reads as
 -- | English.
-audioPanel :: forall m. State -> Http.AudioCheck -> H.ComponentHTML Action () m
+audioPanel :: forall m. State -> Http.AudioCheck -> H.ComponentHTML Action Slots m
 audioPanel st c =
   HH.div [ HP.class_ (HH.ClassName "q-scrim") ]
     [ HH.div [ HP.class_ (HH.ClassName "q-modal is-audio") ]
@@ -3046,7 +3093,7 @@ heldSecs st = case st.opened of
 fmt :: Number -> String
 fmt n = show (Int.round (n * 100.0) # \k -> Int.toNumber k / 100.0)
 
-render :: forall m. State -> H.ComponentHTML Action () m
+render :: forall m. MonadAff m => State -> H.ComponentHTML Action Slots m
 render st =
   HH.div [ HP.class_ (HH.ClassName ("q is-" <> pageKey st.page)) ]
     [ HH.header [ HP.class_ (HH.ClassName "q-head") ]
@@ -3152,6 +3199,7 @@ render st =
                 [ HH.section [ HP.class_ (HH.ClassName "q-curverow is-first") ]
                     [ SweepView.curves sweepHandlers ]
                 ]
+            , drawer: sideOf Bench
             }
         -- | **Triggerfish plays.** The same take, acts and doors as the Bench;
         -- | its own sentence, and the published shelf where the Bench has its
@@ -3161,6 +3209,7 @@ render st =
             { statement: scoreStatement
             , main: takeMain
             , side: [ scoreShelf st ]
+            , drawer: sideOf Score
             }
         -- | **Two places, and the transform between them.**
         -- |
@@ -3199,6 +3248,7 @@ render st =
                       }
                 , main: jp.main
                 , side: jp.side
+                , drawer: sideOf JamPage
                 }
           l ->
             Layout.layout
@@ -3211,13 +3261,28 @@ render st =
                     }
               , main: takeMain
               , side: [ JamView.about l ]
+              , drawer: sideOf JamPage
               }
-        LoopPage -> Loop.view LoopMsg st
+        LoopPage -> Loop.view LoopMsg (sideOf LoopPage) st
     , HH.section [ HP.class_ (HH.ClassName "q-log") ]
         (map (\l -> HH.div_ [ HH.text l ]) st.log)
     ]
   where
   cp = cap st
+
+  -- | **The page's side drawer**: its input, and its rail slotted here,
+  -- | keyed by page so each keeps its own width. See `Quadrat.Layout`.
+  sideOf pg =
+    let
+      d = sideState st pg
+      input = (Drawer.defaultInput (sideName pg))
+        { open = d.open, width = d.width, edge = Drawer.Right, resizable = true
+        , minWidth = 240.0, maxWidth = 560.0, panelId = "q-side-" <> pageKey pg
+        }
+    in
+      { input
+      , handle: HH.slot (Proxy :: _ "drawer") (pageKey pg) Drawer.component input (FromSide pg)
+      }
   -- | **The take and its acts, shared by the Bench and Score**: what is about
   -- | to fill the take differs between them, and nothing downstream of it does.
   takeMain =

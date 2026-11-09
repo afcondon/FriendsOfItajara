@@ -1,31 +1,47 @@
 -- | **Every recording page, one shape.** Andrew's drawing, 2026-11-08: under
--- | the title, a main column three quarters wide whose head is the page's
--- | statement with the input meter beside it, and a side column a quarter wide
--- | for the secondary controls, which scrolls on its own.
+-- | the head, a main column whose head is the page's statement, and a side
+-- | column for the secondary controls.
 -- |
--- | The statement and meter are in the same place on Bench, Jam and Loop, so
--- | the question "what is this page about to do, and is anything coming in"
--- | is answered where the eye already is. The main column holds the meat of
--- | the page; the side column what you set and then stop looking at (the
--- | Bench's parameter sweeps, the looper's Twister card and log).
-module Quadrat.Layout (layout) where
+-- | **The side column is a drawer** since 2026-11-09 (AC: "further clean up
+-- | the initial views and allow us to focus on the primary function of each
+-- | view"), the same `Halogen.Widgets.Drawer` the Triggerfish pages use: on
+-- | the right edge, closed when the page loads, opened by the arrow on its
+-- | rail and resizable by its inner edge. What it holds is what you set and
+-- | then stop looking at: the Bench's parameter sweeps, Score's published
+-- | shelf, Jam's note on the length, the looper's controllers and log.
+-- |
+-- | The page still scrolls as a document; the drawer's dock is pinned to the
+-- | viewport as it does (`quadrat.css`), as the side column was.
+module Quadrat.Layout
+  ( Side
+  , layout
+  ) where
 
 import Prelude
 
 import Halogen.HTML as HH
 import Halogen.HTML.Properties as HP
+import Halogen.Widgets.Drawer as Drawer
+
+-- | The drawer's input and its slotted rail, both from the page's owner: the
+-- | owner holds `open` and `width`, and only it can slot a component.
+type Side w i = { input :: Drawer.Input, handle :: HH.HTML w i }
 
 layout
   :: forall w i
    . { statement :: HH.HTML w i
      , main :: Array (HH.HTML w i)
      , side :: Array (HH.HTML w i)
+     , drawer :: Side w i
      }
   -> HH.HTML w i
 layout r =
   HH.div [ cls "q-layout" ]
-    [ HH.div [ cls "q-layout-main" ] ([ r.statement ] <> r.main)
-    , HH.aside [ cls "q-layout-side" ] r.side
+    [ Drawer.frame r.drawer.input
+        { handle: r.drawer.handle
+        , body: [ HH.div [ cls "q-layout-side" ] r.side ]
+        , main: [ HH.div [ cls "q-layout-main" ] ([ r.statement ] <> r.main) ]
+        }
     ]
 
 cls :: forall r i. String -> HP.IProp (class :: String | r) i

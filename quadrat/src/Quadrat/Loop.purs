@@ -472,17 +472,18 @@ note text = H.modify_ \s -> s { looperLog = pushLog text s.looperLog }
 -- | Twister card is the looper's pages only, with a line under the tabs
 -- | whenever it is not following a device, so a card showing page 1 because
 -- | nothing told it otherwise is never mistaken for one that knows.
-view :: forall r w act. (Msg -> act) -> Record (Fields r) -> HH.HTML w act
-view wrap st =
+view :: forall r w act. (Msg -> act) -> PageLayout.Side w act -> Record (Fields r) -> HH.HTML w act
+view wrap drawer st =
   -- **The page's shape, not the looper's** (`Quadrat.Layout`): the statement
   -- heads the main column as on every recording page (the meter is in the
   -- page's header since 2026-11-09), the panel
-  -- buttons and the loops follow, and the Twister card and the log take the
-  -- side column.
+  -- buttons and the loops follow, and the Twister card and the log are in
+  -- the side drawer, whose rail the owner slots (`drawer`).
   PageLayout.layout
     { statement
     , main: parts.notices <> parts.main <> [ parts.overlay ]
     , side: parts.side
+    , drawer
     }
   where
   parts = Page.parts handlers ports extras st
