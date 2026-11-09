@@ -9092,7 +9092,7 @@
         })(replicate(v)(base2));
       }
       ;
-      throw new Error("Failed pattern match at Quadrat.Http (line 652, column 1 - line 652, column 37): " + [v.constructor.name, n.constructor.name]);
+      throw new Error("Failed pattern match at Quadrat.Http (line 649, column 1 - line 649, column 37): " + [v.constructor.name, n.constructor.name]);
     };
   };
   var slicerOffers = [8, 12, 16, 24, 32, 48, 64, 128];
@@ -9154,7 +9154,7 @@
       return append6(grids)(stacks);
     }
     ;
-    throw new Error("Failed pattern match at Quadrat.Http (line 680, column 1 - line 680, column 75): " + [o.constructor.name]);
+    throw new Error("Failed pattern match at Quadrat.Http (line 677, column 1 - line 677, column 75): " + [o.constructor.name]);
   };
 
   // output/Quadrat.RebusIcons/index.js
@@ -9921,7 +9921,7 @@
             return [];
           }
           ;
-          throw new Error("Failed pattern match at Quadrat.Stave (line 196, column 3 - line 204, column 84): " + [v.constructor.name]);
+          throw new Error("Failed pattern match at Quadrat.Stave (line 187, column 3 - line 195, column 84): " + [v.constructor.name]);
         };
         var ds = map27(diatonic)(sort2(notes));
         var hiD = max6(ext.hi)(fromMaybe(ext.hi)(last2(sort2(map27(function(v) {
@@ -10002,12 +10002,12 @@
             })(diatonic(53)))(22)("q-clef is-f")];
           }
           ;
-          throw new Error("Failed pattern match at Quadrat.Stave (line 163, column 3 - line 168, column 10): ");
+          throw new Error("Failed pattern match at Quadrat.Stave (line 154, column 3 - line 159, column 10): ");
         })();
         return el2("svg")([attr3("viewBox")("0 0 " + (num(width8) + (" " + num(height8)))), attr3("width")(num(width8)), attr3("height")(num(height8)), attr3("class")("q-stave")])(append8(staffLines)(append8(clefGlyphs)(append8(ledgers)(heads))));
       }
       ;
-      throw new Error("Failed pattern match at Quadrat.Stave (line 119, column 1 - line 119, column 94): " + [ext.constructor.name, notes.constructor.name]);
+      throw new Error("Failed pattern match at Quadrat.Stave (line 110, column 1 - line 110, column 94): " + [ext.constructor.name, notes.constructor.name]);
     };
   };
 

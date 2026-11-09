@@ -11021,7 +11021,7 @@
       return "dirt-grid";
     }
     ;
-    throw new Error("Failed pattern match at Quadrat.Encoding (line 72, column 8 - line 77, column 26): " + [v.constructor.name]);
+    throw new Error("Failed pattern match at Quadrat.Encoding (line 70, column 8 - line 75, column 26): " + [v.constructor.name]);
   };
   var nAxis = function(nm) {
     return function(how) {
@@ -11062,7 +11062,7 @@
       return "a grid, flattened to a list";
     }
     ;
-    throw new Error("Failed pattern match at Quadrat.Encoding (line 88, column 9 - line 93, column 44): " + [v.constructor.name]);
+    throw new Error("Failed pattern match at Quadrat.Encoding (line 86, column 9 - line 91, column 44): " + [v.constructor.name]);
   };
   var joined = function(v) {
     if (v instanceof RampleSlices) {
@@ -11072,10 +11072,10 @@
     return false;
   };
   var joinInts = /* @__PURE__ */ (function() {
-    var $39 = intercalate2(monoidString)(", ");
-    var $40 = map(functorArray)(show6);
-    return function($41) {
-      return $39($40($41));
+    var $36 = intercalate2(monoidString)(", ");
+    var $37 = map(functorArray)(show6);
+    return function($38) {
+      return $36($37($38));
     };
   })();
   var defaultExtent = function(v) {
@@ -11099,7 +11099,7 @@
       return [4, 12];
     }
     ;
-    throw new Error("Failed pattern match at Quadrat.Encoding (line 226, column 17 - line 231, column 24): " + [v.constructor.name]);
+    throw new Error("Failed pattern match at Quadrat.Encoding (line 224, column 17 - line 229, column 24): " + [v.constructor.name]);
   };
   var axes = function(v) {
     if (v instanceof RampleLayers) {
@@ -11122,7 +11122,7 @@
       return [nAxis("outer")("you: the slower half of `n`"), nAxis("inner")("you: the faster half of `n`")];
     }
     ;
-    throw new Error("Failed pattern match at Quadrat.Encoding (line 202, column 8 - line 213, column 6): " + [v.constructor.name]);
+    throw new Error("Failed pattern match at Quadrat.Encoding (line 200, column 8 - line 211, column 6): " + [v.constructor.name]);
   };
   var cells2 = function(enc) {
     return function(ext) {
@@ -11147,8 +11147,8 @@
     return function(ext) {
       var $$long = (function() {
         var n = total(ext);
-        var $35 = n <= 128;
-        if ($35) {
+        var $32 = n <= 128;
+        if ($32) {
           return [];
         }
         ;
@@ -11157,8 +11157,8 @@
       var check = function(i2) {
         return function(ax) {
           var n = fromMaybe(0)(index2(ext)(i2));
-          var $36 = elem3(n)(ax.sizes);
-          if ($36) {
+          var $33 = elem3(n)(ax.sizes);
+          if ($33) {
             return Nothing.value;
           }
           ;
@@ -11167,8 +11167,8 @@
           }
           ;
           return new Just(ax.name + (" " + (show6(n) + (" is not available \u2014 " + (function() {
-            var $38 = ax.name === "slice";
-            if ($38) {
+            var $35 = ax.name === "slice";
+            if ($35) {
               return "SLICER offers only " + joinInts(ax.sizes);
             }
             ;
@@ -21542,7 +21542,7 @@
       return "CircleInOut";
     }
     ;
-    throw new Error("Failed pattern match at Quadrat.Curve (line 76, column 13 - line 92, column 31): " + [v.constructor.name]);
+    throw new Error("Failed pattern match at Quadrat.Curve (line 75, column 13 - line 91, column 31): " + [v.constructor.name]);
   };
   var shapeOf = function(s) {
     return find2(function(x) {
@@ -21570,7 +21570,7 @@
       return new Named(next, v.value1);
     }
     ;
-    throw new Error("Failed pattern match at Quadrat.Curve (line 213, column 13 - line 223, column 22): " + [v.constructor.name]);
+    throw new Error("Failed pattern match at Quadrat.Curve (line 212, column 13 - line 222, column 22): " + [v.constructor.name]);
   };
   var lerpAt = function(xs) {
     return function(u2) {
@@ -21611,10 +21611,10 @@
           })(range2(0)(n - 1 | 0));
         }
         ;
-        throw new Error("Failed pattern match at Quadrat.Curve (line 238, column 17 - line 246, column 36): " + [v.constructor.name]);
+        throw new Error("Failed pattern match at Quadrat.Curve (line 233, column 17 - line 241, column 36): " + [v.constructor.name]);
       }
       ;
-      throw new Error("Failed pattern match at Quadrat.Curve (line 234, column 1 - line 234, column 48): " + [n.constructor.name, xs.constructor.name]);
+      throw new Error("Failed pattern match at Quadrat.Curve (line 229, column 1 - line 229, column 48): " + [n.constructor.name, xs.constructor.name]);
     };
   };
   var label8 = function(v) {
@@ -21634,7 +21634,7 @@
       return "Hold";
     }
     ;
-    throw new Error("Failed pattern match at Quadrat.Curve (line 156, column 9 - line 160, column 19): " + [v.constructor.name]);
+    throw new Error("Failed pattern match at Quadrat.Curve (line 155, column 9 - line 159, column 19): " + [v.constructor.name]);
   };
   var isDrawn = function(v) {
     if (v instanceof Drawn) {
@@ -21657,7 +21657,7 @@
         return new Held(v.value0);
       }
       ;
-      throw new Error("Failed pattern match at Quadrat.Curve (line 201, column 13 - line 205, column 19): " + [v.constructor.name]);
+      throw new Error("Failed pattern match at Quadrat.Curve (line 200, column 13 - line 204, column 19): " + [v.constructor.name]);
     };
   };
   var at3 = function(sh) {
@@ -21798,7 +21798,7 @@
           };
         }
         ;
-        throw new Error("Failed pattern match at Quadrat.Curve (line 102, column 9 - line 126, column 77): " + [v.constructor.name]);
+        throw new Error("Failed pattern match at Quadrat.Curve (line 101, column 9 - line 125, column 77): " + [v.constructor.name]);
       };
       return clamp5(0)(1)(raw(sh)(clamp5(0)(1)(t)));
     };
@@ -21815,7 +21815,7 @@
         })(range2(0)(n - 1 | 0));
       }
       ;
-      throw new Error("Failed pattern match at Quadrat.Curve (line 176, column 1 - line 176, column 40): " + [sh.constructor.name, n.constructor.name]);
+      throw new Error("Failed pattern match at Quadrat.Curve (line 175, column 1 - line 175, column 40): " + [sh.constructor.name, n.constructor.name]);
     };
   };
   var valuesOf = function(n) {
@@ -21837,7 +21837,7 @@
         return replicate(max16(1)(n))(clamp5(0)(1)(v.value0));
       }
       ;
-      throw new Error("Failed pattern match at Quadrat.Curve (line 169, column 14 - line 174, column 56): " + [v.constructor.name]);
+      throw new Error("Failed pattern match at Quadrat.Curve (line 168, column 14 - line 173, column 56): " + [v.constructor.name]);
     };
   };
   var setAt = function(n) {

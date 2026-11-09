@@ -684,38 +684,6 @@ function reelsOn(dest) {
   });
 }
 
-async function writeReel(body) {
-  const name = safe(String(body.set || ""));
-  const dest = String(body.dest || "");
-  const slot = Math.max(1, Math.min(REEL_SLOTS, Number(body.slot) || 0));
-  const r = reelOf(name);
-  if (!r.ok) return { ok: false, output: r.output || `nothing to write for ${name}` };
-  if (!volumes().includes(dest)) return { ok: false, output: `${dest} is not a mounted volume` };
-  if (!Number(body.slot)) return { ok: false, output: "say which reel it is \u2014 a reel is a position, not a name" };
-
-  const takeDir = path.join(TAKES, safe(r.take || name));
-  const src = firstWav(takeDir);
-  const file = reelName(slot);
-  const out = path.join(dest, file);
-  // Marker times stay in the TAKE's own coordinates; `--start` shifts them.
-  // Keeping one coordinate system on this side is what stops the two trims
-  // from having to agree about arithmetic done in two places.
-  const times = r.starts.map((t) => t.toFixed(3)).join(",");
-  const done = await run(["splice", src, "--times", times,
-                          "--end", r.endAt.toFixed(3),
-                          "--start", r.head.toFixed(3),
-                          "--output", out]);
-  // **Say where it went and what is in it**, read from what was actually
-  // asked for and never assembled beside the act. The name a reel lands under
-  // is the whole question a person is looking down at the module to answer —
-  // and here it is a slot number, which nothing else on the card records.
-  return done.ok
-    ? { ok: true, file, output: `wrote ${file} \u00b7 reel ${slot} \u00b7 ${r.splices} splices \u00b7 ${r.secs.toFixed(1)}s to ${dest}`
-                                + (r.trimmed > 0.001 ? ` \u00b7 trimmed ${r.trimmed.toFixed(1)}s (${r.trimWhy})` : "")
-                                + (r.refuses.length ? ` \u2014 but ${r.refuses.join("; ")}` : "") }
-    : done;
-}
-
 // **The card, written whole and in order.**
 //
 // One reel at a time is what the module undoes: it compacts on load, keeping
@@ -2806,12 +2774,6 @@ const server = http.createServer(async (req, res) => {
     }
     if (url.pathname === "/api/reel/card" && req.method === "POST") {
       return json(res, 200, await writeReelCard(await readBody(req)));
-    }
-    if (url.pathname === "/api/reel/write" && req.method === "POST") {
-      return json(res, 200, await writeReel(await readBody(req)));
-    }
-    if (url.pathname === "/api/card/clear" && req.method === "POST") {
-      return json(res, 200, { ok: true, card: writeCard(emptyCard()), sets: sets(), output: "card cleared" });
     }
     if (url.pathname === "/api/onsets" && req.method === "POST") {
       const body = await readBody(req);

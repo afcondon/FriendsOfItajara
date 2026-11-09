@@ -403,18 +403,6 @@ export const reelsOn = (dest) => () =>
     .then((d) => ({ ok: !!d.ok, reels: (d.reels ?? []).map(Number), output: String(d.output ?? "") }))
     .catch((e) => ({ ok: false, reels: [], output: String(e.message ?? e) }));
 
-// A reel goes to a POSITION — mg1.wav..mgw.wav — and the set name cannot
-// travel with it. See `reelName` in server.mjs.
-export const writeReel = (set) => (dest) => (slot) => () =>
-  fetch("/api/reel/write", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ set, dest, slot }),
-  })
-    .then(j)
-    .then((d) => ({ ok: !!d.ok, output: String(d.output ?? "") }))
-    .catch((e) => ({ ok: false, output: String(e.message ?? e) }));
-
 // **The card, written whole and in order.** The Morphagene compacts on load —
 // one contiguous run, gaps closed — so a slot chosen in advance is one the
 // module renumbers underneath you. The only arrangement it leaves alone is a

@@ -28,8 +28,7 @@
 -- | accidental is a sharp — which is also what makes the diatonic step of a
 -- | pitch class a function rather than a judgement.
 module Quadrat.Stave
-  ( grand
-  , grandIn
+  ( grandIn
   , spanOf
   , diatonic
   ) where
@@ -101,14 +100,6 @@ spanOf notes =
   in { lo: min botD (fromMaybe botD (Array.head ds))
      , hi: max topD (fromMaybe topD (Array.last ds))
      }
-
--- | **A voicing**, on its own extent. Empty draws nothing at all rather than
--- | an empty staff: a sample with no notes recorded is not a sample with no
--- | notes.
-grand :: forall w i. Array Int -> HH.HTML w i
-grand notes =
-  let s = spanOf notes
-  in grandIn { lo: s.lo, hi: s.hi, clefs: true } notes
 
 -- | A voicing drawn on an extent chosen by the caller, so several can share
 -- | one and be compared.

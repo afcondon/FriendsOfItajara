@@ -42,9 +42,7 @@ module Quadrat.Http
   , qdWrite
   , Arrangement
   , arrangementsOf
-  , voiceRoom
   , splitOver
-  , slicerOffers
   , takePeaks
   , TakePeaks
   , loadSpec
@@ -57,7 +55,6 @@ module Quadrat.Http
   , volumes
   , ReelsOn
   , reelsOn
-  , writeReel
   , writeCard
   ) where
 
@@ -772,10 +769,6 @@ type ReelsOn = { ok :: Boolean, reels :: Array Int, output :: String }
 -- | Which reel slots a card already holds: the blast radius of a write.
 foreign import reelsOn :: String -> Effect (Promise ReelsOn)
 
--- | Set, volume, slot. A reel is addressed by POSITION — `mg1.wav` through
--- | `mgw.wav` — and the module reads nothing else, so the set's name cannot
--- | travel onto the card with it.
-foreign import writeReel :: String -> String -> Int -> Effect (Promise Wrote)
 
 -- | **The card, written whole and in order.** Sets in card order, then the
 -- | volume. Names are derived from position at the far end, not chosen here:

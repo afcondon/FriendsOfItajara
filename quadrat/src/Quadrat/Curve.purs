@@ -28,7 +28,6 @@ module Quadrat.Curve
   , setAt
   , flipped
   , nextShape
-  , asDrawn
   , resample
   ) where
 
@@ -221,10 +220,6 @@ nextShape = case _ of
     let i = fromMaybe 0 (Array.findIndex (_ == sh) shapes)
         next = fromMaybe Linear (Array.index shapes ((i + 1) `mod` Array.length shapes))
     in Named next rev
-
--- | Freeze whatever it is into points, which is what opening the editor does.
-asDrawn :: Int -> Curve -> Curve
-asDrawn n c = Drawn (valuesOf n c)
 
 -- | **Changing the number of points keeps the shape you drew.**
 -- |
