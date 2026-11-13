@@ -54,6 +54,7 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import dgram from "node:dgram";
+import net from "node:net";
 import { spawn, spawnSync } from "node:child_process";
 
 const PORT = Number(process.env.PORT || 3029);
@@ -1001,6 +1002,48 @@ function python(args) {
 function oscString(address, str) {
   const pad = (b) => Buffer.concat([b, Buffer.alloc(4 - (b.length % 4))]);
   return Buffer.concat([pad(Buffer.from(address)), pad(Buffer.from(",s")), pad(Buffer.from(str))]);
+}
+
+// What Continuo is hosting: each instrument and the MIDI channel it listens
+// on (0 = every channel). Continuo answers only on its control socket, which
+// a page cannot open, so the dashboard's routing matrix asks here. `up` is
+// false when the socket does not answer: Continuo is not running.
+// One line to Continuo's control socket and its one-line answer; null when
+// the socket does not answer.
+function continuoSay(line) {
+  const sock = path.join(os.homedir(), ".continuo", "control.sock");
+  return new Promise((resolve) => {
+    let text = "", done = false;
+    const finish = (answer) => { if (!done) { done = true; c.destroy(); resolve(answer); } };
+    const c = net.createConnection(sock, () => c.write(line + "\n"));
+    c.on("data", (d) => { text += d; if (text.includes("\n")) finish(text.trim()); });
+    c.on("end", () => finish(text.trim() || null));
+    c.on("error", () => finish(null));
+    c.setTimeout(800, () => finish(null));
+  });
+}
+
+async function continuoLayers() {
+  try {
+    const layers = (JSON.parse(await continuoSay("status")).audio?.layers ?? []).map((l) => ({
+      name: String(l.name), channel: l.channel | 0, levelDb: Number(l.levelDb ?? 0), pan: Number(l.pan ?? 0),
+    }));
+    return { up: true, layers };
+  } catch { return { up: false, layers: [] }; }
+}
+
+// An instrument's place in Continuo's mix: `layer` is its number (1 is the
+// first), with a level in dB, a pan from -1 (left) to 1 (right), or both.
+// Answers with the layers as they now are.
+async function continuoMix(body) {
+  const layer = Number(body?.layer) | 0;
+  if (layer < 1) return { error: "which layer?" };
+  for (const [verb, v] of [["level", body?.levelDb], ["pan", body?.pan]]) {
+    if (typeof v !== "number" || !Number.isFinite(v)) continue;
+    const said = await continuoSay(`${verb} ${layer} ${v}`);
+    if (said !== "ok") return { error: said ?? "Continuo is not answering" };
+  }
+  return continuoLayers();
 }
 
 async function projectTape(set) {
@@ -2804,6 +2847,8 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, qdDrop(await readBody(req)));
     if (url.pathname === "/api/qd/write" && req.method === "POST")
       return json(res, 200, qdWrite(await readBody(req)));
+    if (url.pathname === "/api/continuo" && req.method === "GET") return json(res, 200, await continuoLayers());
+    if (url.pathname === "/api/continuo/mix" && req.method === "POST") return json(res, 200, await continuoMix(await readBody(req)));
     // Send to · tape. See `projectTape`.
     if (url.pathname === "/api/tape" && req.method === "POST") {
       const body = await readBody(req);
