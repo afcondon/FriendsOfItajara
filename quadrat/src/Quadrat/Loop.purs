@@ -43,9 +43,11 @@ module Quadrat.Loop
 
 import Prelude
 
+import Control.Promise (toAffE)
 import Data.Array as Array
 import Data.Either (Either(..))
 import Data.Foldable (for_, traverse_)
+import Data.Traversable (for)
 import Data.Int as Int
 import Data.Looper.Banks as LoopBanks
 import Data.Looper.Layout as Layout
@@ -60,8 +62,10 @@ import Data.Map (Map)
 import Data.Map as Map
 import Data.Maybe (Maybe(..), isJust, maybe)
 import Data.Number as Number
+import Data.String as String
 import Effect (Effect)
-import Effect.Aff.Class (class MonadAff)
+import Effect.Aff (Aff, Milliseconds(..), delay)
+import Effect.Aff.Class (class MonadAff, liftAff)
 import Effect.Class (liftEffect)
 import Effect.Class.Console as Console
 import Foreign.LooperSocket (LooperState, Peaks, SocketStatus)
@@ -75,6 +79,7 @@ import Helm.Twister as HelmTwister
 import Helm.WebMIDI (MIDIAccess)
 import Helm.WebMIDI as MIDI
 import Itajara.Surface.Looper.Page as Page
+import Quadrat.Http as Http
 import Quadrat.Layout as PageLayout
 import Itajara.Surface.Looper.Statement as LooperStatement
 import Halogen.Widgets.Statement as Statement
@@ -199,6 +204,9 @@ data Msg
   | SetSaveName String
   -- | Save the loop in hand under this name (empty: the looper names it).
   | Save String
+  -- | Every loop that holds something, saved and sent to Conspicillum as a
+  -- | tape each.
+  | SendToConspicillum
   | HubAnswered (Either String MIDIAccess)
   | TwisterSent String (Array Int)
   | PortsChanged
@@ -206,6 +214,7 @@ data Msg
 type Loop r act slots o m = H.HalogenM (Record (Fields r)) act slots o m Unit
 
 foreign import pageHostImpl :: Effect String
+foreign import stampImpl :: Effect String
 
 -- | Helm's hub, as registered with Bosun, on the host the page came from.
 hubPort :: Int
@@ -340,6 +349,27 @@ handle wrap = case _ of
     st <- H.get
     runAction 0.0 (Machine.Command (Verb.at st.looperFocus (Verb.SaveTake name)))
     H.modify_ _ { looperSaveName = "" }
+  -- **Save, then project, and say what came of each.** The save is the
+  -- looper's own (`w`, the layers raw), under a name chosen here so the
+  -- projection knows what to ask for; the projection is the server's Send to
+  -- tape, which lists the tape in Conspicillum and loads it into SuperDirt
+  -- as it runs. Forked, because the daemon writes a take on its slow thread
+  -- and the projection has to wait for the manifest, which is written last.
+  SendToConspicillum -> do
+    st <- H.get
+    stamp <- liftEffect stampImpl
+    let held = Array.filter (\lp -> lp.layers > 0) (maybe [] _.loops st.looper)
+    when (Array.null held) (note "no loop holds anything to send.")
+    names <- Array.catMaybes <$> for held \lp ->
+      if lp.recording
+        then Nothing <$ note ("loop " <> show (lp.index + 1) <> " is recording; it was not sent.")
+        else do
+          let name = "loop" <> show (lp.index + 1) <> "-" <> stamp
+          runAction 0.0 (Machine.Command (Verb.at lp.index (Verb.SaveTake name)))
+          pure (Just name)
+    void $ H.fork $ for_ names \name -> do
+      answer <- liftAff (projected 12 name)
+      note (if answer.ok then answer.output else name <> " was not sent: " <> answer.output)
   -- Set from the wanted state, never flipped: the daemon's own flip is how
   -- two surfaces came to disagree about the click.
   SetClick wanted -> pedal 81 (if wanted then 127 else 0)
@@ -390,6 +420,16 @@ handle wrap = case _ of
       _ -> pure unit
   where
   hold key value = H.modify_ \s -> s { looperEditLocal = Map.insert key value s.looperEditLocal }
+
+-- | Ask the server for the tape until the take is on disk, half a second
+-- | apart. "Not kept" is the one answer worth asking again about: it is what
+-- | the server says while the looper is still writing.
+projected :: Int -> String -> Aff Http.Wrote
+projected tries name = do
+  answer <- toAffE (Http.projectTape name)
+  if not answer.ok && tries > 1 && String.contains (String.Pattern "not kept") answer.output
+    then delay (Milliseconds 500.0) *> projected (tries - 1) name
+    else pure answer
 
 -- | Look for the Twister among the hub's outputs and watch it, once found.
 -- | Watches outlive a hub reconnect (Helm re-sends them), so this runs only
@@ -481,12 +521,23 @@ view wrap drawer st =
   -- the side drawer, whose rail the owner slots (`drawer`).
   PageLayout.layout
     { statement
-    , main: parts.notices <> parts.main <> [ parts.overlay ]
+    , main: parts.notices <> [ sendAll ] <> parts.main <> [ parts.overlay ]
     , side: parts.side
     , drawer
     }
   where
   parts = Page.parts handlers ports extras st
+
+  -- | Quadrat's own, not the looper page's: PWYF has no Conspicillum to send to.
+  sendAll =
+    HH.div [ HP.class_ (HH.ClassName "q-actbar") ]
+      [ HH.button
+          [ HP.class_ (HH.ClassName "q-slot is-toggle")
+          , HP.title "Save every loop that holds something, and load each into Conspicillum as a tape"
+          , HE.onClick \_ -> wrap SendToConspicillum
+          ]
+          [ HH.text "Send the loops to Conspicillum" ]
+      ]
 
   handlers =
     { pressLoop: wrap <<< PressLoop
