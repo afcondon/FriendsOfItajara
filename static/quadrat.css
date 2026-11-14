@@ -1837,3 +1837,12 @@ select.q-slot { field-sizing: content; }
 .q-calibrate-steps td { text-align: right; padding: 3px 14px 3px 0; border-bottom: 1px solid var(--rule); }
 .q-calibrate-steps tr.is-suspect td { color: var(--hot); }
 .q-calibrate-about p { margin: 0 0 .8em; font-size: 14px; color: var(--muted); }
+.q-calibrate-tuner { margin: 6px 32px 10px; max-width: 520px; }
+.q-calibrate-tuned { margin: 6px 0 4px; font-size: 56px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+.q-calibrate-tuner + .q-calibrate-said, p.q-calibrate-tuned { margin-left: 32px; }
+.q-calibrate-tuner .q-calibrate-tuned { margin-left: 0; }
+.q-calibrate-cents { font-size: 22px; font-weight: 400; color: var(--muted); letter-spacing: 0; }
+.q-calibrate-needle { position: relative; height: 14px; margin: 10px 0 6px; border-left: 1px solid var(--rule); border-right: 1px solid var(--rule);
+  background: linear-gradient(var(--ink), var(--ink)) center / 1px 100% no-repeat, linear-gradient(var(--rule), var(--rule)) center / 100% 1px no-repeat; }
+.q-calibrate-mark { position: absolute; top: -3px; width: 4px; height: 20px; margin-left: -2px; background: var(--page); border-radius: 2px; transition: left .08s linear; }
+.q-calibrate-hz { margin: 0; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }

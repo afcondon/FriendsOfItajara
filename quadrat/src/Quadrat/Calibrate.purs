@@ -60,7 +60,7 @@ import Data.Number as Number
 import Data.Number.Format (fixed, toStringWith)
 import Data.String as String
 import Data.Traversable (traverse)
-import Data.Looper.Verb (Verb(..))
+import Data.Looper.Verb (Verb)
 import Data.Looper.Verb as Verb
 import Effect (Effect)
 import Effect.Aff (Aff, Milliseconds(..), attempt, delay)
@@ -144,6 +144,11 @@ type Own r =
   , calHeard :: Int
   -- | The hash the table was last kept under, once it has been.
   , calKept :: String
+  -- | Tuning: the starting voltage is held and the pitch read over and
+  -- | over, so the oscillator can be put where the sweep should begin.
+  , calTuning :: Boolean
+  -- | The last reading while tuning, as a sentence.
+  , calTuned :: String
   | r
   )
 
@@ -151,11 +156,13 @@ initial
   :: { calLabel :: String, calModule :: String, calWhere :: String, calComment :: String, calCoarse :: String
      , calJack :: Int, calSource :: String, calFrom :: Number, calTo :: Number, calStep :: Number
      , calBusy :: String, calSaid :: String, calBefore :: Maybe Run, calAfter :: Maybe Run, calHeard :: Int, calKept :: String
+     , calTuning :: Boolean, calTuned :: String
      }
 initial =
   { calLabel: "", calModule: "", calWhere: "", calComment: "", calCoarse: ""
   , calJack: 1, calSource: "", calFrom: 0.0, calTo: 5.0, calStep: 0.25
   , calBusy: "", calSaid: "", calBefore: Nothing, calAfter: Nothing, calHeard: 0, calKept: ""
+  , calTuning: false, calTuned: ""
   }
 
 data Msg
@@ -169,6 +176,9 @@ data Msg
   | SetFrom String
   | SetTo String
   | SetStep String
+  -- | Hold the starting voltage and keep reading the pitch, until stopped.
+  | Tune
+  | StopTuning
   -- | Two voltages, two pitches: is the patch what it should be?
   | CheckPatch
   -- | The sweep: the before.
@@ -233,6 +243,10 @@ ask described request = do
 
 -- ── Playing a staircase into a take and reading it ─────────────────────────
 
+-- | How a sweep's steps are held and read.
+sweeping :: { holdMs :: Number, readings :: Int, rest :: Boolean }
+sweeping = { holdMs, readings, rest: true }
+
 -- | The ES-9 bus behind a panel jack: jack 1 is bus 8.
 busOf :: Int -> Int
 busOf jack = jack + 7
@@ -244,9 +258,10 @@ record
   :: forall r act slots o m
    . MonadAff m
   => String
+  -> { holdMs :: Number, readings :: Int, rest :: Boolean }
   -> Array { volts :: Number, target :: Number, reached :: Boolean }
   -> H.HalogenM (Record (Fields r)) act slots o m (Either String Run)
-record prefix wanted = do
+record prefix how wanted = do
   st <- H.get
   let
     source = st.looper >>= \rig ->
@@ -259,7 +274,7 @@ record prefix wanted = do
       take <- liftEffect (Slug.stamped prefix)
       -- A capture with a start and an end and nothing else: no bars, no
       -- quantising, no trimming of its head. The steps say where they are.
-      liftEffect $ for_ [ CaptureArm false, CaptureQuantise 0, CaptureBars 0, CaptureStop 0, Capture index ] verb
+      liftEffect $ for_ [ Verb.CaptureArm false, Verb.CaptureQuantise 0, Verb.CaptureBars 0, Verb.CaptureStop 0, Verb.Capture index ] verb
       opened <- liftAff (awaitCapture 50)
       if not opened then pure (Left "the daemon did not start recording; is Itajara running?")
       else do
@@ -267,19 +282,19 @@ record prefix wanted = do
           set step.volts
           mark <- liftEffect Schedule.at
           H.modify_ _ { calBusy = "holding " <> show2 step.volts <> " V" }
-          liftAff (delay (Milliseconds holdMs))
+          liftAff (delay (Milliseconds how.holdMs))
           pure (map (\at -> { volts: step.volts, target: step.target, reached: step.reached, at }) mark)
-        set 0.0
-        _ <- liftEffect (verb EndCapture)
+        when how.rest (set 0.0)
+        _ <- liftEffect (verb Verb.EndCapture)
         liftAff (delay (Milliseconds 200.0))
-        _ <- liftEffect (verb (WriteCapture take))
-        liftAff (delay (Milliseconds 1200.0))
+        _ <- liftEffect (verb (Verb.WriteCapture take))
+        liftAff (delay (Milliseconds 1000.0))
         case Array.catMaybes marks of
           marked | Array.length marked /= Array.length wanted -> pure (Left "the recording stopped before the sweep ended")
           marked -> do
             H.modify_ _ { calBusy = "reading the pitches" }
-            let regions = marked <#> \step -> { start: step.at + settleSecs, end: step.at + holdMs / 1000.0 - guardSecs }
-            measured <- liftAff (toAffE (measureImpl take regions readings))
+            let regions = marked <#> \step -> { start: step.at + settleSecs, end: step.at + how.holdMs / 1000.0 - guardSecs }
+            measured <- liftAff (toAffE (measureImpl take regions how.readings))
             pure
               if not measured.ok then Left ("the take could not be read: " <> measured.output)
               else if Array.length measured.regions /= Array.length marked then Left "the take is shorter than the sweep: some steps fell outside it"
@@ -395,11 +410,37 @@ handle = case _ of
   SetTo written -> for_ (Number.fromString written) \volts -> H.modify_ _ { calTo = clamp (-10.0) 10.0 volts }
   SetStep written -> for_ (Number.fromString written) \volts -> H.modify_ _ { calStep = clamp 0.05 2.0 volts }
 
+  -- The daemon listens to the chosen input and every snapshot carries its
+  -- pitch (`Tune`, itajara's `crate::pitch`), so the reading on the page
+  -- follows a hand on the oscillator's knob. The starting voltage is held
+  -- meanwhile: this is the pitch the sweep will begin from.
+  Tune -> idle do
+    st <- H.get
+    case st.looper >>= \rig -> map (_ + 1) (Array.findIndex (\candidate -> candidate.name == st.calSource && candidate.available) rig.sources) of
+      Nothing -> H.modify_ _ { calSaid = "choose the input the oscillator is heard on; the one chosen is not there" }
+      Just index -> do
+        void $ liftAff $ attempt $ toAffE $ Rig.setCv { set: [ { bus: busOf st.calJack, level: st.calFrom / 10.0 } ], esx: [] }
+        _ <- liftEffect (verb (Verb.Tune index))
+        H.modify_ _ { calTuning = true, calBusy = "holding " <> show2 st.calFrom <> " V and listening", calSaid = "" }
+
+  -- The jack back to rest, the daemon told to stop listening, and the
+  -- setting written down if nobody has said what it is.
+  StopTuning -> do
+    st <- H.get
+    _ <- liftEffect (verb (Verb.Tune 0))
+    void $ liftAff $ attempt $ toAffE $ Rig.setCv { set: [ { bus: busOf st.calJack, level: 0.0 } ], esx: [] }
+    H.modify_ _
+      { calBusy = "", calTuning = false
+      , calCoarse = case heardNow st of
+          Just base | st.calCoarse == "" -> "tuned to " <> base.note <> " at " <> show2 st.calFrom <> " V"
+          _ -> st.calCoarse
+      }
+
   CheckPatch -> idle do
     st <- H.get
     let high = min st.calTo (st.calFrom + 2.0)
     H.modify_ _ { calBusy = "checking the patch", calSaid = "" }
-    result <- record "calibrate-check" [ { volts: st.calFrom, target: 0.0, reached: true }, { volts: high, target: 0.0, reached: true } ]
+    result <- record "calibrate-check" sweeping [ { volts: st.calFrom, target: 0.0, reached: true }, { volts: high, target: 0.0, reached: true } ]
     H.modify_ _
       { calBusy = ""
       , calSaid = case result of
@@ -414,7 +455,7 @@ handle = case _ of
     else if Array.length voltages < 2 then H.modify_ _ { calSaid = "the sweep needs at least two voltages: check from, to and the step" }
     else do
       H.modify_ _ { calBusy = "sweeping", calSaid = "", calBefore = Nothing, calAfter = Nothing, calHeard = 0, calKept = "" }
-      result <- record "calibrate-before" (voltages <#> \volts -> { volts, target: 0.0, reached: true })
+      result <- record "calibrate-before" sweeping (voltages <#> \volts -> { volts, target: 0.0, reached: true })
       case result of
         Left why -> H.modify_ _ { calBusy = "", calSaid = why }
         Right run -> case Array.find (\step -> step.reads == 0) run.steps of
@@ -446,7 +487,7 @@ handle = case _ of
           -- measured, which is what a realiser does) and marked out of reach.
           wanted = before.steps <#> \step -> { volts: realise table step.target, target: step.target, reached: covers table step.target }
         H.modify_ _ { calBusy = "playing through the table", calSaid = "" }
-        result <- record "calibrate-after" wanted
+        result <- record "calibrate-after" sweeping wanted
         H.modify_ case result of
           Left why -> _ { calBusy = "", calSaid = why }
           Right after -> _
@@ -489,6 +530,11 @@ handle = case _ of
   idle work = do
     st <- H.get
     when (st.calBusy == "") work
+
+-- | The note the daemon hears on the input it is listening to, if it hears
+-- | one: the nearest note and how far the pitch sits from it.
+heardNow :: forall r. Record (Fields r) -> Maybe Judge.Base
+heardNow st = st.looper >>= \rig -> if rig.pitch.src > 0 && rig.pitch.hz > 0.0 then Just (Judge.baseOf rig.pitch.hz) else Nothing
 
 -- | What two points say about the patch. Two, never one: a dead audio
 -- | stream answers a ping happily, and one pitch says nothing about whether
@@ -619,7 +665,9 @@ view wrap drawer st =
           , field "Notes" st.calComment SetComment "anything worth knowing later"
           ]
       , HH.div [ cls "q-calibrate-acts" ]
-          [ button "Check the patch" "two voltages, two pitches: is the voltage reaching the oscillator?" true CheckPatch
+          [ if st.calTuning then HH.button [ cls "q-pill", HE.onClick \_ -> wrap StopTuning ] [ text "Stop tuning" ]
+            else button "Tune" "hold the starting voltage and show the note being heard, to put the oscillator where the sweep should begin" true Tune
+          , button "Check the patch" "two voltages, two pitches: is the voltage reaching the oscillator?" true CheckPatch
           , button "Sweep" "the before: ideal voltages, and how far each pitch falls from a perfect volt per octave" true Sweep
           , button "Play through the table" "the after: the same pitches at the voltages the table gives" (isJust st.calBefore) Verify
           , button "Keep" "store the table where every realiser looks for it" (isJust st.calBefore) Keep
@@ -649,7 +697,27 @@ view wrap drawer st =
       , HH.button [ cls "q-pill", HP.title "with a sine at each step's target: a step that is off beats against it", HE.onClick \_ -> wrap (Play after true) ] [ text ("Play the " <> name <> " with a reference tone") ]
       ]
 
-  said = if st.calSaid == "" then text "" else HH.p [ cls "q-calibrate-said" ] [ text st.calSaid ]
+  said =
+    HH.div_
+      [ if st.calTuning then tuner else text ""
+      , if st.calSaid == "" then text "" else HH.p [ cls "q-calibrate-said" ] [ text st.calSaid ]
+      ]
+
+  -- | The note being heard, and a needle: the middle is the note, the ends
+  -- | are half a semitone flat and sharp.
+  tuner = case heardNow st of
+    Nothing -> HH.p [ cls "q-calibrate-tuned" ] [ text "no pitch" ]
+    Just base ->
+      HH.div [ cls "q-calibrate-tuner" ]
+        [ HH.p [ cls "q-calibrate-tuned" ]
+            [ text base.note
+            , HH.span [ cls "q-calibrate-cents" ]
+                [ text ((if base.offsetCents >= 0.0 then " +" else " \x2212") <> show (Int.round (Number.abs base.offsetCents)) <> " cents") ]
+            ]
+        , HH.div [ cls "q-calibrate-needle" ]
+            [ HH.span [ cls "q-calibrate-mark", HP.style ("left: " <> show2 (50.0 + clamp (-50.0) 50.0 base.offsetCents) <> "%") ] [] ]
+        , HH.p [ cls "q-calibrate-hz" ] [ text (maybe "" (\rig -> show2 rig.pitch.hz <> " Hz at " <> show2 st.calFrom <> " V") st.looper) ]
+        ]
 
   -- | Both error curves on one pair of axes: cents from the target at each
   -- | step, the before and the after.

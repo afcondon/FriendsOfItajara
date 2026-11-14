@@ -522,6 +522,8 @@ component = H.mkComponent
       , calAfter: Calibrate.initial.calAfter
       , calHeard: Calibrate.initial.calHeard
       , calKept: Calibrate.initial.calKept
+      , calTuning: Calibrate.initial.calTuning
+      , calTuned: Calibrate.initial.calTuned
       }
   , render
   , eval: H.mkEval H.defaultEval { handleAction = handleAction, initialize = Just Init }
