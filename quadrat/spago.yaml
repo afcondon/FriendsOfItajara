@@ -40,6 +40,8 @@ package:
     - hawser-fetch
     - helm
     - quadrat-common
+    - reef
+    - reef-stored
     - integers
     - itajara-client
     - itajara-controllers

@@ -103,6 +103,7 @@ import Quadrat.Rig as Rig
 import Quadrat.Encoding as Encoding
 import Quadrat.Schedule as Schedule
 import Quadrat.Pitch as Pitch
+import Quadrat.Tables as Tables
 import Quadrat.Sweep as Sweep
 import Quadrat.SweepView as SweepView
 import Halogen.Widgets.Statement as Statement
@@ -645,16 +646,15 @@ handleAction = case _ of
   PickPitch i label
     | label == "" -> handleAction (SweepMsg (Sweep.ClearPitch i))
     | otherwise -> do
-        r <- H.liftAff (attempt (toAffE (Http.calibration label)))
+        r <- H.liftAff (Tables.one label)
         case r of
-          Left e -> H.modify_ (note ("calibration " <> label <> ": " <> Aff.message e))
+          Left problem -> H.modify_ (note ("calibration " <> label <> ": " <> problem))
           Right t
             -- An empty table would realise every note as 0 V — one flat
             -- transect and nothing on the page to say why — so it is refused
             -- here rather than stored and discovered later.
-            | not t.ok || Array.null t.points ->
-                H.modify_ (note ("calibration " <> label <> " has no usable points"
-                                  <> (if t.error == "" then "" else ": " <> t.error)))
+            | Array.null t.points ->
+                H.modify_ (note ("calibration " <> label <> " has no usable points"))
             | otherwise -> do
                 st0 <- H.get
                 let tlo = Pitch.hzNote (fromMaybe 0.0 (map _.hz (Array.head t.points)))
@@ -753,14 +753,12 @@ handleAction = case _ of
       , equalN = clamp 2 128 (Encoding.total pl.extent)
       }
     -- The calibration list, once. Failure is carried as a SENTENCE rather than
-    -- as an empty array: "nothing has been measured yet" and "the rig doctor is
+    -- as an empty array: "nothing has been measured yet" and "the store is
     -- not running" are the same empty dropdown and different jobs for you.
-    cal <- H.liftAff (attempt (toAffE Http.calibrations))
+    cal <- H.liftAff Tables.list
     H.modify_ case cal of
-      Left e -> _ { tables = [], tablesErr = "calibrations unavailable: " <> Aff.message e }
-      Right r
-        | r.ok -> _ { tables = r.tables, tablesErr = "" }
-        | otherwise -> _ { tables = [], tablesErr = "calibrations unavailable — is `deepstar serve` up on :3027?" }
+      Left problem -> _ { tables = [], tablesErr = "calibrations unavailable: " <> problem }
+      Right tables -> _ { tables = tables, tablesErr = "" }
     -- **Ask for MIDI at load, and never wait for the answer.**
     --
     -- It used to be asked for when the Trigger modal opened, which is right for

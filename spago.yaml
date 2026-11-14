@@ -59,6 +59,14 @@ workspace:
       path: ../../purescript-hylograph-libs/purescript-hawser
     hawser-fetch:
       path: ../../purescript-hylograph-libs/purescript-hawser/fetch
+    # The V/oct realiser the rig plays through, and the shape of a stored
+    # calibration table (reef/stored). Quadrat had a copy of the first.
+    reef:
+      path: ../reef
+    reef-stored:
+      path: ../reef/stored
+    harmonia:
+      path: ../harmonia
     # Identity without a name: a content or a key, as a memorable pair of
     # coloured icons. Extracted from Triggerfish so that a chord set can wear
     # the SAME identity in both places. By path until it earns publishing.

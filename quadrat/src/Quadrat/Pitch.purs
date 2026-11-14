@@ -38,7 +38,7 @@ import Data.Array as Array
 import Data.Int as Int
 import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Number (log, pow)
-import Data.Tuple (Tuple(..))
+import Reef.Calibration as Reef
 
 -- | One measured point: the frequency the module produced when this voltage
 -- | was applied. Absolute, not relative to any base.
@@ -75,25 +75,18 @@ hzNote hz = Int.round (69.0 + 12.0 * log2 (hz / 440.0))
 -- | measurement removes, because it is in the reader rather than the data.
 voltsForHz :: Table -> Number -> Realised
 voltsForHz t hz = case Array.head pts, Array.last pts of
+  -- The arithmetic is `Reef.Calibration.realise`, the one the rig plays
+  -- through, held to every other copy by reef's calibration vectors. What is
+  -- added here is saying so when the table could not reach the pitch.
   Just lo, Just hi
-    | hz <= lo.hz -> { volts: lo.volts, hz: lo.hz, clamped: true }
-    | hz >= hi.hz -> { volts: hi.volts, hz: hi.hz, clamped: true }
-    | otherwise -> fromMaybe
-        { volts: lo.volts, hz: lo.hz, clamped: true }
-        (Array.findMap bracket (Array.zip pts (Array.drop 1 pts)))
+    | hz <= lo.hz -> { volts: Reef.realise t hz, hz: lo.hz, clamped: true }
+    | hz >= hi.hz -> { volts: Reef.realise t hz, hz: hi.hz, clamped: true }
+    | otherwise -> { volts: Reef.realise t hz, hz, clamped: false }
   _, _ -> { volts: 0.0, hz: 0.0, clamped: true }
   where
   -- Sorted by voltage, because a table is a sweep and a sweep is ordered by
-  -- what it swept. Not assumed: a re-published or hand-edited table has no
-  -- obligation to arrive in order, and an unsorted table read as sorted finds
-  -- no bracket and clamps everything to one end.
+  -- what it swept; the ends are the ends after sorting, as the realiser's are.
   pts = Array.sortWith _.volts t.points
-
-  bracket (Tuple a b)
-    | hz >= a.hz && hz <= b.hz && b.hz > a.hz =
-        let f = (log2 hz - log2 a.hz) / (log2 b.hz - log2 a.hz)
-        in Just { volts: a.volts + f * (b.volts - a.volts), hz, clamped: false }
-    | otherwise = Nothing
 
 -- | The voltage for a MIDI note.
 voltsForNote :: Table -> Int -> Realised

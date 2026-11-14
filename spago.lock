@@ -88,6 +88,8 @@
             "prelude",
             "quadrat-common",
             "rebus",
+            "reef",
+            "reef-stored",
             "strings",
             "tuples",
             "web-dom",
@@ -779,6 +781,9 @@
       "halogen-widgets": {
         "path": "../../purescript-halogen-widgets"
       },
+      "harmonia": {
+        "path": "../harmonia"
+      },
       "hawser": {
         "path": "../../purescript-hylograph-libs/purescript-hawser"
       },
@@ -799,6 +804,12 @@
       },
       "rebus": {
         "path": "../../code-typography/rebus"
+      },
+      "reef": {
+        "path": "../reef"
+      },
+      "reef-stored": {
+        "path": "../reef/stored"
       }
     }
   },
@@ -1318,6 +1329,18 @@
         "web-uievents"
       ]
     },
+    "harmonia": {
+      "type": "local",
+      "path": "../harmonia",
+      "dependencies": [
+        "arrays",
+        "foldable-traversable",
+        "integers",
+        "maybe",
+        "prelude",
+        "tuples"
+      ]
+    },
     "hawser": {
       "type": "local",
       "path": "../../purescript-hylograph-libs/purescript-hawser",
@@ -1672,6 +1695,46 @@
         "strings"
       ]
     },
+    "record": {
+      "type": "registry",
+      "version": "4.0.0",
+      "integrity": "sha256-WQ8fqp4X1wTA70J4qUcPW4Z7DCwx6e5KJnT/EuTdWSc=",
+      "dependencies": [
+        "functions",
+        "prelude",
+        "unsafe-coerce"
+      ]
+    },
+    "reef": {
+      "type": "local",
+      "path": "../reef",
+      "dependencies": [
+        "arrays",
+        "either",
+        "foldable-traversable",
+        "foreign",
+        "harmonia",
+        "integers",
+        "maybe",
+        "numbers",
+        "prelude",
+        "simple-json",
+        "strings",
+        "tuples"
+      ]
+    },
+    "reef-stored": {
+      "type": "local",
+      "path": "../reef/stored",
+      "dependencies": [
+        "arrays",
+        "hawser",
+        "maybe",
+        "numbers",
+        "prelude",
+        "reef"
+      ]
+    },
     "refs": {
       "type": "registry",
       "version": "6.0.0",
@@ -1687,6 +1750,31 @@
       "integrity": "sha256-EJrxtKt5xC7TYjBZrSBO/J7Aw3DmtilYjt4olpAXWVc=",
       "dependencies": [
         "unsafe-coerce"
+      ]
+    },
+    "simple-json": {
+      "type": "registry",
+      "version": "9.0.0",
+      "integrity": "sha256-9PIR1i5DtHn4ApFptn+c2BfnGMok0ESlYe4TnZiBvgs=",
+      "dependencies": [
+        "arrays",
+        "bifunctors",
+        "control",
+        "effect",
+        "either",
+        "exceptions",
+        "foldable-traversable",
+        "foreign",
+        "foreign-object",
+        "identity",
+        "lists",
+        "maybe",
+        "nullable",
+        "partial",
+        "prelude",
+        "record",
+        "transformers",
+        "variant"
       ]
     },
     "st": {
@@ -1810,6 +1898,22 @@
       "integrity": "sha256-ttSJTQUnK8AK2eGOsfRxLUJEDPL6pnmExjbiOqfwC6I=",
       "dependencies": [
         "prelude"
+      ]
+    },
+    "variant": {
+      "type": "registry",
+      "version": "8.0.0",
+      "integrity": "sha256-Ydrgl8liWEwYQOWW76PdZtg3vxKpoKgsnmFyTLgZkoU=",
+      "dependencies": [
+        "control",
+        "enums",
+        "foldable-traversable",
+        "lists",
+        "maybe",
+        "partial",
+        "prelude",
+        "type-equality",
+        "unsafe-coerce"
       ]
     },
     "web-clipboard": {
