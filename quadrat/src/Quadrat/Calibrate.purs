@@ -83,6 +83,7 @@ import Quadrat.Slug as Slug
 import Quadrat.Tables as Tables
 import Reef.Calibration (covers, realise)
 import Reef.Calibration.Judge as Judge
+import Reef.Calibration.Notes as Notes
 import Reef.Calibration.Stored (Stored, StoredPoint)
 import Reef.Calibration.Stored as Stored
 
@@ -157,6 +158,9 @@ type Own r =
   -- | Whether tuning switched the daemon's monitoring on, and so should
   -- | switch it off again.
   , calMonitored :: Boolean
+  -- | The signal paths already calibrated, the latest table of each: what
+  -- | the path menu offers, so that calibrating one again is one choice.
+  , calPaths :: Array Stored
   | r
   )
 
@@ -165,16 +169,22 @@ initial
      , calJack :: Int, calSource :: String, calFrom :: Number, calTo :: Number, calStep :: Number
      , calBusy :: String, calSaid :: String, calBefore :: Maybe Run, calAfter :: Maybe Run, calHeard :: Int, calKept :: String
      , calTuning :: Boolean, calTuned :: String, calBase :: Maybe Int, calMonitored :: Boolean
+     , calPaths :: Array Stored
      }
 initial =
   { calLabel: "", calModule: "", calWhere: "", calComment: "", calCoarse: ""
   , calJack: 1, calSource: "", calFrom: 0.0, calTo: 5.0, calStep: 0.25
   , calBusy: "", calSaid: "", calBefore: Nothing, calAfter: Nothing, calHeard: 0, calKept: ""
   , calTuning: false, calTuned: "", calBase: Nothing, calMonitored: false
+  , calPaths: []
   }
 
 data Msg
-  = SetLabel String
+  -- | The page was opened: read which paths have been calibrated.
+  = Load
+  -- | A path chosen from the menu, by its label; empty for a new one.
+  | Pick String
+  | SetLabel String
   | SetModule String
   | SetWhere String
   | SetComment String
@@ -417,6 +427,42 @@ tableOf st measuredAt run =
 
 handle :: forall r act slots o m. MonadAff m => Msg -> Handler r act slots o m
 handle = case _ of
+  Load -> do
+    found <- liftAff Tables.curated
+    for_ found \tables ->
+      -- The latest table of each label, in the order of the labels.
+      H.modify_ _
+        { calPaths = Array.sortWith _.label $ Array.nubByEq (\one other -> one.label == other.label)
+            (Array.reverse (Array.sortWith (_.measuredAt >>> fromMaybe "") tables))
+        }
+
+  -- Everything the last calibration of this path recorded, put back on the
+  -- page: the jack, the module, the setting, and the notes kept beside it.
+  -- The coarse setting is what it WAS; it is yours to confirm before a sweep.
+  Pick label -> do
+    st <- H.get
+    case Array.find (\kept -> kept.label == label) st.calPaths of
+      Nothing -> H.modify_ _ { calLabel = "", calModule = "", calWhere = "", calComment = "", calCoarse = "", calBase = Nothing, calBefore = Nothing, calAfter = Nothing, calSaid = "" }
+      Just kept -> do
+        H.modify_ _
+          { calLabel = kept.label
+          , calJack = if kept.bus >= 8 && kept.bus <= 15 then kept.bus - 7 else st.calJack
+          , calModule = fromMaybe "" kept.module
+          , calCoarse = fromMaybe "" kept.coarseSetting
+          , calWhere = "", calComment = "", calBase = Nothing, calBefore = Nothing, calAfter = Nothing
+          , calSaid = "last calibrated " <> String.take 10 (fromMaybe "at a time nobody recorded" kept.measuredAt)
+              <> (if fromMaybe "" kept.stimulus == "es9-cv" then "" else ", through " <> fromMaybe "another kind of output" kept.stimulus <> ", which this page does not sweep yet")
+              <> ". Check the coarse setting still describes the module before sweeping."
+          }
+        noted <- liftAff (ask Api.getRef { name: Notes.refFor label })
+        for_ noted \{ hash } -> do
+          content <- liftAff (ask Api.getContent { hash })
+          for_ (either (const Nothing) (Notes.read <<< _.payload) content) \written ->
+            H.modify_ _
+              { calWhere = written.place, calComment = written.comment
+              , calModule = if written.module == "" then fromMaybe "" kept.module else written.module
+              }
+
   SetLabel written -> H.modify_ _ { calLabel = written }
   SetModule written -> H.modify_ _ { calModule = written }
   SetWhere written -> H.modify_ _ { calWhere = written }
@@ -607,9 +653,13 @@ noteAt run = (Judge.baseOf (fromMaybe 0.0 (Array.head run.steps <#> _.hz))).note
 -- | of its own so that a path's calibrations are a history.
 keep :: forall r. Record (Fields r) -> Stored -> Aff (Either String String)
 keep st table = do
-  existing <- Tables.list
+  existing <- Tables.curated
   case existing of
     Left why -> pure (Left why)
+    -- One label, one output. A realiser looks a table up by its label, so
+    -- the same label on two outputs is two different facts under one name.
+    Right tables | Just other <- Array.find (\kept -> kept.label == table.label && kept.bus /= table.bus) tables ->
+      pure (Left ("the name " <> table.label <> " is already a table for another output (bus " <> show other.bus <> "). Give this path its own name."))
     Right _ -> ask Api.putContent { kind: Stored.kind, payload: Stored.write table } >>= case _ of
       Left trouble -> pure (Left (troubleText trouble))
       Right { hash } -> do
@@ -628,15 +678,12 @@ keep st table = do
             -- recordings. Beside the table, not inside it, so that fixing a
             -- comment does not change what the table is called.
             let
-              notes = "{\"label\":" <> show table.label <> ",\"table\":" <> show hash
-                <> ",\"module\":" <> show st.calModule
-                <> ",\"where\":" <> show st.calWhere
-                <> ",\"comment\":" <> show st.calComment
-                <> ",\"before\":" <> show (maybe "" _.take st.calBefore)
-                <> ",\"after\":" <> show (maybe "" _.take st.calAfter)
-                <> "}"
-              refName = "quadrat/calibrations/" <> table.label
-            noted <- ask Api.putContent { kind: "calibration-notes", payload: notes }
+              written = Notes.write
+                { label: table.label, table: hash, module: st.calModule, place: st.calWhere, comment: st.calComment
+                , before: maybe "" _.take st.calBefore, after: maybe "" _.take st.calAfter
+                }
+              refName = Notes.refFor table.label
+            noted <- ask Api.putContent { kind: Notes.kind, payload: written }
             current <- ask Api.getRef { name: refName }
             for_ noted \{ hash: notesHash } ->
               ask Api.moveRef { name: refName, to: notesHash, expected: either (const Nothing) (Just <<< _.hash) current }
@@ -668,7 +715,7 @@ view wrap drawer st =
       , sentences =
           [ [ text "Sweep jack ", choice (show st.calJack) (map show (Array.range 1 8)) (\chosen -> wrap (SetJack (fromMaybe 1 (Int.fromString chosen))))
             , text " from ", number st.calFrom SetFrom, text " V to ", number st.calTo SetTo, text " V in steps of ", number st.calStep SetStep
-            , text " V, heard on ", choice st.calSource sources (wrap <<< SetSource), text "."
+            , text " V, heard on ", sourceChoice, text "."
             ]
           , [ text ("That is " <> show (Array.length (grid st.calFrom st.calTo st.calStep)) <> " steps and one more at each end, " <> show2 (holdMs / 1000.0) <> " s each, each read " <> show readings <> " times."
                 <> maybe "" (\midi -> " " <> show2 st.calFrom <> " V is " <> Judge.noteName midi <> ".") st.calBase) ]
@@ -678,7 +725,27 @@ view wrap drawer st =
           else [ HH.p [ cls "q-clash is-soft" ] [ text (st.calBusy <> "\x2026") ] ]
       }
 
-  sources = [ "" ] <> maybe [] (\rig -> map _.name (Array.filter _.available rig.sources)) st.looper
+  -- | The inputs, each saying what it is: a name alone ("hits") is no help
+  -- | to anyone who did not write the daemon's start-up line.
+  sourceChoice =
+    HH.select [ cls "q-slot", HE.onValueChange (wrap <<< SetSource) ]
+      ( [ HH.option [ HP.value "", HP.selected (st.calSource == "") ] [ text "\x2014" ] ]
+          <> maybe [] (\rig -> Array.filter _.available rig.sources <#> \source ->
+            HH.option [ HP.value source.name, HP.selected (source.name == st.calSource) ] [ text (source.name <> ": " <> source.from) ]) st.looper
+      )
+
+  -- | The paths already calibrated. Choosing one puts back what its last
+  -- | calibration recorded.
+  pathChoice =
+    HH.label [ cls "q-field" ]
+      [ HH.span [ cls "q-field-name" ] [ text "A path calibrated before" ]
+      , HH.select [ cls "q-field-input", HE.onValueChange (wrap <<< Pick) ]
+          ( [ HH.option [ HP.value "", HP.selected (not (Array.any (\kept -> kept.label == st.calLabel) st.calPaths)) ] [ text "a new path" ] ]
+              <> (st.calPaths <#> \kept ->
+                HH.option [ HP.value kept.label, HP.selected (kept.label == st.calLabel) ]
+                  [ text (kept.label <> maybe "" (\named -> " (" <> named <> ")") kept.module) ])
+          )
+      ]
 
   choice current options pick =
     HH.select [ cls "q-slot", HE.onValueChange pick ]
@@ -701,7 +768,8 @@ view wrap drawer st =
   controls =
     HH.section [ cls "q-calibrate-controls" ]
       [ HH.div [ cls "q-calibrate-names" ]
-          [ field "Signal path" st.calLabel SetLabel "what realisers look it up by, e.g. plaits-es9-jack1"
+          [ pathChoice
+          , field "Signal path" st.calLabel SetLabel "what realisers look it up by, e.g. plaits-es9-jack1"
           , field "Module" st.calModule SetModule "which unit: the one in the top row, say"
           , field "Where" st.calWhere SetWhere "which case, which row"
           , field "Coarse setting" st.calCoarse SetCoarse "the front panel as it stands: a table is true only for this"

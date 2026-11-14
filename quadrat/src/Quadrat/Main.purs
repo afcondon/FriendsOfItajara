@@ -526,6 +526,7 @@ component = H.mkComponent
       , calTuned: Calibrate.initial.calTuned
       , calBase: Calibrate.initial.calBase
       , calMonitored: Calibrate.initial.calMonitored
+      , calPaths: Calibrate.initial.calPaths
       }
   , render
   , eval: H.mkEval H.defaultEval { handleAction = handleAction, initialize = Just Init }
@@ -1631,6 +1632,7 @@ handleAction = case _ of
     when (pg == Score && before.page /= Score) $ H.modify_ _ { fill = Swept }
     H.modify_ _ { page = pg }
     when (pg == LoopPage) (Loop.start LoopMsg)
+    when (pg == CalibratePage) (handleAction (CalibrateMsg Calibrate.Load))
     when (pg == Score && before.page /= Score) (handleAction FetchDeclared)
     when (pg == JamPage && before.page /= JamPage) do
       st <- H.get

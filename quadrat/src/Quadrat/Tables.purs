@@ -12,6 +12,7 @@
 module Quadrat.Tables
   ( list
   , one
+  , curated
   , Whole
   , storeBase
   ) where
