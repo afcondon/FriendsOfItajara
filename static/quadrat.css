@@ -1846,3 +1846,4 @@ select.q-slot { field-sizing: content; }
   background: linear-gradient(var(--ink), var(--ink)) center / 1px 100% no-repeat, linear-gradient(var(--rule), var(--rule)) center / 100% 1px no-repeat; }
 .q-calibrate-mark { position: absolute; top: -3px; width: 4px; height: 20px; margin-left: -2px; background: var(--page); border-radius: 2px; transition: left .08s linear; }
 .q-calibrate-hz { margin: 0; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.q-calibrate-declare { margin-top: 12px; background: var(--page); color: #fff; }

@@ -149,6 +149,14 @@ type Own r =
   , calTuning :: Boolean
   -- | The last reading while tuning, as a sentence.
   , calTuned :: String
+  -- | The note the starting voltage was declared to be ("this is C2:
+  -- | calibrate from here"), as a MIDI number. The targets are then anchored
+  -- | on that note exactly, so that the few cents nobody can dial out of a
+  -- | panel knob are part of what the table corrects.
+  , calBase :: Maybe Int
+  -- | Whether tuning switched the daemon's monitoring on, and so should
+  -- | switch it off again.
+  , calMonitored :: Boolean
   | r
   )
 
@@ -156,13 +164,13 @@ initial
   :: { calLabel :: String, calModule :: String, calWhere :: String, calComment :: String, calCoarse :: String
      , calJack :: Int, calSource :: String, calFrom :: Number, calTo :: Number, calStep :: Number
      , calBusy :: String, calSaid :: String, calBefore :: Maybe Run, calAfter :: Maybe Run, calHeard :: Int, calKept :: String
-     , calTuning :: Boolean, calTuned :: String
+     , calTuning :: Boolean, calTuned :: String, calBase :: Maybe Int, calMonitored :: Boolean
      }
 initial =
   { calLabel: "", calModule: "", calWhere: "", calComment: "", calCoarse: ""
   , calJack: 1, calSource: "", calFrom: 0.0, calTo: 5.0, calStep: 0.25
   , calBusy: "", calSaid: "", calBefore: Nothing, calAfter: Nothing, calHeard: 0, calKept: ""
-  , calTuning: false, calTuned: ""
+  , calTuning: false, calTuned: "", calBase: Nothing, calMonitored: false
   }
 
 data Msg
@@ -179,6 +187,8 @@ data Msg
   -- | Hold the starting voltage and keep reading the pitch, until stopped.
   | Tune
   | StopTuning
+  -- | "This is the note here: calibrate from here."
+  | Declare
   -- | Two voltages, two pitches: is the patch what it should be?
   | CheckPatch
   -- | The sweep: the before.
@@ -331,21 +341,29 @@ grid from to step =
 
 -- ── From a run to a table ──────────────────────────────────────────────────
 
--- | The pitch a perfect volt per octave would give at this voltage, from the
--- | first step of a run.
-ideal :: Run -> Number -> Number
-ideal run volts = case Array.head run.steps of
-  Just first | first.hz > 0.0 -> first.hz * Number.pow 2.0 (volts - first.volts)
-  _ -> 0.0
+-- | Where the targets are anchored: a voltage and the pitch that voltage
+-- | is meant to be. The declared note at the starting voltage, if one was
+-- | declared; otherwise whatever the oscillator gave at the first voltage
+-- | asked for.
+anchorOf :: forall r. Record (Fields r) -> Run -> { volts :: Number, hz :: Number }
+anchorOf st run = case st.calBase of
+  Just midi -> { volts: st.calFrom, hz: 440.0 * Number.pow 2.0 ((Int.toNumber midi - 69.0) / 12.0) }
+  Nothing -> case Array.find (\step -> step.volts >= st.calFrom - 1.0e-6) run.steps of
+    Just first -> { volts: first.volts, hz: first.hz }
+    Nothing -> { volts: st.calFrom, hz: 0.0 }
 
 -- | How far a step's pitch fell from its target, in cents.
 errorOf :: Step -> Number
 errorOf step = if step.hz > 0.0 && step.target > 0.0 then Judge.centsBetween step.target step.hz else 0.0
 
--- | The before, with each step's target filled in now that the first step's
--- | pitch is known.
-aimed :: Run -> Run
-aimed run = run { steps = run.steps <#> \step -> step { target = ideal run step.volts } }
+-- | A run with each step's target filled in: the pitch a perfect volt per
+-- | octave would give at that voltage, from the anchor.
+aimed :: { volts :: Number, hz :: Number } -> Run -> Run
+aimed anchor run = run { steps = run.steps <#> \step -> step { target = if anchor.hz > 0.0 then anchor.hz * Number.pow 2.0 (step.volts - anchor.volts) else 0.0 } }
+
+-- | The steps that were asked for, without the one added at each end.
+asked :: forall r. Record (Fields r) -> Run -> Run
+asked st run = run { steps = Array.filter (\step -> step.volts >= st.calFrom - 1.0e-6 && step.volts <= st.calTo + 1.0e-6) run.steps }
 
 points :: Run -> Array StoredPoint
 points run = run.steps <#> \step ->
@@ -421,20 +439,34 @@ handle = case _ of
       Just index -> do
         void $ liftAff $ attempt $ toAffE $ Rig.setCv { set: [ { bus: busOf st.calJack, level: st.calFrom / 10.0 } ], esx: [] }
         _ <- liftEffect (verb (Verb.Tune index))
-        H.modify_ _ { calTuning = true, calBusy = "holding " <> show2 st.calFrom <> " V and listening", calSaid = "" }
+        -- Heard as well as read: the daemon plays the input it is listening
+        -- to. Left as it was if it was already on.
+        let monitored = maybe false (not <<< _.monitor) st.looper
+        when monitored $ void $ liftEffect (verb (Verb.Monitor true))
+        H.modify_ _ { calTuning = true, calMonitored = monitored, calBusy = "holding " <> show2 st.calFrom <> " V and listening", calSaid = "" }
 
   -- The jack back to rest, the daemon told to stop listening, and the
   -- setting written down if nobody has said what it is.
   StopTuning -> do
     st <- H.get
     _ <- liftEffect (verb (Verb.Tune 0))
+    when st.calMonitored $ void $ liftEffect (verb (Verb.Monitor false))
     void $ liftAff $ attempt $ toAffE $ Rig.setCv { set: [ { bus: busOf st.calJack, level: 0.0 } ], esx: [] }
-    H.modify_ _
-      { calBusy = "", calTuning = false
-      , calCoarse = case heardNow st of
-          Just base | st.calCoarse == "" -> "tuned to " <> base.note <> " at " <> show2 st.calFrom <> " V"
-          _ -> st.calCoarse
-      }
+    H.modify_ _ { calBusy = "", calTuning = false, calMonitored = false }
+
+  -- The note nearest what is heard becomes the note the starting voltage
+  -- IS. Nobody can dial a panel knob to the cent, and nobody needs to: the
+  -- sweep measures where the oscillator really is, and the table places the
+  -- declared note exactly.
+  Declare -> do
+    st <- H.get
+    for_ (heardNow st) \base ->
+      H.modify_ _
+        { calBase = Just base.midi
+        , calCoarse = "tuned to " <> base.note <> " at " <> show2 st.calFrom <> " V, " <> show (Int.round (Number.abs base.offsetCents)) <> " cents " <> (if base.offsetCents >= 0.0 then "sharp" else "flat")
+        , calSaid = show2 st.calFrom <> " V is " <> base.note <> ". The sweep will measure how far off it really is, and the table will place " <> base.note <> " exactly."
+        }
+    handle StopTuning
 
   CheckPatch -> idle do
     st <- H.get
@@ -450,9 +482,19 @@ handle = case _ of
 
   Sweep -> idle do
     st <- H.get
-    let voltages = grid st.calFrom st.calTo st.calStep
+    let
+      wanted = grid st.calFrom st.calTo st.calStep
+      -- One step wider at each end than what was asked for. An oscillator
+      -- that is a few cents sharp at the bottom, or flat at the top, has its
+      -- end notes just outside a sweep of exactly the range, and a table
+      -- does not guess past what it measured.
+      below = if st.calFrom - st.calStep >= -10.0 then [ st.calFrom - st.calStep ] else []
+      above = case Array.last wanted of
+        Just top | top + st.calStep <= 10.0 -> [ top + st.calStep ]
+        _ -> []
+      voltages = below <> wanted <> above
     if st.calLabel == "" then H.modify_ _ { calSaid = "name the signal path first: the table is looked up by that name" }
-    else if Array.length voltages < 2 then H.modify_ _ { calSaid = "the sweep needs at least two voltages: check from, to and the step" }
+    else if Array.length wanted < 2 then H.modify_ _ { calSaid = "the sweep needs at least two voltages: check from, to and the step" }
     else do
       H.modify_ _ { calBusy = "sweeping", calSaid = "", calBefore = Nothing, calAfter = Nothing, calHeard = 0, calKept = "" }
       result <- record "calibrate-before" sweeping (voltages <#> \volts -> { volts, target: 0.0, reached: true })
@@ -460,15 +502,15 @@ handle = case _ of
         Left why -> H.modify_ _ { calBusy = "", calSaid = why }
         Right run -> case Array.find (\step -> step.reads == 0) run.steps of
           Just silent -> H.modify_ _
-            { calBusy = "", calBefore = Just (aimed run)
+            { calBusy = "", calBefore = Just (aimed (anchorOf st run) run)
             , calSaid = "no pitch could be read at " <> show2 silent.volts <> " V, so there is no table. Listen to the take: is the oscillator sounding, and above about 25 Hz?"
             }
           Nothing -> do
-            let before = aimed run
+            let before = aimed (anchorOf st run) run
             H.modify_ _
               { calBusy = "", calBefore = Just before
               , calSaid = case Judge.problems (points before) of
-                  [] -> "swept " <> show (Array.length before.steps) <> " steps from " <> noteAt before <> ". Now play it back through the table to see what is left."
+                  [] -> "swept " <> show (Array.length before.steps) <> " steps, one wider at each end than asked, from " <> noteAt (asked st before) <> ". Now play it back through the table to see what is left."
                   found -> "this sweep would not be kept: " <> String.joinWith "; " (map Judge.problemText found)
               }
 
@@ -485,14 +527,14 @@ handle = case _ of
           -- as high as the ideal pitch of the top step, so the table has no
           -- voltage for it: that step is played (at the last voltage
           -- measured, which is what a realiser does) and marked out of reach.
-          wanted = before.steps <#> \step -> { volts: realise table step.target, target: step.target, reached: covers table step.target }
+          wanted = (asked st before).steps <#> \step -> { volts: realise table step.target, target: step.target, reached: covers table step.target }
         H.modify_ _ { calBusy = "playing through the table", calSaid = "" }
         result <- record "calibrate-after" sweeping wanted
         H.modify_ case result of
           Left why -> _ { calBusy = "", calSaid = why }
           Right after -> _
             { calBusy = "", calAfter = Just after
-            , calSaid = "through the table, the worst step is " <> show2 (worst after) <> " cents from its target; before, it was " <> show2 (worst before) <> "."
+            , calSaid = "through the table, the worst step is " <> show2 (worst after) <> " cents from its target; before, it was " <> show2 (worst (asked st before)) <> "."
                 <> case Array.length (Array.filter (not <<< _.reached) after.steps) of
                   0 -> ""
                   beyond -> " " <> show beyond <> (if beyond == 1 then " step is" else " steps are")
@@ -628,7 +670,8 @@ view wrap drawer st =
             , text " from ", number st.calFrom SetFrom, text " V to ", number st.calTo SetTo, text " V in steps of ", number st.calStep SetStep
             , text " V, heard on ", choice st.calSource sources (wrap <<< SetSource), text "."
             ]
-          , [ text ("That is " <> show (Array.length (grid st.calFrom st.calTo st.calStep)) <> " steps of " <> show2 (holdMs / 1000.0) <> " s, each read " <> show readings <> " times.") ]
+          , [ text ("That is " <> show (Array.length (grid st.calFrom st.calTo st.calStep)) <> " steps and one more at each end, " <> show2 (holdMs / 1000.0) <> " s each, each read " <> show readings <> " times."
+                <> maybe "" (\midi -> " " <> show2 st.calFrom <> " V is " <> Judge.noteName midi <> ".") st.calBase) ]
           ]
       , warnings =
           if st.calBusy == "" then []
@@ -676,7 +719,7 @@ view wrap drawer st =
           Nothing -> text ""
           Just before ->
             HH.div [ cls "q-calibrate-hear" ]
-              [ text ("The detector reads the first step as " <> noteAt before <> moved <> ". If you hear another octave: ")
+              [ text ("The detector reads the first step as " <> noteAt (asked st before) <> moved <> ". If you hear another octave: ")
               , button "an octave down" "the ear decides the octave; the detector everything finer" true (Heard (-1))
               , button "an octave up" "the ear decides the octave; the detector everything finer" true (Heard 1)
               ]
@@ -717,6 +760,8 @@ view wrap drawer st =
         , HH.div [ cls "q-calibrate-needle" ]
             [ HH.span [ cls "q-calibrate-mark", HP.style ("left: " <> show2 (50.0 + clamp (-50.0) 50.0 base.offsetCents) <> "%") ] [] ]
         , HH.p [ cls "q-calibrate-hz" ] [ text (maybe "" (\rig -> show2 rig.pitch.hz <> " Hz at " <> show2 st.calFrom <> " V") st.looper) ]
+        , HH.button [ cls "q-pill q-calibrate-declare", HP.title "a panel knob cannot be dialled to the cent, and need not be: the table will place this note exactly", HE.onClick \_ -> wrap Declare ]
+            [ text ("This is " <> base.note <> ": calibrate from here") ]
         ]
 
   -- | Both error curves on one pair of axes: cents from the target at each
@@ -725,10 +770,11 @@ view wrap drawer st =
     Nothing -> text ""
     Just before ->
       let
-        runs = [ before ] <> maybe [] Array.singleton st.calAfter
+        shown = asked st before
+        runs = [ shown ] <> maybe [] Array.singleton st.calAfter
         errors = Array.concatMap (\run -> map errorOf (Array.filter _.reached run.steps)) runs
         reach = max 5.0 (fromMaybe 5.0 (maximum (map Number.abs errors)))
-        count = max 1 (Array.length before.steps - 1)
+        count = max 1 (Array.length shown.steps - 1)
         x index = 40.0 + 540.0 * Int.toNumber index / Int.toNumber count
         y cents = 110.0 - 95.0 * cents / reach
         -- Only the steps the table could reach: one it could not is not a
@@ -742,13 +788,13 @@ view wrap drawer st =
               ( [ svg "line" [ attribute "x1" "40", attribute "x2" "580", attribute "y1" "110", attribute "y2" "110", attribute "class" "q-calibrate-zero" ] []
                 , svg "text" [ attribute "x" "4", attribute "y" (show2 (y reach + 4.0)), attribute "class" "q-calibrate-tick" ] [ text ("+" <> show2 reach) ]
                 , svg "text" [ attribute "x" "4", attribute "y" (show2 (y (negate reach) + 4.0)), attribute "class" "q-calibrate-tick" ] [ text ("\x2212" <> show2 reach) ]
-                , svg "polyline" [ attribute "points" (line before), attribute "class" "q-calibrate-before" ] []
+                , svg "polyline" [ attribute "points" (line shown), attribute "class" "q-calibrate-before" ] []
                 ]
                   <> maybe [] (\after -> [ svg "polyline" [ attribute "points" (line after), attribute "class" "q-calibrate-after" ] [] ]) st.calAfter
               )
           , HH.figcaption_
               [ text
-                  ( "Cents from a perfect volt per octave at each step. Before: worst " <> show2 (worst before)
+                  ( "Cents from a perfect volt per octave at each step. Before: worst " <> show2 (worst shown)
                       <> maybe "." (\after -> "; after, through the table: worst " <> show2 (worst after) <> ".") st.calAfter
                   )
               ]
@@ -771,7 +817,7 @@ view wrap drawer st =
                       , HH.td_ [ text (maybe "" (\after -> maybe "" (\played -> if played.reached then show2 (errorOf played) else "beyond the sweep") (Array.index after.steps index)) st.calAfter) ]
                       ]
                 )
-                before.steps
+                (asked st before).steps
             )
         ]
 
