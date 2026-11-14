@@ -523,7 +523,6 @@ component = H.mkComponent
       , calHeard: Calibrate.initial.calHeard
       , calKept: Calibrate.initial.calKept
       , calTuning: Calibrate.initial.calTuning
-      , calTuned: Calibrate.initial.calTuned
       , calBase: Calibrate.initial.calBase
       , calMonitored: Calibrate.initial.calMonitored
       , calPaths: Calibrate.initial.calPaths

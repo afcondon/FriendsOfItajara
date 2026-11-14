@@ -149,8 +149,6 @@ type Own r =
   -- | Tuning: the starting voltage is held and the pitch read over and
   -- | over, so the oscillator can be put where the sweep should begin.
   , calTuning :: Boolean
-  -- | The last reading while tuning, as a sentence.
-  , calTuned :: String
   -- | The note the starting voltage was declared to be ("this is C2:
   -- | calibrate from here"), as a MIDI number. The targets are then anchored
   -- | on that note exactly, so that the few cents nobody can dial out of a
@@ -171,14 +169,14 @@ initial
   :: { calLabel :: String, calModule :: String, calWhere :: String, calComment :: String, calCoarse :: String
      , calJack :: Int, calSource :: String, calFrom :: Number, calTo :: Number, calStep :: Number
      , calBusy :: String, calSaid :: String, calBefore :: Maybe Run, calAfter :: Maybe Run, calHeard :: Int, calKept :: String
-     , calTuning :: Boolean, calTuned :: String, calBase :: Maybe Int, calMonitored :: Boolean
+     , calTuning :: Boolean, calBase :: Maybe Int, calMonitored :: Boolean
      , calPaths :: Array Stored, calModules :: Array Inventory.Module
      }
 initial =
   { calLabel: "", calModule: "", calWhere: "", calComment: "", calCoarse: ""
   , calJack: 1, calSource: "", calFrom: 0.0, calTo: 5.0, calStep: 0.25
   , calBusy: "", calSaid: "", calBefore: Nothing, calAfter: Nothing, calHeard: 0, calKept: ""
-  , calTuning: false, calTuned: "", calBase: Nothing, calMonitored: false
+  , calTuning: false, calBase: Nothing, calMonitored: false
   , calPaths: [], calModules: []
   }
 
@@ -202,6 +200,8 @@ data Msg
   | StopTuning
   -- | "This is the note here: calibrate from here."
   | Declare
+  -- | Work out which input the jack's oscillator is heard on.
+  | FindInput
   -- | Two voltages, two pitches: is the patch what it should be?
   | CheckPatch
   -- | The sweep: the before.
@@ -505,6 +505,44 @@ handle = case _ of
     void $ liftAff $ attempt $ toAffE $ Rig.setCv { set: [ { bus: busOf st.calJack, level: 0.0 } ], esx: [] }
     H.modify_ _ { calBusy = "", calTuning = false, calMonitored = false }
 
+  -- Which input is this oscillator on? Nobody should have to know what the
+  -- daemon's source names mean. So each input in turn is listened to at the
+  -- starting voltage and a volt above it: the one whose pitch moves by an
+  -- octave is the one the jack is driving.
+  FindInput -> idle do
+    st <- H.get
+    let
+      bus = busOf st.calJack
+      set volts = void $ liftAff $ attempt $ toAffE $ Rig.setCv { set: [ { bus, level: volts / 10.0 } ], esx: [] }
+      -- The pitch the daemon reports for this source, once it has had time
+      -- to hear the new voltage; zero if it finds none.
+      hear index = do
+        liftAff (delay (Milliseconds 500.0))
+        snapshot <- liftEffect Socket.latest
+        pure (maybe 0.0 (\rig -> if rig.pitch.src == index then rig.pitch.hz else 0.0) snapshot)
+      candidates = maybe [] (\rig -> Array.catMaybes (Array.mapWithIndex (\at source -> if source.available then Just { index: at + 1, name: source.name, from: source.from } else Nothing) rig.sources)) st.looper
+    H.modify_ _ { calBusy = "listening to each input in turn", calSaid = "" }
+    heard <- candidates # traverse \candidate -> do
+      _ <- liftEffect (verb (Verb.Tune candidate.index))
+      set st.calFrom
+      low <- hear candidate.index
+      set (st.calFrom + 1.0)
+      high <- hear candidate.index
+      pure { candidate, octaves: if low > 0.0 && high > 0.0 then Number.log (high / low) / Number.log 2.0 else 0.0, low, high }
+    _ <- liftEffect (verb (Verb.Tune 0))
+    set 0.0
+    H.modify_ case Array.find (\found -> Number.abs (found.octaves - 1.0) < 0.25) heard of
+      Just found -> _
+        { calBusy = "", calSource = found.candidate.name
+        , calSaid = "jack " <> show st.calJack <> " is heard on " <> found.candidate.name <> " (" <> found.candidate.from <> "): its pitch moved "
+            <> show2 found.octaves <> " octaves for one volt, " <> show2 found.low <> " to " <> show2 found.high <> " Hz."
+        }
+      Nothing -> _
+        { calBusy = ""
+        , calSaid = "no input answered: none changed pitch by about an octave when jack " <> show st.calJack
+            <> " moved by a volt. Is the jack patched to the oscillator's pitch input, and the oscillator to an input?"
+        }
+
   -- The note nearest what is heard becomes the note the starting voltage
   -- IS. Nobody can dial a panel knob to the cent, and nobody needs to: the
   -- sweep measures where the oscillator really is, and the table places the
@@ -789,7 +827,8 @@ view wrap drawer st =
           , field "Notes" st.calComment SetComment "anything worth knowing later"
           ]
       , HH.div [ cls "q-calibrate-acts" ]
-          [ if st.calTuning then HH.button [ cls "q-pill", HE.onClick \_ -> wrap StopTuning ] [ text "Stop tuning" ]
+          [ button "Find the input" "nudge the jack by a volt and see which input's pitch moves by an octave" true FindInput
+          , if st.calTuning then HH.button [ cls "q-pill", HE.onClick \_ -> wrap StopTuning ] [ text "Stop tuning" ]
             else button "Tune" "hold the starting voltage and show the note being heard, to put the oscillator where the sweep should begin" true Tune
           , button "Check the patch" "two voltages, two pitches: is the voltage reaching the oscillator?" true CheckPatch
           , button "Sweep" "the before: ideal voltages, and how far each pitch falls from a perfect volt per octave" true Sweep
