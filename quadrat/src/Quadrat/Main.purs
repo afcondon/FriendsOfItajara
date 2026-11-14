@@ -527,6 +527,7 @@ component = H.mkComponent
       , calBase: Calibrate.initial.calBase
       , calMonitored: Calibrate.initial.calMonitored
       , calPaths: Calibrate.initial.calPaths
+      , calModules: Calibrate.initial.calModules
       }
   , render
   , eval: H.mkEval H.defaultEval { handleAction = handleAction, initialize = Just Init }

@@ -76,6 +76,7 @@ import Halogen.Widgets.Statement as Statement
 import Hawser.Fetch (Trouble, troubleText)
 import Hawser.Fetch as Fetch
 import Hawser.Http (Endpoint)
+import Quadrat.Inventory as Inventory
 import Quadrat.Layout as PageLayout
 import Quadrat.Rig as Rig
 import Quadrat.Schedule as Schedule
@@ -161,6 +162,8 @@ type Own r =
   -- | The signal paths already calibrated, the latest table of each: what
   -- | the path menu offers, so that calibrating one again is one choice.
   , calPaths :: Array Stored
+  -- | The modules Marquetry says exist, for choosing which one this is.
+  , calModules :: Array Inventory.Module
   | r
   )
 
@@ -169,14 +172,14 @@ initial
      , calJack :: Int, calSource :: String, calFrom :: Number, calTo :: Number, calStep :: Number
      , calBusy :: String, calSaid :: String, calBefore :: Maybe Run, calAfter :: Maybe Run, calHeard :: Int, calKept :: String
      , calTuning :: Boolean, calTuned :: String, calBase :: Maybe Int, calMonitored :: Boolean
-     , calPaths :: Array Stored
+     , calPaths :: Array Stored, calModules :: Array Inventory.Module
      }
 initial =
   { calLabel: "", calModule: "", calWhere: "", calComment: "", calCoarse: ""
   , calJack: 1, calSource: "", calFrom: 0.0, calTo: 5.0, calStep: 0.25
   , calBusy: "", calSaid: "", calBefore: Nothing, calAfter: Nothing, calHeard: 0, calKept: ""
   , calTuning: false, calTuned: "", calBase: Nothing, calMonitored: false
-  , calPaths: []
+  , calPaths: [], calModules: []
   }
 
 data Msg
@@ -428,6 +431,8 @@ tableOf st measuredAt run =
 handle :: forall r act slots o m. MonadAff m => Msg -> Handler r act slots o m
 handle = case _ of
   Load -> do
+    owned <- liftAff Inventory.modules
+    H.modify_ _ { calModules = owned }
     found <- liftAff Tables.curated
     for_ found \tables ->
       -- The latest table of each label, in the order of the labels.
@@ -679,7 +684,8 @@ keep st table = do
             -- comment does not change what the table is called.
             let
               written = Notes.write
-                { label: table.label, table: hash, module: st.calModule, place: st.calWhere, comment: st.calComment
+                { label: table.label, table: hash, module: st.calModule, moduleKey: Inventory.keyOf st.calModules st.calModule
+                , place: st.calWhere, comment: st.calComment
                 , before: maybe "" _.take st.calBefore, after: maybe "" _.take st.calAfter
                 }
               refName = Notes.refFor table.label
@@ -770,7 +776,14 @@ view wrap drawer st =
       [ HH.div [ cls "q-calibrate-names" ]
           [ pathChoice
           , field "Signal path" st.calLabel SetLabel "what realisers look it up by, e.g. plaits-es9-jack1"
-          , field "Module" st.calModule SetModule "which unit: the one in the top row, say"
+          , HH.label [ cls "q-field" ]
+              [ HH.span [ cls "q-field-name" ] [ text "Module" ]
+              , HH.input
+                  [ cls "q-field-input", HP.value st.calModule, HP.placeholder "choose from what you own, or type one that is not listed"
+                  , HP.attr (HH.AttrName "list") "q-calibrate-modules", HE.onValueInput (wrap <<< SetModule)
+                  ]
+              , HH.datalist [ HP.id "q-calibrate-modules" ] (st.calModules <#> \owned -> HH.option [ HP.value (Inventory.said owned) ] [])
+              ]
           , field "Where" st.calWhere SetWhere "which case, which row"
           , field "Coarse setting" st.calCoarse SetCoarse "the front panel as it stands: a table is true only for this"
           , field "Notes" st.calComment SetComment "anything worth knowing later"
