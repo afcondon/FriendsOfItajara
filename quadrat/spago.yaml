@@ -25,14 +25,19 @@ package:
   dependencies:
     - aff
     - aff-promise
+    - amphora-api
     - arrays
     - console
     - effect
     - either
+    - exceptions
     - foldable-traversable
+    - functions
     - halogen
     - halogen-subscriptions
     - halogen-widgets
+    - hawser
+    - hawser-fetch
     - helm
     - quadrat-common
     - integers
@@ -43,6 +48,7 @@ package:
     - nullable
     - numbers
     - ordered-collections
+    - parallel
     - prelude
     - rebus
     - strings

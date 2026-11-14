@@ -27,10 +27,20 @@ module Quadrat.Declared
 
 import Prelude
 
+import Amphora.Api as Api
+import Control.Parallel (parTraverse)
+import Data.Array (catMaybes, head)
 import Data.Either (Either(..))
+import Data.Function.Uncurried (Fn4, runFn4)
+import Data.Maybe (Maybe(..))
+import Data.Nullable (Nullable, toMaybe)
 import Effect (Effect)
-import Effect.Aff (Aff, makeAff, nonCanceler)
-import Effect.Exception (Error)
+import Effect.Aff (Aff, throwError)
+import Effect.Class (liftEffect)
+import Effect.Exception (error)
+import Hawser.Fetch (troubleText)
+import Hawser.Fetch as Fetch
+import Hawser.Http (Endpoint)
 
 -- | One progression waiting to be sampled. `onsets` are seconds from the first
 -- | chord — which is what `Main.schedule` wants, because a take is armed on its
@@ -68,17 +78,34 @@ type Clip =
   , vels :: Array Int
   }
 
-foreign import fetchDeclaredImpl
-  :: (Error -> Effect Unit)
-  -> (Array Clip -> Effect Unit)
-  -> Effect Unit
+-- | Where the store is: the page's own host, on :3024.
+foreign import storeBase :: Effect String
 
--- | Everything published for sampling. An unreachable store is an empty list
--- | and a note, never fatal: the page samples perfectly well without one.
+-- | One clip from a content's hash and payload and its first label's name and
+-- | tags; null when the payload is not a clip with events.
+foreign import declaredOf :: Fn4 String String String (Array String) (Nullable Clip)
+
+-- | Everything published for sampling: each favourite of `triggerfish-clips`,
+-- | with its content and its first label. An unreachable store is an empty
+-- | list and a note, never fatal: the page samples perfectly well without one.
+-- |
+-- | Each request is an operation of `Amphora.Api`, the store's own description
+-- | of what it answers; nothing here writes a path. A store that is down
+-- | should leave the page saying "nothing declared" in a second or two, so
+-- | each gives up after 2.5 s.
 fetchDeclared :: Aff (Array Clip)
-fetchDeclared = makeAff \cb -> do
-  fetchDeclaredImpl (cb <<< Left) (cb <<< Right)
-  pure nonCanceler
+fetchDeclared = do
+  base <- liftEffect storeBase
+  let
+    ask :: forall request reply. Endpoint request reply -> request -> Aff reply
+    ask described request = Fetch.ask { base, timeoutMs: 2500 } described request >>= case _ of
+      Right reply -> pure reply
+      Left trouble -> throwError (error ("Amphora: " <> troubleText trouble))
+  favourites <- ask Api.listFavorites { collection: Just "triggerfish-clips" }
+  map catMaybes $ favourites # parTraverse \{ contentHash } -> do
+    content <- ask Api.getContent { hash: contentHash }
+    labels <- ask Api.listLabels { hash: Just contentHash }
+    pure (head labels >>= \label -> toMaybe (runFn4 declaredOf contentHash content.payload label.name label.tags))
 
 -- | **Has the page come back to the foreground since this was last asked?**
 -- |

@@ -16,20 +16,7 @@ const base = () => {
   return p + "//" + h + ":3024";
 };
 
-// Fail fast rather than hang: a store that is down should leave the page saying
-// "nothing declared" in a second or two, not pending until the browser gives up.
-const TIMEOUT_MS = 2500;
-
-const getJSON = (url) => {
-  const c = new AbortController();
-  const t = setTimeout(() => c.abort(), TIMEOUT_MS);
-  return fetch(url, { signal: c.signal })
-    .then((r) => {
-      if (!r.ok) throw new Error("GET " + url + " -> " + r.status);
-      return r.json();
-    })
-    .finally(() => clearTimeout(t));
-};
+export const storeBase = () => base();
 
 const tag = (tags, prefix) => {
   const hit = (tags || []).find((t) => t.indexOf(prefix) === 0);
@@ -63,54 +50,41 @@ const chordsOf = (events) => {
     }));
 };
 
-export const fetchDeclaredImpl = (onError) => (onSuccess) => () => {
-  const b = base();
-  getJSON(b + "/favorites?collection=triggerfish-clips")
-    .then((favs) => {
-      const hashes = (favs || []).map((f) => f.contentHash).filter(Boolean);
-      return Promise.all(
-        hashes.map((h) =>
-          Promise.all([
-            getJSON(b + "/content/" + h).then((c) => (c && c.payload) || null),
-            getJSON(b + "/labels?hash=" + h).then((ls) => (ls && ls[0]) || null),
-          ]).then(([payload, label]) => {
-            if (typeof payload !== "string" || !label) return null;
-            let clip;
-            try {
-              clip = JSON.parse(payload);
-            } catch (e) {
-              return null;
-            }
-            if (!clip || !Array.isArray(clip.events) || clip.events.length === 0) return null;
-            const groups = chordsOf(clip.events);
-            return {
-              hash: h,
-              // The publisher's name. A Vetula progression's is its own (given
-              // when it was started) and differs from its chord rebus; Odonus
-              // names a clip by its rebus.
-              name: label.name || clip.name || tag(label.tags, "rebus:") || h.slice(0, 8),
-              source: tag(label.tags, "source:") || clip.source || "",
-              kind: tag(label.tags, "kind:"),
-              rebus: tag(label.tags, "rebus:"),
-              key: tag(label.tags, "key:") || clip.key || "",
-              // The chords (from zero) whose notes leave that key, as Vetula
-              // checked them. Absent means none did, or nobody checked.
-              outside: tag(label.tags, "outside:")
-                .split(",")
-                .filter((x) => x !== "")
-                .map((x) => parseInt(x, 10))
-                .filter((n) => !isNaN(n)),
-              onsets: groups.map((g) => g.at),
-              chords: groups.map((g) => g.notes),
-              gates: groups.map((g) => g.gate),
-              vels: groups.map((g) => g.vel),
-            };
-          })
-        )
-      );
-    })
-    .then((xs) => onSuccess(xs.filter(Boolean))())
-    .catch((e) => onError(e instanceof Error ? e : new Error(String(e)))());
+// One published clip, from what the store holds for it: the content's hash and
+// payload, and its first label's name and tags. Null when the payload is not a
+// clip with events. The asking is PureScript, over the store's described
+// operations (Amphora.Api); this is only the reading of a clip.
+export const declaredOf = (h, payload, labelName, tags) => {
+  let clip;
+  try {
+    clip = JSON.parse(payload);
+  } catch (e) {
+    return null;
+  }
+  if (!clip || !Array.isArray(clip.events) || clip.events.length === 0) return null;
+  const groups = chordsOf(clip.events);
+  return {
+    hash: h,
+    // The publisher's name. A Vetula progression's is its own (given
+    // when it was started) and differs from its chord rebus; Odonus
+    // names a clip by its rebus.
+    name: labelName || clip.name || tag(tags, "rebus:") || h.slice(0, 8),
+    source: tag(tags, "source:") || clip.source || "",
+    kind: tag(tags, "kind:"),
+    rebus: tag(tags, "rebus:"),
+    key: tag(tags, "key:") || clip.key || "",
+    // The chords (from zero) whose notes leave that key, as Vetula
+    // checked them. Absent means none did, or nobody checked.
+    outside: tag(tags, "outside:")
+      .split(",")
+      .filter((x) => x !== "")
+      .map((x) => parseInt(x, 10))
+      .filter((n) => !isNaN(n)),
+    onsets: groups.map((g) => g.at),
+    chords: groups.map((g) => g.notes),
+    gates: groups.map((g) => g.gate),
+    vels: groups.map((g) => g.vel),
+  };
 };
 
 // **Has the page just come back to the foreground?** Latches on

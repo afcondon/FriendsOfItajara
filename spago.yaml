@@ -51,6 +51,14 @@ workspace:
     # the Loop page uses only to watch the Twister through Helm's hub.
     helm:
       path: ../helm
+    # Amphora's HTTP API, described once (amphora/api); Quadrat asks its
+    # operations through hawser-fetch and writes no path of its own.
+    amphora-api:
+      path: ../live-coding/amphora/api
+    hawser:
+      path: ../../purescript-hylograph-libs/purescript-hawser
+    hawser-fetch:
+      path: ../../purescript-hylograph-libs/purescript-hawser/fetch
     # Identity without a name: a content or a key, as a memorable pair of
     # coloured icons. Extracted from Triggerfish so that a chord set can wear
     # the SAME identity in both places. By path until it earns publishing.
