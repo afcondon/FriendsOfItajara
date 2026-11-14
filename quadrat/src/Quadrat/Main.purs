@@ -96,6 +96,7 @@ import Quadrat.Slug (slugFor, stamped)
 import Quadrat.JamView as JamView
 import Quadrat.Layout as Layout
 import Itajara.Surface.Looper.Types (LooperPanel(..))
+import Quadrat.Calibrate as Calibrate
 import Quadrat.Loop as Loop
 import Quadrat.Divider (Divider)
 import Quadrat.Divider as Divider
@@ -130,7 +131,7 @@ main = HA.runHalogenAff do
 -- | **One recording page per player** (`docs/kb/plans/quadrat-recording-views.md`):
 -- | the Bench is the rig playing a transect, `Score` is Triggerfish playing what
 -- | it has published, Jam is you, Loop is you into the looper.
-data Page = Bench | Score | JamPage | LoopPage
+data Page = Bench | Score | JamPage | LoopPage | CalibratePage
 
 derive instance Eq Page
 
@@ -366,7 +367,8 @@ type State =
   , sides :: Map.Map String { open :: Boolean, width :: Number }
   -- | The Loop page's own fields, the daemon's snapshot (`looper`) among them:
   -- | see `Quadrat.Loop.Fields`.
-  | Loop.Fields ()
+  -- | And the Calibration page's: see `Quadrat.Calibrate.Fields`.
+  | Loop.Fields (Calibrate.Own ())
   }
 
 -- | The two panels that became modals.
@@ -441,6 +443,7 @@ data Action
   | GoTo Page
   -- | Anything the Loop page does (`Quadrat.Loop`).
   | LoopMsg Loop.Msg
+  | CalibrateMsg Calibrate.Msg
   -- | A page's side drawer was toggled or resized.
   | FromSide Page Drawer.Output
   | SetJamName String
@@ -503,6 +506,22 @@ component = H.mkComponent
       , twisterHeardBank: Loop.initial.twisterHeardBank
       , twisterFollow: Loop.initial.twisterFollow
       , looperSaveName: Loop.initial.looperSaveName
+      , calLabel: Calibrate.initial.calLabel
+      , calModule: Calibrate.initial.calModule
+      , calWhere: Calibrate.initial.calWhere
+      , calComment: Calibrate.initial.calComment
+      , calCoarse: Calibrate.initial.calCoarse
+      , calJack: Calibrate.initial.calJack
+      , calSource: Calibrate.initial.calSource
+      , calFrom: Calibrate.initial.calFrom
+      , calTo: Calibrate.initial.calTo
+      , calStep: Calibrate.initial.calStep
+      , calBusy: Calibrate.initial.calBusy
+      , calSaid: Calibrate.initial.calSaid
+      , calBefore: Calibrate.initial.calBefore
+      , calAfter: Calibrate.initial.calAfter
+      , calHeard: Calibrate.initial.calHeard
+      , calKept: Calibrate.initial.calKept
       }
   , render
   , eval: H.mkEval H.defaultEval { handleAction = handleAction, initialize = Just Init }
@@ -779,7 +798,7 @@ handleAction = case _ of
     widths <- liftEffect $ traverse
       (\pg -> map (\w -> Tuple (pageKey pg) { open: false, width: w })
                  (SideWidth.loadWidth (pageKey pg) sideWidth))
-      [ Bench, Score, JamPage, LoopPage ]
+      [ Bench, Score, JamPage, LoopPage, CalibratePage ]
     H.modify_ _ { sides = Map.fromFoldable widths }
     liftEffect $ Socket.connect Socket.defaultUrl
     liftEffect Bus.start
@@ -1613,6 +1632,7 @@ handleAction = case _ of
       st <- H.get
       jamTake st.jam.length
   LoopMsg msg -> Loop.handle LoopMsg msg
+  CalibrateMsg msg -> Calibrate.handle msg
   FromSide pg out -> do
     st <- H.get
     let d = sideState st pg
@@ -2953,6 +2973,7 @@ sideName = case _ of
   Score -> "Published"
   JamPage -> "About"
   LoopPage -> "Controllers"
+  CalibratePage -> "How"
 
 -- | A page's drawer as held, or closed at the default width.
 sideState :: State -> Page -> { open :: Boolean, width :: Number }
@@ -2969,6 +2990,7 @@ pageKey = case _ of
   Score -> "score"
   JamPage -> "jam"
   LoopPage -> "loop"
+  CalibratePage -> "calibrate"
 
 -- | **Why nothing is arriving**, in the order the answers are worth reading.
 -- |
@@ -3110,6 +3132,7 @@ render st =
             , pageTab Score "Score" "Triggerfish plays: sample a progression or a clip it has published"
             , pageTab JamPage "Jam" "you play: for as long as it plays, for some bars, or cut at each hit"
             , pageTab LoopPage "Loop" "you play into the looper: the loops, their layers, the Edit panel"
+            , pageTab CalibratePage "Calibrate" "measure how an oscillator really tracks, and keep the table that corrects it"
             ]
         -- | **Help in the nav, for the page that has some.** The looper's
         -- | recipes were one of a row of buttons above the loops; as a "?"
@@ -3262,6 +3285,7 @@ render st =
               , drawer: sideOf JamPage
               }
         LoopPage -> Loop.view LoopMsg (sideOf LoopPage) st
+        CalibratePage -> Calibrate.view CalibrateMsg (sideOf CalibratePage) st
     , HH.section [ HP.class_ (HH.ClassName "q-log") ]
         (map (\l -> HH.div_ [ HH.text l ]) st.log)
     ]
@@ -4382,6 +4406,7 @@ render st =
     Score -> "sample what Triggerfish has written"
     JamPage -> "record what you play"
     LoopPage -> "play into the looper"
+    CalibratePage -> "measure an oscillator, keep its table"
 
   pageTab pg label why =
     HH.button

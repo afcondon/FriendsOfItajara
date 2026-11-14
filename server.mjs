@@ -2418,7 +2418,12 @@ function onsets(body) {
     if (!clean.length) {
       return Promise.resolve({ ok: false, output: "the schedule named no regions with anything in them" });
     }
-    return msmJson(["onset", wav, "--json", "--regions", "-"], JSON.stringify(clean));
+    // **Pitch, only where it is asked for.** A calibration sweep wants the
+    // pitch of each step, read several times so a median can survive one wild
+    // reading; no other run mentions pitch. `pitch` is how many readings.
+    const readings = Math.floor(Number(body.pitch));
+    const pitch = readings >= 1 && readings <= 9 ? ["--pitch", String(readings)] : [];
+    return msmJson(["onset", wav, "--json", "--regions", "-", ...pitch], JSON.stringify(clean));
   }
 
   const args = ["onset", wav, "--as", String(body.as || "hits").replace(/[^a-z]/g, ""), "--json"];

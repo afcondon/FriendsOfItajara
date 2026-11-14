@@ -13,6 +13,7 @@ module Quadrat.Tables
   ( list
   , one
   , Whole
+  , storeBase
   ) where
 
 import Prelude

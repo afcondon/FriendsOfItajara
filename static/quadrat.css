@@ -61,6 +61,7 @@ body {
 .q.is-score { --page: #74508f; --field: #f2edf6; }
 .q.is-jam   { --page: #a3566d; --field: #f7edf0; }
 .q.is-loop  { --page: #2c7a80; --field: #e8f2f2; }
+.q.is-calibrate { --page: #4f7a3a; --field: #eef3e9; }
 .q-pill { border: 0; border-radius: 4px; padding: 7px 13px; cursor: pointer;
   font: inherit; font-size: 14px; font-weight: 700; line-height: 1; color: #fff;
   transition: opacity .1s; }
@@ -71,6 +72,7 @@ body {
 .q-pill.is-score { background: #74508f; }
 .q-pill.is-jam   { background: #a3566d; }
 .q-pill.is-loop  { background: #2c7a80; }
+.q-pill.is-calibrate { background: #4f7a3a; }
 .q-ok { color: var(--live); font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; }
 .q-warn { color: var(--hot); font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; }
 
@@ -1807,3 +1809,31 @@ select.q-slot { field-sizing: content; }
   cursor: pointer; padding: 0; align-self: center;
 }
 .q-help:hover, .q-help:focus { color: var(--ink); border-color: var(--ink); outline: 0; }
+
+/* ── The Calibration page ───────────────────────────────────────────────── */
+.q-say.is-calibrate { padding: 24px 32px 18px; }
+.q-say.is-calibrate .hw-statement-line { font-size: 21px; margin-bottom: .3em; }
+.q-say.is-calibrate .q-slot.is-number { width: 4.6em; }
+.q-calibrate-controls { padding: 4px 32px 8px; display: grid; gap: 14px; }
+.q-calibrate-names { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px 18px; }
+.q-field { display: grid; gap: 3px; }
+.q-field-name { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.q-field-input { font: inherit; width: 100%; padding: 6px 8px; border: 1px solid var(--rule); border-radius: 4px; background: #fff; }
+.q-field-input:focus { outline: 2px solid var(--pick-soft); border-color: var(--pick); }
+.q-calibrate-acts, .q-calibrate-play, .q-calibrate-hear { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.q-calibrate-acts .q-pill, .q-calibrate-play .q-pill, .q-calibrate-hear .q-pill { background: var(--page); color: #fff; }
+.q-calibrate-play .q-pill { background: transparent; color: var(--ink); box-shadow: inset 0 0 0 1px var(--rule); }
+.q-calibrate-acts .q-pill:disabled, .q-calibrate-hear .q-pill:disabled { opacity: .35; cursor: default; }
+.q-calibrate-said { margin: 6px 32px 10px; padding: 10px 14px; border-left: 3px solid var(--page); background: var(--field); max-width: 70ch; }
+.q-calibrate-curves { margin: 8px 32px; max-width: 720px; }
+.q-calibrate-curves svg { width: 100%; height: auto; background: #fff; border: 1px solid var(--rule); border-radius: 4px; }
+.q-calibrate-curves figcaption { font-size: 13px; color: var(--muted); margin-top: 6px; }
+.q-calibrate-zero { stroke: var(--rule); stroke-width: 1; }
+.q-calibrate-tick { font-size: 11px; fill: var(--muted); }
+.q-calibrate-before { fill: none; stroke: var(--hot); stroke-width: 2; }
+.q-calibrate-after { fill: none; stroke: var(--live); stroke-width: 2; }
+.q-calibrate-steps { margin: 10px 32px 40px; border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: 13px; }
+.q-calibrate-steps th { text-align: right; font-weight: 600; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); padding: 4px 14px 4px 0; border-bottom: 1px solid var(--rule); }
+.q-calibrate-steps td { text-align: right; padding: 3px 14px 3px 0; border-bottom: 1px solid var(--rule); }
+.q-calibrate-steps tr.is-suspect td { color: var(--hot); }
+.q-calibrate-about p { margin: 0 0 .8em; font-size: 14px; color: var(--muted); }
