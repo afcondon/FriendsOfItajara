@@ -81,7 +81,7 @@ import Quadrat.Rig as Rig
 import Quadrat.Schedule as Schedule
 import Quadrat.Slug as Slug
 import Quadrat.Tables as Tables
-import Reef.Calibration (realise)
+import Reef.Calibration (covers, realise)
 import Reef.Calibration.Judge as Judge
 import Reef.Calibration.Stored (Stored, StoredPoint)
 import Reef.Calibration.Stored as Stored
@@ -103,6 +103,11 @@ type Step =
   , reads :: Int
   , spreadCents :: Number
   , agreementCents :: Number
+  -- | Whether the table could reach the target at all. A pitch above or
+  -- | below everything the sweep measured cannot be aimed at: the realiser
+  -- | holds the last voltage it measured and does not guess beyond it. Such a
+  -- | step is not an error of the table, and is not counted as one.
+  , reached :: Boolean
   }
 
 -- | Everything the Calibration page reads and writes, as a row Quadrat's
@@ -239,7 +244,7 @@ record
   :: forall r act slots o m
    . MonadAff m
   => String
-  -> Array { volts :: Number, target :: Number }
+  -> Array { volts :: Number, target :: Number, reached :: Boolean }
   -> H.HalogenM (Record (Fields r)) act slots o m (Either String Run)
 record prefix wanted = do
   st <- H.get
@@ -263,7 +268,7 @@ record prefix wanted = do
           mark <- liftEffect Schedule.at
           H.modify_ _ { calBusy = "holding " <> show2 step.volts <> " V" }
           liftAff (delay (Milliseconds holdMs))
-          pure (map (\at -> { volts: step.volts, target: step.target, at }) mark)
+          pure (map (\at -> { volts: step.volts, target: step.target, reached: step.reached, at }) mark)
         set 0.0
         _ <- liftEffect (verb EndCapture)
         liftAff (delay (Milliseconds 200.0))
@@ -287,7 +292,7 @@ record prefix wanted = do
                           combined = Judge.combine usable
                         in
                           { volts: step.volts, target: step.target, at: step.at, hz: combined.median, reads: Array.length usable
-                          , spreadCents: combined.spreadCents, agreementCents: combined.agreementCents
+                          , spreadCents: combined.spreadCents, agreementCents: combined.agreementCents, reached: step.reached
                           }
                     )
                     marked
@@ -394,7 +399,7 @@ handle = case _ of
     st <- H.get
     let high = min st.calTo (st.calFrom + 2.0)
     H.modify_ _ { calBusy = "checking the patch", calSaid = "" }
-    result <- record "calibrate-check" [ { volts: st.calFrom, target: 0.0 }, { volts: high, target: 0.0 } ]
+    result <- record "calibrate-check" [ { volts: st.calFrom, target: 0.0, reached: true }, { volts: high, target: 0.0, reached: true } ]
     H.modify_ _
       { calBusy = ""
       , calSaid = case result of
@@ -409,7 +414,7 @@ handle = case _ of
     else if Array.length voltages < 2 then H.modify_ _ { calSaid = "the sweep needs at least two voltages: check from, to and the step" }
     else do
       H.modify_ _ { calBusy = "sweeping", calSaid = "", calBefore = Nothing, calAfter = Nothing, calHeard = 0, calKept = "" }
-      result <- record "calibrate-before" (voltages <#> \volts -> { volts, target: 0.0 })
+      result <- record "calibrate-before" (voltages <#> \volts -> { volts, target: 0.0, reached: true })
       case result of
         Left why -> H.modify_ _ { calBusy = "", calSaid = why }
         Right run -> case Array.find (\step -> step.reads == 0) run.steps of
@@ -435,8 +440,11 @@ handle = case _ of
         let
           table = Stored.table (tableOf (st { calHeard = 0 }) now before)
           -- The same pitches the sweep aimed at, at the voltages the table
-          -- says will produce them.
-          wanted = before.steps <#> \step -> { volts: realise table step.target, target: step.target }
+          -- says will produce them. An oscillator that runs flat never got
+          -- as high as the ideal pitch of the top step, so the table has no
+          -- voltage for it: that step is played (at the last voltage
+          -- measured, which is what a realiser does) and marked out of reach.
+          wanted = before.steps <#> \step -> { volts: realise table step.target, target: step.target, reached: covers table step.target }
         H.modify_ _ { calBusy = "playing through the table", calSaid = "" }
         result <- record "calibrate-after" wanted
         H.modify_ case result of
@@ -444,6 +452,10 @@ handle = case _ of
           Right after -> _
             { calBusy = "", calAfter = Just after
             , calSaid = "through the table, the worst step is " <> show2 (worst after) <> " cents from its target; before, it was " <> show2 (worst before) <> "."
+                <> case Array.length (Array.filter (not <<< _.reached) after.steps) of
+                  0 -> ""
+                  beyond -> " " <> show beyond <> (if beyond == 1 then " step is" else " steps are")
+                    <> " beyond what the sweep measured and not counted: the oscillator did not get that far within these voltages, and a table does not guess past its last measurement. Sweep a little wider to cover them."
             }
 
   Heard octaves -> H.modify_ \st -> st { calHeard = st.calHeard + octaves }
@@ -495,8 +507,9 @@ patchVerdict volts pitches = case pitches of
           else "closed: " <> show2 low <> " Hz to " <> show2 high <> " Hz, " <> show2 moved <> " octaves for " <> show2 volts <> " V. Ready to sweep."
   _ -> "the check did not return two pitches"
 
+-- | The largest error among the steps the table could reach.
 worst :: Run -> Number
-worst run = fromMaybe 0.0 (maximum (map (Number.abs <<< errorOf) run.steps))
+worst run = fromMaybe 0.0 (maximum (map (Number.abs <<< errorOf) (Array.filter _.reached run.steps)))
 
 noteAt :: Run -> String
 noteAt run = (Judge.baseOf (fromMaybe 0.0 (Array.head run.steps <#> _.hz))).note
@@ -645,12 +658,14 @@ view wrap drawer st =
     Just before ->
       let
         runs = [ before ] <> maybe [] Array.singleton st.calAfter
-        errors = Array.concatMap (\run -> map errorOf run.steps) runs
+        errors = Array.concatMap (\run -> map errorOf (Array.filter _.reached run.steps)) runs
         reach = max 5.0 (fromMaybe 5.0 (maximum (map Number.abs errors)))
         count = max 1 (Array.length before.steps - 1)
         x index = 40.0 + 540.0 * Int.toNumber index / Int.toNumber count
         y cents = 110.0 - 95.0 * cents / reach
-        line run = String.joinWith " " (Array.mapWithIndex (\index step -> show2 (x index) <> "," <> show2 (y (errorOf step))) run.steps)
+        -- Only the steps the table could reach: one it could not is not a
+        -- point on the table's curve.
+        line run = String.joinWith " " (Array.catMaybes (Array.mapWithIndex (\index step -> if step.reached then Just (show2 (x index) <> "," <> show2 (y (errorOf step))) else Nothing) run.steps))
         svg name attributes children = HH.elementNS (HH.Namespace "http://www.w3.org/2000/svg") (HH.ElemName name) (map (\pair -> HP.attr (HH.AttrName pair.name) pair.value) attributes) children
         attribute name value = { name, value }
       in
@@ -685,7 +700,7 @@ view wrap drawer st =
                       , HH.td_ [ text (show2 (errorOf step)) ]
                       , HH.td_ [ text (show step.reads) ]
                       , HH.td_ [ text (show2 step.agreementCents) ]
-                      , HH.td_ [ text (maybe "" (\after -> maybe "" (show2 <<< errorOf) (Array.index after.steps index)) st.calAfter) ]
+                      , HH.td_ [ text (maybe "" (\after -> maybe "" (\played -> if played.reached then show2 (errorOf played) else "beyond the sweep") (Array.index after.steps index)) st.calAfter) ]
                       ]
                 )
                 before.steps

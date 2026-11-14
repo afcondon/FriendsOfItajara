@@ -2399,6 +2399,9 @@ meterDb s = case s.page of
   -- A running jam's own source; otherwise the input the page will record.
   JamPage | maybe false (_.jam.on) s.looper -> fromRig \rig -> Just rig.jam.src
   LoopPage -> fromRig \rig -> map _.src (Array.index rig.loops s.looperFocus)
+  -- The input this page will record, which is its own choice and not the
+  -- Bench's: a meter showing another input is worse than no meter.
+  CalibratePage -> maybe (-120.0) _.db (s.looper >>= \rig -> Array.find (\source -> source.name == s.calSource) rig.sources)
   _ -> dbNow s
   where
   fromRig pick =
